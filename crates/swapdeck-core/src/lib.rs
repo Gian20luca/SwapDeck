@@ -1,4 +1,14 @@
-//! Logica di SwapDeck. Lo scheletro espone solo la versione; il resto arriva dallo step 1.
+//! Logica di SwapDeck: client di cswap e config. Motore, lock, storico e
+//! rilevamento dei conflitti arrivano con lo step 2.
+
+pub mod cswap;
+// Step 2: pub mod engine;
+// Step 2: pub mod lock;
+// Step 2: pub mod history;
+// Step 2: pub mod conflicts;
+
+#[cfg(test)]
+mod ts_export;
 
 /// Versione del crate, uguale a quella del workspace.
 pub fn version() -> &'static str {

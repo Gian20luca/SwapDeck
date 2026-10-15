@@ -39,7 +39,8 @@
       "isOrganization": true,
       "active": false,
       "usageStatus": "relogin_required",
-      "usage": null
+      "usage": null,
+      "loginExpiresAt": "2026-10-10T08:00:00Z"
     }
   ]
 }

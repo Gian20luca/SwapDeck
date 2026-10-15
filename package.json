@@ -12,7 +12,8 @@
     "lint": "prettier --check . && pnpm -r typecheck",
     "format": "prettier --write .",
     "test:rust": "cargo test --workspace",
-    "lint:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings"
+    "lint:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings",
+    "gen:types": "pnpm --filter @swapdeck/types gen:types"
   },
   "devDependencies": {
     "prettier": "catalog:"

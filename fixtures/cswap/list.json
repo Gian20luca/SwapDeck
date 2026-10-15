@@ -16,21 +16,21 @@
         },
         "sevenDay": {
           "pct": 50.0,
-          "resetsAt": "2026-10-19T16:59:59.948092+00:00",
-          "countdown": "3d 21h",
+          "resetsAt": "2026-10-19T16:59:59.586141+00:00",
+          "countdown": "3d 20h",
           "clock": "Oct 19 18:59",
-          "expectedPct": 44.3,
+          "expectedPct": 44.9,
           "aheadOfPace": false,
-          "projectedExhaustionAt": "2026-10-18T22:00:33Z",
+          "projectedExhaustionAt": "2026-10-18T23:55:17Z",
           "willLastToReset": false
         },
         "scoped": [
           {
             "pct": 0.0,
             "resetsAt": "2026-10-19T17:00:00+00:00",
-            "countdown": "3d 21h",
+            "countdown": "3d 20h",
             "clock": "Oct 19 19:00",
-            "expectedPct": 44.3,
+            "expectedPct": 44.9,
             "aheadOfPace": false,
             "willLastToReset": true,
             "name": "Fable"
@@ -38,8 +38,9 @@
         ]
       },
       "alias": "alias1",
-      "usageFetchedAt": "2026-10-15T19:30:16Z",
-      "usageAgeSeconds": 153.2
+      "loginExpiresAt": "2026-11-05T09:40:41Z",
+      "usageFetchedAt": "2026-10-15T20:27:38Z",
+      "usageAgeSeconds": 499.8
     },
     {
       "number": 2,
@@ -51,6 +52,7 @@
       "usageStatus": "relogin_required",
       "usage": null,
       "alias": "alias2",
+      "loginExpiresAt": "2026-10-06T17:50:08Z",
       "lastGoodUsage": {
         "fiveHour": {
           "pct": 0.0
@@ -67,7 +69,7 @@
         }
       },
       "lastGoodFetchedAt": "2026-10-06T16:17:06Z",
-      "lastGoodAgeSeconds": 789343.2
+      "lastGoodAgeSeconds": 793131.6
     },
     {
       "number": 3,
@@ -80,27 +82,27 @@
       "usage": {
         "fiveHour": {
           "pct": 1.0,
-          "resetsAt": "2026-10-15T21:29:59.936945+00:00",
-          "countdown": "1h 57m",
-          "clock": "23:29"
+          "resetsAt": "2026-10-15T21:30:00.299710+00:00",
+          "countdown": "54m",
+          "clock": "23:30"
         },
         "sevenDay": {
           "pct": 21.0,
-          "resetsAt": "2026-10-20T01:59:59.936966+00:00",
-          "countdown": "4d 6h",
-          "clock": "Oct 20 03:59",
-          "expectedPct": 38.9,
+          "resetsAt": "2026-10-20T02:00:00.299730+00:00",
+          "countdown": "4d 5h",
+          "clock": "Oct 20 04:00",
+          "expectedPct": 39.6,
           "aheadOfPace": false,
-          "projectedExhaustionAt": "2026-10-26T01:31:29Z",
+          "projectedExhaustionAt": "2026-10-26T06:28:44Z",
           "willLastToReset": true
         },
         "scoped": [
           {
             "pct": 0.0,
             "resetsAt": "2026-10-20T02:00:00+00:00",
-            "countdown": "4d 6h",
+            "countdown": "4d 5h",
             "clock": "Oct 20 04:00",
-            "expectedPct": 38.9,
+            "expectedPct": 39.6,
             "aheadOfPace": false,
             "willLastToReset": true,
             "name": "Fable"
@@ -108,8 +110,9 @@
         ]
       },
       "alias": "alias3",
-      "usageFetchedAt": "2026-10-15T19:25:12Z",
-      "usageAgeSeconds": 457.1
+      "loginExpiresAt": "2026-10-18T16:06:10Z",
+      "usageFetchedAt": "2026-10-15T20:27:38Z",
+      "usageAgeSeconds": 499.8
     },
     {
       "number": 5,
@@ -121,6 +124,7 @@
       "usageStatus": "relogin_required",
       "usage": null,
       "alias": "alias5",
+      "loginExpiresAt": "2026-11-02T12:13:48Z",
       "lastGoodUsage": {
         "fiveHour": {
           "pct": 16.0,
@@ -152,7 +156,7 @@
         ]
       },
       "lastGoodFetchedAt": "2026-10-06T20:35:09Z",
-      "lastGoodAgeSeconds": 773860.4
+      "lastGoodAgeSeconds": 777648.9
     },
     {
       "number": 6,
@@ -164,28 +168,28 @@
       "usageStatus": "ok",
       "usage": {
         "fiveHour": {
-          "pct": 47.0,
-          "resetsAt": "2026-10-15T22:19:59.555116+00:00",
-          "countdown": "2h 47m",
-          "clock": "Oct 16 00:19"
+          "pct": 66.0,
+          "resetsAt": "2026-10-15T22:20:00.105830+00:00",
+          "countdown": "1h 44m",
+          "clock": "Oct 16 00:20"
         },
         "sevenDay": {
-          "pct": 74.0,
-          "resetsAt": "2026-10-21T00:59:59.555133+00:00",
-          "countdown": "5d 5h",
-          "clock": "Oct 21 02:59",
-          "expectedPct": 25.3,
+          "pct": 77.0,
+          "resetsAt": "2026-10-21T01:00:00.105850+00:00",
+          "countdown": "5d 4h",
+          "clock": "Oct 21 03:00",
+          "expectedPct": 26.0,
           "aheadOfPace": true,
-          "projectedExhaustionAt": "2026-10-16T10:26:19Z",
+          "projectedExhaustionAt": "2026-10-16T09:37:21Z",
           "willLastToReset": false
         },
         "scoped": [
           {
             "pct": 0.0,
             "resetsAt": "2026-10-21T01:00:00+00:00",
-            "countdown": "5d 5h",
+            "countdown": "5d 4h",
             "clock": "Oct 21 03:00",
-            "expectedPct": 25.3,
+            "expectedPct": 26.0,
             "aheadOfPace": false,
             "willLastToReset": true,
             "name": "Fable"
@@ -193,8 +197,9 @@
         ]
       },
       "alias": "alias6",
-      "usageFetchedAt": "2026-10-15T19:30:16Z",
-      "usageAgeSeconds": 153.2
+      "loginExpiresAt": "2026-11-03T03:37:05Z",
+      "usageFetchedAt": "2026-10-15T20:35:58Z",
+      "usageAgeSeconds": 0.0
     }
   ]
 }

@@ -1,6 +1,6 @@
-# Contratto di `cswap` (claude-swap 0.26.0)
+# Contratto di `cswap` (claude-swap 0.26.0 – 0.27.2)
 
-Fonte: sorgenti installati con `uv tool` (`claude_swap/cli.py`, `switcher.py`, `json_output.py`, `usage_store.py`, `poll_policy.py`, `autoswitch.py`, `settings.py`, `update_check.py`), più prove in sola lettura sul profilo reale e prove d'errore su un profilo vuoto e temporaneo (15/10/2026, Windows 11). Le fixture citate stanno in [`fixtures/cswap/`](../fixtures/cswap/README.md).
+Fonte: sorgenti installati con `uv tool` (`claude_swap/cli.py`, `switcher.py`, `json_output.py`, `usage_store.py`, `poll_policy.py`, `autoswitch.py`, `settings.py`, `update_check.py`), più prove in sola lettura (0.26.0 e 0.27.2) sul profilo reale e prove d'errore su un profilo vuoto e temporaneo (15/10/2026, Windows 11). Le differenze della 0.27.2 rispetto alla 0.26.0 sono ricavate dal confronto dei sorgenti (`json_output.py`, `cli.py`, `transfer.py`, `switcher.py`) e segnate «0.27». Le fixture citate stanno in [`fixtures/cswap/`](../fixtures/cswap/README.md).
 
 Per ogni voce: **[V]** = verificato eseguendo cswap, **[S]** = ricavato dai sorgenti.
 
@@ -13,7 +13,7 @@ Per ogni voce: **[V]** = verificato eseguendo cswap, **[S]** = ricavato dai sorg
 - **Codifica:** stdout e stderr sono forzati a UTF-8 con `errors="replace"` [S][V]. Decodificare in UTF-8 con sostituzione. In JSON i caratteri non ASCII arrivano come `\uXXXX`.
 - **Colori:** disattivati quando stdout non è un terminale; `NO_COLOR` li spegne comunque [S]. Impostare `NO_COLOR=1` per sicurezza.
 - **Ambiente:** non ereditare `CLAUDE_CONFIG_DIR` che punta dentro `<backup>/sessions/` (shell di `cswap run`): ogni comando che modifica fallisce con `SwitchError` «This shell is inside a cswap run session profile…» [S]. Non ereditare `CLAUDE_SECURESTORAGE_CONFIG_DIR`.
-- **Avviso di aggiornamento:** dopo ogni comando non JSON (tranne `purge` e `upgrade`) cswap può scrivere su **stderr** `A newer version of claude-swap is available (X.Y.Z). You are using 0.26.0. Run … to update.` Interroga PyPI al massimo una volta ogni 24 h (cache `cache/update_check.json`, timeout 2 s) [S][V]. Non è un errore.
+- **Avviso di aggiornamento:** dopo ogni comando non JSON (tranne `purge` e `upgrade`) cswap può scrivere su **stderr** `A newer version of claude-swap is available (X.Y.Z). You are using 0.27.2. Run … to update.` Interroga PyPI al massimo una volta ogni 24 h (cache `cache/update_check.json`, timeout 2 s) [S][V]. Non è un errore.
 
 ## 2. Codici di uscita
 
@@ -82,6 +82,8 @@ Schema (fixture `list.json`, `list-*.json`):
 | `.usage` | object \| null | Non null solo con `ok` |
 | `.alias` | string | **Assente** se non impostato |
 | `.disabled` | `true` | **Assente** se abilitato |
+| `.loginExpiresAt` | string ISO `Z` | 0.27 [V]. Scadenza del refresh token (`refreshTokenExpiresAt`): dopo serve un nuovo `/login`. **Assente** se il login non la registra (= sconosciuta, non «adesso»). Può essere futura anche con `relogin_required` |
+| `.usageError`, `.usageRetryAt` (ISO `Z`) | string | 0.27 [S]. Solo con `usageStatus: "unavailable"`: causa dell'ultimo fetch fallito (`http-429`, `timeout`, `network`, `http-NNN`) e, durante il backoff, quando riprova |
 | `.usageFetchedAt` (ISO `Z`), `.usageAgeSeconds` (float) | | Solo con `usage` non null |
 | `.lastGoodUsage`, `.lastGoodFetchedAt`, `.lastGoodAgeSeconds` | | Solo con `usage` null e una misura precedente: dati **da mostrare**, non da usare per decidere |
 | `duplicateAccountWarnings`, `lockstepUsageWarnings` | string[] | Assenti se vuoti |
@@ -102,14 +104,14 @@ Semantica di `usageStatus`:
 - `api_key`: account a chiave API, senza quote.
 - `foreign_credential`: la credenziale attiva appartiene a un altro account; uno `switch` la ripara.
 
-Non esiste uno stato «rate limited» in JSON: un 429 si vede come `ok` vecchio oppure `unavailable` con `lastGoodUsage` (fixture `list-rate-limited.json`). La causa (`http-429`, `timeout`, `network`, `http-NNN`) appare solo negli eventi `poll` di `auto --json` (`fetchErrors`) e nel log [S].
+Non esiste uno stato «rate limited» in JSON: un 429 si vede come `ok` vecchio oppure `unavailable` con `lastGoodUsage` (fixture `list-rate-limited.json`). Fino alla 0.26 la causa (`http-429`, `timeout`, `network`, `http-NNN`) appariva solo negli eventi `poll` di `auto --json` (`fetchErrors`) e nel log; dalla 0.27 le righe `unavailable` la portano in `usageError` [S].
 
 ### 3.2 `status` — `cswap status --json` [V]
 
 Tre forme (fixture `status.json`, `status-no-active.json`, `status-unmanaged.json`):
 - nessun login: `{"schemaVersion":1,"active":null}`;
 - login non gestito: `active = {email, managed:false}`;
-- gestito: `active` ha i campi di una riga di `list` (senza `active` e `disabled`) più `managed:true`; c'è anche `totalManagedAccounts` (int).
+- gestito: `active` ha i campi di una riga di `list` (senza `active`, `disabled` e `loginExpiresAt`) più `managed:true`; c'è anche `totalManagedAccounts` (int). Dalla 0.27 anche `usageError`/`usageRetryAt` come in `list` [S].
 
 Recupera i consumi solo dell'account attivo [S].
 
@@ -215,8 +217,12 @@ Stampa l'elenco di ciò che rimuove (cartella di backup, credenziali, profili di
 
 ### 3.13 `--version`, `--token-status`
 
-- `cswap --version` → `cswap 0.26.0` (il prefisso è il nome con cui è stato invocato). Regex: `^\S+ (\d+)\.(\d+)\.(\d+)` [V].
+- `cswap --version` → `cswap 0.27.2` (il prefisso è il nome con cui è stato invocato). Regex: `^\S+ (\d+)\.(\d+)\.(\d+)` [V].
 - `--token-status` vale solo con `list` in testo; con `--json` dà uscita 2 [V]. Righe `• <fonte>: <fresh|expired>, refresh token <yes|no>, expires <clock> in <countdown>` (fonti: `active profile`, `session profile`, `stored backup`). Non contiene token (fixture `list-token-status.txt`).
+
+### 3.14 `import-usage` — 0.27 [S]
+
+`cswap import-usage <path|-> [--hold S]`. Adotta le letture dei consumi fatte da un'altra macchina (il suo `list --json`): le righe `ok` sono abbinate agli slot locali per (email, `organizationUuid`); le altre e gli account non gestiti si saltano. `--hold S` impedisce i fetch locali di quegli account per S secondi (0 toglie un blocco precedente); `--hold` senza `import-usage` o negativo → uscita 2. Esito su stderr (`Adopted usage for … → slot N`); file mancante o `schemaVersion` diverso → `TransferError` (`usage file not found: …`), uscita 1 [V]. Non fa parte di F0: SwapDeck non lo usa.
 
 ## 4. Consumi: cadenza, cache e rete [S]
 
@@ -253,8 +259,8 @@ Regole per il client:
 
 ## 7. Versione minima supportata
 
-- **0.26.0** (l'unica provata). Il client legge `--version` all'avvio. Con una versione minore: avviso e funzioni ridotte. Con una maggiore e `schemaVersion` = 1: procede, ignorando i campi sconosciuti (lo schema è dichiarato additivo). Con `schemaVersion` ≠ 1: si ferma e avvisa.
-- Su PyPI esiste già la 0.27.2 (avviso di aggiornamento del 15/10/2026): da provare prima di estendere il supporto.
+- **Minima 0.26.0**; provate 0.26.0 e 0.27.2. Il client legge `--version` all'avvio. Sotto la 0.26.0: versione non supportata (avviso, azioni bloccate). Con una maggiore e `schemaVersion` = 1: procede, ignorando i campi sconosciuti (lo schema è dichiarato additivo). Con `schemaVersion` ≠ 1: si ferma e avvisa.
+- 0.27.2 (15/10/2026): solo aggiunte (`loginExpiresAt`, `usageError`, `usageRetryAt`, comando `import-usage`); `schemaVersion` resta 1.
 - Requisiti: Python ≥ 3.12 (lo fornisce uv); dipendenze `textual`, `truststore`, `keyring` (solo Windows).
 
 ## 8. Installazione

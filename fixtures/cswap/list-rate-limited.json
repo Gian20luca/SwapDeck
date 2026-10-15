@@ -58,7 +58,9 @@
         }
       },
       "lastGoodFetchedAt": "2026-10-15T17:40:00Z",
-      "lastGoodAgeSeconds": 6600.0
+      "lastGoodAgeSeconds": 6600.0,
+      "usageError": "http-429",
+      "usageRetryAt": "2026-10-15T19:36:00Z"
     }
   ]
 }

@@ -1,27 +1,31 @@
 Accounts:
   1: alias1 (user1@example.com) [Example Org 1]
      ├ 5h:      0%
-     ├ 7d:     50%   resets Oct 19 18:59  in 3d 21h
-     └ Fable:   0%   resets Oct 19 19:00  in 3d 21h
+     ├ 7d:     50%   resets Oct 19 18:59  in 3d 20h
+     └ Fable:   0%   resets Oct 19 19:00  in 3d 20h · 8m ago
 
   2: alias2 (user2@example.com) [Example Org 2]
      re-login needed — refresh token dead; log in with Claude Code, then run: cswap add
      └ last seen 87% used · 9d ago
 
   3: alias3 (user3@example.com) [Example Org 1]
-     ├ 5h:      1%   resets 23:29         in 1h 57m
-     ├ 7d:     21%   resets Oct 20 03:59  in 4d 6h
-     └ Fable:   0%   resets Oct 20 04:00  in 4d 6h · 7m ago
+     ├ 5h:      1%   resets 23:30         in 53m
+     ├ 7d:     21%   resets Oct 20 04:00  in 4d 5h
+     └ Fable:   0%   resets Oct 20 04:00  in 4d 5h · 8m ago
 
   5: alias5 (user5@example.com) [Example Org 1]
      re-login needed — refresh token dead; log in with Claude Code, then run: cswap add
-     └ last seen 18% used · 8d ago
+     └ last seen 18% used · 9d ago
 
   6: alias6 (user6@example.com) [Example Org 1] (active)
-     ├ 5h:     47%   resets Oct 16 00:19  in 2h 47m
-     ├ 7d:     74%   resets Oct 21 02:59  in 5d 5h  (ahead of pace)
-     └ Fable:   0%   resets Oct 21 03:00  in 5d 5h
+     ├ 5h:     66%   resets Oct 16 00:20  in 1h 43m
+     ├ 7d:     77%   resets Oct 21 03:00  in 5d 4h  (ahead of pace)
+     └ Fable:   0%   resets Oct 21 03:00  in 5d 4h
 
 Running instances:
-  ● VS Code   c:\work\project-a  (1 session, IDE)
-  ● Claude CLI   ~/work/project-b  (1 session)
+  ● VS Code   c:\BitBucket\Desio\links-host-to-host  (1 session, IDE)
+  ● VS Code   c:\ProgettiMieiAi\WidgetCswap  (1 session, IDE)
+  ● VS Code   c:\BitBucket\Desio  (1 session, IDE)
+  ● VS Code   c:\BitBucket\CRASTI\links-rpa-runner  (IDE)
+  ● VS Code   c:\BitBucket\Desio\links-onboarding-api  (IDE)
+  ● VS Code   c:\ProgettiMieiAi\CheatLinksCafeChallenge  (IDE)

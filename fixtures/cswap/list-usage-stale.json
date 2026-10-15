@@ -30,7 +30,8 @@
         }
       },
       "lastGoodFetchedAt": "2026-10-15T18:10:00Z",
-      "lastGoodAgeSeconds": 4800.0
+      "lastGoodAgeSeconds": 4800.0,
+      "usageError": "timeout"
     },
     {
       "number": 2,

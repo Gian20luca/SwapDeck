@@ -1,7 +1,9 @@
 /**
- * Tipi condivisi. Dallo step 1 saranno generati da `swapdeck-core` con ts-rs:
- * qui resta solo la versione del formato dei dati.
+ * Tipi condivisi, generati da `swapdeck-core` con ts-rs (`pnpm gen:types`).
+ * Qui resta a mano solo la versione dello schema JSON di cswap supportata.
  */
+export type * from './generated/index.js';
+
 export const SCHEMA_VERSION = 1 as const;
 
 export type SchemaVersion = typeof SCHEMA_VERSION;

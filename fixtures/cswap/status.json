@@ -10,28 +10,28 @@
     "usageStatus": "ok",
     "usage": {
       "fiveHour": {
-        "pct": 47.0,
-        "resetsAt": "2026-10-15T22:19:59.555116+00:00",
-        "countdown": "2h 47m",
-        "clock": "Oct 16 00:19"
+        "pct": 66.0,
+        "resetsAt": "2026-10-15T22:20:00.105830+00:00",
+        "countdown": "1h 43m",
+        "clock": "Oct 16 00:20"
       },
       "sevenDay": {
-        "pct": 74.0,
-        "resetsAt": "2026-10-21T00:59:59.555133+00:00",
-        "countdown": "5d 5h",
-        "clock": "Oct 21 02:59",
-        "expectedPct": 25.3,
+        "pct": 77.0,
+        "resetsAt": "2026-10-21T01:00:00.105850+00:00",
+        "countdown": "5d 4h",
+        "clock": "Oct 21 03:00",
+        "expectedPct": 26.0,
         "aheadOfPace": true,
-        "projectedExhaustionAt": "2026-10-16T10:26:19Z",
+        "projectedExhaustionAt": "2026-10-16T09:37:21Z",
         "willLastToReset": false
       },
       "scoped": [
         {
           "pct": 0.0,
           "resetsAt": "2026-10-21T01:00:00+00:00",
-          "countdown": "5d 5h",
+          "countdown": "5d 4h",
           "clock": "Oct 21 03:00",
-          "expectedPct": 25.3,
+          "expectedPct": 26.0,
           "aheadOfPace": false,
           "willLastToReset": true,
           "name": "Fable"
@@ -39,8 +39,8 @@
       ]
     },
     "alias": "alias6",
-    "usageFetchedAt": "2026-10-15T19:30:16Z",
-    "usageAgeSeconds": 155.0
+    "usageFetchedAt": "2026-10-15T20:35:58Z",
+    "usageAgeSeconds": 10.3
   },
   "totalManagedAccounts": 5
 }
