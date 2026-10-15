@@ -2,6 +2,9 @@
 //! stato JSON (`list --json`) che modifica come farebbe cswap, simula prompt su
 //! stdin, codici di uscita e attese. Si configura con `fake.json` accanto
 //! all'eseguibile; ogni chiamata è registrata in una riga JSON nel file di log.
+//! Senza `fake.json` usa `fixtures/cswap/` e parte da `list.json`, salvando lo
+//! stato in `state.json` accanto all'eseguibile: così si può indicare con
+//! `SWAPDECK_CSWAP` per provare app ed estensione senza toccare il cswap reale.
 //! Chiamato `uv`, simula `uv tool upgrade claude-swap`.
 
 use std::fs::{self, OpenOptions};
@@ -83,8 +86,11 @@ impl Fake {
     }
 
     fn fixture(&self, name: &str) -> String {
-        let dir = self.cfg["fixtures"].as_str().unwrap();
-        fs::read_to_string(Path::new(dir).join(name)).unwrap()
+        let dir = self.cfg["fixtures"]
+            .as_str()
+            .map(PathBuf::from)
+            .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/cswap"));
+        fs::read_to_string(dir.join(name)).unwrap()
     }
 
     fn state_path(&self) -> PathBuf {
@@ -98,9 +104,14 @@ impl Fake {
         fs::read_to_string(self.state_path())
             .ok()
             .and_then(|t| serde_json::from_str(&t).ok())
-            .unwrap_or_else(
-                || json!({"schemaVersion": 1, "activeAccountNumber": null, "accounts": []}),
-            )
+            .unwrap_or_else(|| {
+                if self.cfg.get("state").is_none() {
+                    // Senza fake.json (prove dell'app con SWAPDECK_CSWAP): parte da list.json.
+                    serde_json::from_str(&self.fixture("list.json")).unwrap()
+                } else {
+                    json!({"schemaVersion": 1, "activeAccountNumber": null, "accounts": []})
+                }
+            })
     }
 
     fn save(&self, state: &Value) {
