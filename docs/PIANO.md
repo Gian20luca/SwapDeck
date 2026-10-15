@@ -15,7 +15,7 @@ Stato: **piano, in attesa del via**. Prontezza circa 95% (il contratto di `cswap
 | F2 | Notifiche di sistema alle soglie (default 80% e 95%) e a ogni cambio di account | confermata |
 | F3 | Motore di regole che generalizza `cswap-guard` | confermata (punti 3 e 9) |
 | F4 | Mini-widget flottante sempre in primo piano, oltre all'icona nell'area di notifica | confermata |
-| F5 | Rileva `cswap` e, se manca, installa `uv` e `claude-swap` per utente; aggiorna `cswap` dalla GUI | confermata |
+| F5 | Rileva `cswap` e, se manca, installa `uv` e `claude-swap` per utente. Controlla la versione installata contro l'ultima su PyPI, avvisa se ce n'è una nuova e la aggiorna con conferma (`uv tool upgrade claude-swap`; `cswap upgrade` su Windows non funziona). Dopo l'aggiornamento verifica `schemaVersion` | confermata |
 | F6 | Avvio automatico al login (per utente) | confermata |
 | F7 | Estensione VS Code con monitoraggio **e** azioni | confermata |
 | F8 | Aggiornamento automatico dell'app | confermata (dipende dal repo) |
