@@ -51,7 +51,9 @@ export function HistoryPanel({ account, fiveHourSpanHours = 24 }: HistoryPanelPr
     backend
       .getHistory({ account })
       .then((points) => alive && setState({ status: 'ready', points }))
-      .catch((error: unknown) => alive && setState({ status: 'error', message: errorMessage(error) }));
+      .catch(
+        (error: unknown) => alive && setState({ status: 'error', message: errorMessage(error) }),
+      );
     return () => {
       alive = false;
     };

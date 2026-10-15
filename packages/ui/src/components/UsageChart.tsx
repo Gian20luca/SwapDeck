@@ -78,7 +78,9 @@ export function UsageChart({ title, x, lines, height = 160 }: UsageChartProps) {
           const color = cssColor(
             host,
             line.color ??
-              (isPace ? '--sd-chart-pace' : (DEFAULT_COLORS[usageIndex++ % DEFAULT_COLORS.length] ?? '')),
+              (isPace
+                ? '--sd-chart-pace'
+                : (DEFAULT_COLORS[usageIndex++ % DEFAULT_COLORS.length] ?? '')),
           );
           return {
             label: line.label,

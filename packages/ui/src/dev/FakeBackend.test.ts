@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { actions } from '../backend/actions.js';
 import { BackendError } from '../backend/types.js';
 import { FakeBackend } from './FakeBackend.js';
-import { SCENARIO_NAMES, loadScenario } from './fixtures.js';
+import { FIXTURE_REFERENCE_MS, SCENARIOS, SCENARIO_NAMES, loadScenario } from './fixtures.js';
 import { generateHistory } from './history.js';
 
 const NOW = Date.parse('2026-10-20T12:00:00Z');
@@ -10,9 +10,10 @@ const NOW = Date.parse('2026-10-20T12:00:00Z');
 describe('fixtures', () => {
   it('sposta gli istanti in modo che «ora» coincida con la cattura', () => {
     const list = loadScenario('default', NOW);
-    const delta = NOW - Date.parse('2026-10-15T19:32:50Z');
+    const delta = NOW - FIXTURE_REFERENCE_MS;
+    const original = SCENARIOS.default.accounts[0]!.usage!.sevenDay!.resetsAt;
     expect(Date.parse(list.accounts[0]!.usage!.sevenDay!.resetsAt!)).toBeCloseTo(
-      Date.parse('2026-10-19T16:59:59.948Z') + delta,
+      Date.parse(original) + delta,
       -2,
     );
   });
@@ -57,10 +58,19 @@ describe('FakeBackend: letture', () => {
 
   it('confirmationFor segue le regole del piano', async () => {
     const backend = new FakeBackend({ now: () => NOW });
-    expect(await backend.confirmationFor({ kind: 'purge' })).toEqual({ kind: 'typed', word: 'purge' });
-    expect(await backend.confirmationFor({ kind: 'remove', account: 1 })).toEqual({ kind: 'simple' });
-    expect(await backend.confirmationFor({ kind: 'disable', account: 6 })).toEqual({ kind: 'simple' });
-    expect(await backend.confirmationFor({ kind: 'disable', account: 1 })).toEqual({ kind: 'none' });
+    expect(await backend.confirmationFor({ kind: 'purge' })).toEqual({
+      kind: 'typed',
+      word: 'purge',
+    });
+    expect(await backend.confirmationFor({ kind: 'remove', account: 1 })).toEqual({
+      kind: 'simple',
+    });
+    expect(await backend.confirmationFor({ kind: 'disable', account: 6 })).toEqual({
+      kind: 'simple',
+    });
+    expect(await backend.confirmationFor({ kind: 'disable', account: 1 })).toEqual({
+      kind: 'none',
+    });
     expect(await backend.confirmationFor(actions.switchTo(1))).toEqual({ kind: 'none' });
   });
 });
@@ -126,13 +136,21 @@ describe('FakeBackend: altre azioni', () => {
   it('disable, enable e setAlias aggiornano la lista', async () => {
     const backend = new FakeBackend({ now: () => NOW });
     await backend.runAction({ kind: 'disable', account: 1 });
-    expect((await backend.listAccounts()).accounts.find((a) => a.number === 1)?.disabled).toBe(true);
+    expect((await backend.listAccounts()).accounts.find((a) => a.number === 1)?.disabled).toBe(
+      true,
+    );
     await backend.runAction({ kind: 'enable', account: 1 });
-    expect((await backend.listAccounts()).accounts.find((a) => a.number === 1)?.disabled).toBeUndefined();
+    expect(
+      (await backend.listAccounts()).accounts.find((a) => a.number === 1)?.disabled,
+    ).toBeUndefined();
     await backend.runAction({ kind: 'setAlias', account: 1, alias: 'nuovo' });
-    expect((await backend.listAccounts()).accounts.find((a) => a.number === 1)?.alias).toBe('nuovo');
+    expect((await backend.listAccounts()).accounts.find((a) => a.number === 1)?.alias).toBe(
+      'nuovo',
+    );
     await backend.runAction({ kind: 'setAlias', account: 1, alias: null });
-    expect((await backend.listAccounts()).accounts.find((a) => a.number === 1)?.alias).toBeUndefined();
+    expect(
+      (await backend.listAccounts()).accounts.find((a) => a.number === 1)?.alias,
+    ).toBeUndefined();
   });
 
   it('remove e swap', async () => {
@@ -143,7 +161,9 @@ describe('FakeBackend: altre azioni', () => {
     expect(list.accounts.find((a) => a.number === 1)?.email).toBe('user6@example.com');
     await backend.runAction({ kind: 'remove', account: 3 });
     expect((await backend.listAccounts()).accounts.some((a) => a.number === 3)).toBe(false);
-    await expect(backend.runAction({ kind: 'remove', account: 3 })).rejects.toBeInstanceOf(BackendError);
+    await expect(backend.runAction({ kind: 'remove', account: 3 })).rejects.toBeInstanceOf(
+      BackendError,
+    );
   });
 
   it('le azioni non simulate rispondono con un messaggio e vengono registrate', async () => {
@@ -157,9 +177,11 @@ describe('FakeBackend: altre azioni', () => {
     const backend = new FakeBackend({ now: () => NOW });
     const listener = vi.fn();
     const off = backend.onStateChanged(listener);
-    const before = (await backend.listAccounts()).accounts.find((a) => a.active)!.usage!.fiveHour!.pct;
+    const before = (await backend.listAccounts()).accounts.find((a) => a.active)!.usage!.fiveHour!
+      .pct;
     backend.tick();
-    const after = listener.mock.calls[0]![0].accounts.find((a: { active: boolean }) => a.active).usage.fiveHour.pct;
+    const after = listener.mock.calls[0]![0].accounts.find((a: { active: boolean }) => a.active)
+      .usage.fiveHour.pct;
     expect(after).toBeGreaterThan(before);
     off();
     backend.tick();
@@ -197,7 +219,12 @@ describe('storico sintetico', () => {
     expect(a).toEqual(b);
     for (let i = 0; i < a.length; i++) {
       const p = a[i]!;
-      for (const v of [p.fiveHourPct, p.sevenDayPct, p.fiveHourExpectedPct, p.sevenDayExpectedPct]) {
+      for (const v of [
+        p.fiveHourPct,
+        p.sevenDayPct,
+        p.fiveHourExpectedPct,
+        p.sevenDayExpectedPct,
+      ]) {
         if (v !== null) {
           expect(v).toBeGreaterThanOrEqual(0);
           expect(v).toBeLessThanOrEqual(100);
@@ -222,7 +249,8 @@ describe('storico sintetico', () => {
       const own = points.filter((p) => p.account === account.number);
       if (!account.usage && !account.lastGoodUsage) expect(own).toHaveLength(0);
       if (!account.usage && account.lastGoodFetchedAt) {
-        for (const p of own) expect(p.ts * 1000).toBeLessThanOrEqual(Date.parse(account.lastGoodFetchedAt) + 1000);
+        for (const p of own)
+          expect(p.ts * 1000).toBeLessThanOrEqual(Date.parse(account.lastGoodFetchedAt) + 1000);
       }
     }
   });

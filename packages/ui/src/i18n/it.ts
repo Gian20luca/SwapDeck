@@ -49,7 +49,7 @@ export const it = {
   'account.cannotSwitch.relogin': 'Serve un nuovo login in Claude Code',
   'account.lastKnown': 'Ultimo dato noto',
   'account.history': 'Storico',
-  'account.historyHide': 'Nascondi storico',
+  'account.historyHide': 'Nascondi lo storico di {name}',
   'account.historyLabel': 'Mostra lo storico di {name}',
 
   'usage.fiveHour': '5 ore',

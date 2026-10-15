@@ -44,7 +44,12 @@ export interface ThemeProviderProps {
 }
 
 /** Tema chiaro/scuro/auto: imposta `data-theme` sull'elemento radice; i colori sono variabili CSS. */
-export function ThemeProvider({ initial = 'auto', onChange, target, children }: ThemeProviderProps) {
+export function ThemeProvider({
+  initial = 'auto',
+  onChange,
+  target,
+  children,
+}: ThemeProviderProps) {
   const [mode, setModeState] = useState<ThemeMode>(initial);
   const [systemDark, setSystemDark] = useState<boolean>(systemPrefersDark);
 

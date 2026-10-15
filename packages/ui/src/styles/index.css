@@ -14,7 +14,7 @@
   --sd-warn: #8f5a00;
   --sd-danger: #bf2323;
   --sd-ok-fill: #2fa466;
-  --sd-warn-fill: #e0a21c;
+  --sd-warn-fill: #c07d00;
   --sd-danger-fill: #d64545;
   --sd-track: #dfe3ea;
   --sd-focus: #1b4fc4;
@@ -87,7 +87,12 @@ body {
   margin: 0;
   background: var(--sd-bg);
   color: var(--sd-text);
-  font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font:
+    14px/1.4 system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
 }
 
 /* Focus ben visibile per la tastiera su ogni elemento interattivo. */

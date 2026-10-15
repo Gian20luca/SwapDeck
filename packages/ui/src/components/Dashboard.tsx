@@ -58,7 +58,10 @@ export function Dashboard({ toolbarExtra }: DashboardProps) {
         setNotice({ tone: 'info', text: t('quick.result.stay', { message: result.message }) });
       }
     } catch (error) {
-      setNotice({ tone: 'danger', text: t('dashboard.switchFailed', { message: errorMessage(error) }) });
+      setNotice({
+        tone: 'danger',
+        text: t('dashboard.switchFailed', { message: errorMessage(error) }),
+      });
     } finally {
       setBusy(false);
     }
@@ -99,7 +102,11 @@ export function Dashboard({ toolbarExtra }: DashboardProps) {
 
       <div aria-live="polite">
         {notice && (
-          <div className="sd-notice" data-tone={notice.tone} role={notice.tone === 'danger' ? 'alert' : 'status'}>
+          <div
+            className="sd-notice"
+            data-tone={notice.tone}
+            role={notice.tone === 'danger' ? 'alert' : 'status'}
+          >
             {notice.text}
           </div>
         )}
@@ -155,7 +162,9 @@ export function Dashboard({ toolbarExtra }: DashboardProps) {
                 busy={busy}
                 onSwitch={onSwitch}
                 historyOpen={historyFor === account.number}
-                onToggleHistory={(a) => setHistoryFor((cur) => (cur === a.number ? null : a.number))}
+                onToggleHistory={(a) =>
+                  setHistoryFor((cur) => (cur === a.number ? null : a.number))
+                }
                 history={<HistoryPanel account={account.number} />}
               />
             ))}

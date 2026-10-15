@@ -91,7 +91,7 @@ export class FakeBackend implements Backend {
     return this.list.accounts.find((a) => a.number === number);
   }
 
-  async listAccounts(): Promise<ListResponse> {
+  async listAccounts(_options?: { refresh?: boolean }): Promise<ListResponse> {
     this.listCalls += 1;
     await this.delay();
     return this.snapshot();
@@ -156,14 +156,18 @@ export class FakeBackend implements Backend {
         return this.doSwitch(action);
       case 'disable':
       case 'enable': {
-        const account = this.find(action.account) ?? fail(`Account-${action.account} does not exist`, 'AccountNotFoundError');
+        const account =
+          this.find(action.account) ??
+          fail(`Account-${action.account} does not exist`, 'AccountNotFoundError');
         if (action.kind === 'disable') account.disabled = true;
         else delete account.disabled;
         this.emit();
         return {};
       }
       case 'setAlias': {
-        const account = this.find(action.account) ?? fail(`Account-${action.account} does not exist`, 'AccountNotFoundError');
+        const account =
+          this.find(action.account) ??
+          fail(`Account-${action.account} does not exist`, 'AccountNotFoundError');
         if (action.alias === null) delete account.alias;
         else account.alias = action.alias;
         this.emit();
@@ -172,25 +176,32 @@ export class FakeBackend implements Backend {
       case 'remove': {
         const before = this.list.accounts.length;
         this.list.accounts = this.list.accounts.filter((a) => a.number !== action.account);
-        if (this.list.accounts.length === before) fail(`Account-${action.account} does not exist`, 'AccountNotFoundError');
+        if (this.list.accounts.length === before)
+          fail(`Account-${action.account} does not exist`, 'AccountNotFoundError');
         if (this.list.activeAccountNumber === action.account) this.list.activeAccountNumber = null;
         this.emit();
         return {};
       }
       case 'swap': {
-        const a = this.find(action.a) ?? fail(`Account-${action.a} does not exist`, 'AccountNotFoundError');
-        const b = this.find(action.b) ?? fail(`Account-${action.b} does not exist`, 'AccountNotFoundError');
+        const a =
+          this.find(action.a) ?? fail(`Account-${action.a} does not exist`, 'AccountNotFoundError');
+        const b =
+          this.find(action.b) ?? fail(`Account-${action.b} does not exist`, 'AccountNotFoundError');
         [a.number, b.number] = [b.number, a.number];
         if (this.list.activeAccountNumber === action.a) this.list.activeAccountNumber = action.b;
-        else if (this.list.activeAccountNumber === action.b) this.list.activeAccountNumber = action.a;
+        else if (this.list.activeAccountNumber === action.b)
+          this.list.activeAccountNumber = action.a;
         this.list.accounts.sort((x, y) => x.number - y.number);
         this.emit();
         return {};
       }
       case 'move': {
-        const account = this.find(action.account) ?? fail(`Account-${action.account} does not exist`, 'AccountNotFoundError');
+        const account =
+          this.find(action.account) ??
+          fail(`Account-${action.account} does not exist`, 'AccountNotFoundError');
         if (this.find(action.slot)) fail(`Slot ${action.slot} is already used`, 'ConfigError');
-        if (this.list.activeAccountNumber === account.number) this.list.activeAccountNumber = action.slot;
+        if (this.list.activeAccountNumber === account.number)
+          this.list.activeAccountNumber = action.slot;
         account.number = action.slot;
         this.list.accounts.sort((x, y) => x.number - y.number);
         this.emit();
@@ -271,9 +282,21 @@ export class FakeBackend implements Backend {
         accounts.find((a) => a.number === action.target) ??
         fail(`No account found with identifier: ${action.target}`, 'AccountNotFoundError');
       if (target.active) {
-        return response(target, false, 'already-active', 'direct', `Account-${target.number} is already active`);
+        return response(
+          target,
+          false,
+          'already-active',
+          'direct',
+          `Account-${target.number} is already active`,
+        );
       }
-      return response(target, true, 'switched', 'direct', `Switched to Account-${target.number} (${target.email})`);
+      return response(
+        target,
+        true,
+        'switched',
+        'direct',
+        `Switched to Account-${target.number} (${target.email})`,
+      );
     }
 
     const candidates = accounts.filter((a) => !a.active);
@@ -284,25 +307,63 @@ export class FakeBackend implements Backend {
     if (action.strategy === 'best') {
       const pool = candidates.filter(usable);
       if (pool.length === 0) {
-        return response(null, false, 'candidates-exhausted', 'best', 'All other accounts are at their limit', warnings);
+        return response(
+          null,
+          false,
+          'candidates-exhausted',
+          'best',
+          'All other accounts are at their limit',
+          warnings,
+        );
       }
       const rank = (a: Account) => a.usage?.sevenDay?.pct ?? 0;
       const best = pool.reduce((m, a) => (rank(a) < rank(m) ? a : m));
       if (current && usable(current) && rank(current) <= rank(best)) {
-        return response(current, false, 'already-best', 'best', `Account-${current.number} is already the best`, warnings);
+        return response(
+          current,
+          false,
+          'already-best',
+          'best',
+          `Account-${current.number} is already the best`,
+          warnings,
+        );
       }
-      return response(best, true, 'switched', 'best', `Switched to Account-${best.number} (${best.email})`, warnings);
+      return response(
+        best,
+        true,
+        'switched',
+        'best',
+        `Switched to Account-${best.number} (${best.email})`,
+        warnings,
+      );
     }
 
     // `next-available` e rotazione semplice: primo account utile dopo quello attivo, in cerchio.
     const ordered = [...accounts].sort((a, b) => a.number - b.number);
-    const start = Math.max(0, ordered.findIndex((a) => a.active));
+    const start = Math.max(
+      0,
+      ordered.findIndex((a) => a.active),
+    );
     const rotated = [...ordered.slice(start + 1), ...ordered.slice(0, start)];
     const strategy = action.strategy === 'next-available' ? 'next-available' : 'rotation';
     const next = rotated.find((a) => (strategy === 'rotation' ? !isDisabled(a) : usable(a)));
     if (!next) {
-      return response(null, false, 'candidates-exhausted', strategy, 'No valid target account', warnings);
+      return response(
+        null,
+        false,
+        'candidates-exhausted',
+        strategy,
+        'No valid target account',
+        warnings,
+      );
     }
-    return response(next, true, 'switched', strategy, `Switched to Account-${next.number} (${next.email})`, warnings);
+    return response(
+      next,
+      true,
+      'switched',
+      strategy,
+      `Switched to Account-${next.number} (${next.email})`,
+      warnings,
+    );
   }
 }

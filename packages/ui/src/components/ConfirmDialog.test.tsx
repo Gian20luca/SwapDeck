@@ -7,7 +7,14 @@ function setup(props: Partial<Parameters<typeof ConfirmDialog>[0]> = {}) {
   const onConfirm = vi.fn();
   const onCancel = vi.fn();
   render(
-    <ConfirmDialog open title="Rimuovere?" message="Sicuro?" onConfirm={onConfirm} onCancel={onCancel} {...props} />,
+    <ConfirmDialog
+      open
+      title="Rimuovere?"
+      message="Sicuro?"
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+      {...props}
+    />,
   );
   return { onConfirm, onCancel };
 }
@@ -101,7 +108,11 @@ describe('ConfirmDialog semplice', () => {
 
 describe('ConfirmDialog a doppia conferma', () => {
   it('chiede prima la conferma semplice, poi la parola', async () => {
-    const { onConfirm } = setup({ requireWord: 'ELIMINA', confirmLabel: 'Elimina tutto', tone: 'danger' });
+    const { onConfirm } = setup({
+      requireWord: 'ELIMINA',
+      confirmLabel: 'Elimina tutto',
+      tone: 'danger',
+    });
     expect(screen.getByText('Passo 1 di 2')).toBeInTheDocument();
     expect(screen.queryByLabelText('Parola di conferma')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Continua' }));

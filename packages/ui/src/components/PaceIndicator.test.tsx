@@ -26,7 +26,9 @@ describe('PaceIndicator', () => {
       />,
     );
     expect(screen.getByText('In anticipo sul ritmo')).toBeInTheDocument();
-    expect(screen.getByText(/Si esaurisce prima del reset · Esaurimento stimato/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Si esaurisce prima del reset · Esaurimento stimato/),
+    ).toBeInTheDocument();
     expect(screen.getByRole('group')).toHaveAttribute('data-tone', 'danger');
   });
 

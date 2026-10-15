@@ -7,13 +7,13 @@ export { MiniWidget } from './components/MiniWidget.js';
 export { AccountCard, type AccountCardProps } from './components/AccountCard.js';
 export { UsageBar, type UsageBarProps } from './components/UsageBar.js';
 export { PaceIndicator, type PaceIndicatorProps } from './components/PaceIndicator.js';
-export { QuickSwitch, type QuickStrategy, type QuickSwitchProps } from './components/QuickSwitch.js';
-export { HistoryPanel, type HistoryPanelProps } from './components/HistoryPanel.js';
 export {
-  UsageChart,
-  type ChartLine,
-  type UsageChartProps,
-} from './components/UsageChart.js';
+  QuickSwitch,
+  type QuickStrategy,
+  type QuickSwitchProps,
+} from './components/QuickSwitch.js';
+export { HistoryPanel, type HistoryPanelProps } from './components/HistoryPanel.js';
+export { UsageChart, type ChartLine, type UsageChartProps } from './components/UsageChart.js';
 export { ConfirmDialog, type ConfirmDialogProps } from './components/ConfirmDialog.js';
 export { LanguageSelect, ThemeSelect } from './components/PreferenceControls.js';
 

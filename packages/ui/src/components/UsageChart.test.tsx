@@ -43,7 +43,9 @@ describe('UsageChart', () => {
 
   it('espone un’etichetta accessibile con l’ultimo valore', () => {
     render(<UsageChart title="5 ore" x={x} lines={lines} />);
-    expect(screen.getByRole('img', { name: 'Grafico: 5 ore. Ultimo valore 30%.' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: 'Grafico: 5 ore. Ultimo valore 30%.' }),
+    ).toBeInTheDocument();
   });
 
   it('distrugge il grafico allo smontaggio', () => {

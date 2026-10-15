@@ -22,7 +22,9 @@ describe('UsageBar', () => {
   });
 
   it('applica il livello di soglia', () => {
-    const { container, rerender } = render(<UsageBar label="x" accountName="a" pct={50} now={now} />);
+    const { container, rerender } = render(
+      <UsageBar label="x" accountName="a" pct={50} now={now} />,
+    );
     expect(container.querySelector('.sd-bar')).toHaveAttribute('data-level', 'ok');
     rerender(<UsageBar label="x" accountName="a" pct={85} now={now} />);
     expect(container.querySelector('.sd-bar')).toHaveAttribute('data-level', 'warn');

@@ -21,10 +21,13 @@ export function useAccounts(): { state: AccountsState; refresh: () => Promise<vo
 
   const load = useCallback(
     async (force: boolean) => {
-      setState((prev) => (prev.status === 'ready' ? { ...prev, refreshing: true } : { status: 'loading' }));
+      setState((prev) =>
+        prev.status === 'ready' ? { ...prev, refreshing: true } : { status: 'loading' },
+      );
       try {
         const data = await backend.listAccounts(force ? { refresh: true } : undefined);
-        if (alive.current) setState({ status: 'ready', data, refreshing: false, receivedAt: Date.now() });
+        if (alive.current)
+          setState({ status: 'ready', data, refreshing: false, receivedAt: Date.now() });
       } catch (error) {
         if (alive.current) setState({ status: 'error', message: errorMessage(error) });
       }
@@ -36,7 +39,8 @@ export function useAccounts(): { state: AccountsState; refresh: () => Promise<vo
     alive.current = true;
     void load(false);
     const off = backend.onStateChanged((data) => {
-      if (alive.current) setState({ status: 'ready', data, refreshing: false, receivedAt: Date.now() });
+      if (alive.current)
+        setState({ status: 'ready', data, refreshing: false, receivedAt: Date.now() });
     });
     return () => {
       alive.current = false;

@@ -45,7 +45,11 @@ export function UsageBar({
       <div
         className="sd-bar__track"
         role="progressbar"
-        aria-label={t('usage.barLabel', { window: label, name: accountName, pct: shown ?? t('usage.unknown') })}
+        aria-label={t('usage.barLabel', {
+          window: label,
+          name: accountName,
+          pct: shown ?? t('usage.unknown'),
+        })}
         aria-valuemin={0}
         aria-valuemax={100}
         {...(shown !== null ? { 'aria-valuenow': shown } : {})}

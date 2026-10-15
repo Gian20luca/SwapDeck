@@ -23,8 +23,17 @@ export type ScenarioName = keyof typeof SCENARIOS;
 
 export const SCENARIO_NAMES = Object.keys(SCENARIOS) as ScenarioName[];
 
-/** Istante in cui sono state catturate le fixture (data di `list.json` più la sua età). */
-export const FIXTURE_REFERENCE_MS = Date.parse('2026-10-15T19:32:50Z');
+/** Istante di cattura di `list.json`: l'ultima lettura dei consumi più la sua età (le fixture si possono ricatturare). */
+export const FIXTURE_REFERENCE_MS = Math.max(
+  ...list.accounts.flatMap((a) =>
+    'usageFetchedAt' in a && typeof a.usageFetchedAt === 'string'
+      ? [
+          Date.parse(a.usageFetchedAt) +
+            ('usageAgeSeconds' in a ? Number(a.usageAgeSeconds) : 0) * 1000,
+        ]
+      : [],
+  ),
+);
 
 const TIME_KEYS = new Set([
   'resetsAt',

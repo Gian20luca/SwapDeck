@@ -51,7 +51,7 @@ export const en: Record<MessageKey, string> = {
   'account.cannotSwitch.relogin': 'A new login in Claude Code is required',
   'account.lastKnown': 'Last known data',
   'account.history': 'History',
-  'account.historyHide': 'Hide history',
+  'account.historyHide': 'Hide history of {name}',
   'account.historyLabel': 'Show history of {name}',
 
   'usage.fiveHour': '5 hours',

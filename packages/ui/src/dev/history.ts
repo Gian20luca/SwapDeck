@@ -74,7 +74,11 @@ function usageOf(account: Account): { usage: Usage; until: number } | null {
  * l'ultimo punto coincide col consumo attuale e le finestre si azzerano ai reset.
  * Gli account senza consumi noti non hanno punti; quelli con dato vecchio si fermano all'ultima misura.
  */
-export function generateHistory(list: ListResponse, nowMs: number, sinceSeconds?: number): HistoryPoint[] {
+export function generateHistory(
+  list: ListResponse,
+  nowMs: number,
+  sinceSeconds?: number,
+): HistoryPoint[] {
   const now = Math.floor(nowMs / 1000);
   const since = sinceSeconds ?? now - SEVEN_DAYS;
   const points: HistoryPoint[] = [];
@@ -86,7 +90,9 @@ export function generateHistory(list: ListResponse, nowMs: number, sinceSeconds?
     const five = usage.fiveHour;
     const seven = usage.sevenDay;
     const fiveModel: WindowModel = {
-      reset: five?.resetsAt ? Date.parse(five.resetsAt) / 1000 : until + (((account.number * 53) % 300) + 30) * 60,
+      reset: five?.resetsAt
+        ? Date.parse(five.resetsAt) / 1000
+        : until + (((account.number * 53) % 300) + 30) * 60,
       length: FIVE_HOURS,
       currentPct: five?.pct ?? 0,
     };

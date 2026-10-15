@@ -38,7 +38,10 @@ export function PaceIndicator({
       <span className="sd-pace__main">
         <span aria-hidden="true">{ahead ? '▲' : '●'}</span>{' '}
         <span>{ahead ? t('pace.ahead') : t('pace.onTrack')}</span>
-        <span className="sd-pace__expected"> · {t('pace.expected', { pct: Math.round(expectedPct) })}</span>
+        <span className="sd-pace__expected">
+          {' '}
+          · {t('pace.expected', { pct: Math.round(expectedPct) })}
+        </span>
       </span>
       {willLastToReset !== null && willLastToReset !== undefined && (
         <span className="sd-pace__last">
