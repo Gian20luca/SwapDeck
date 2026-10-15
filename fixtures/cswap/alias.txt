@@ -1,0 +1,6 @@
+Aliases:
+  1: alias1 (user1@example.com)
+  2: alias2 (user2@example.com)
+  3: alias3 (user3@example.com)
+  5: alias5 (user5@example.com)
+  6: alias6 (user6@example.com)

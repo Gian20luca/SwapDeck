@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "activeAccountNumber": 1,
+  "accounts": [
+    {
+      "number": 1,
+      "email": "user1@example.com",
+      "organizationName": "Example Org 1",
+      "organizationUuid": "00000000-0000-4000-8000-000000000001",
+      "isOrganization": true,
+      "active": true,
+      "usageStatus": "unavailable",
+      "usage": null,
+      "lastGoodUsage": {
+        "fiveHour": {
+          "pct": 63.0,
+          "resetsAt": "2026-10-15T21:00:00.000000+00:00",
+          "countdown": "1h 30m",
+          "clock": "23:00"
+        },
+        "sevenDay": {
+          "pct": 70.0,
+          "resetsAt": "2026-10-19T17:00:00.000000+00:00",
+          "countdown": "3d 21h",
+          "clock": "Oct 19 19:00",
+          "expectedPct": 44.3,
+          "aheadOfPace": true,
+          "projectedExhaustionAt": "2026-10-17T09:12:00Z",
+          "willLastToReset": false
+        }
+      },
+      "lastGoodFetchedAt": "2026-10-15T18:10:00Z",
+      "lastGoodAgeSeconds": 4800.0
+    },
+    {
+      "number": 2,
+      "email": "user2@example.com",
+      "organizationName": "Example Org 1",
+      "organizationUuid": "00000000-0000-4000-8000-000000000001",
+      "isOrganization": true,
+      "active": false,
+      "usageStatus": "unavailable",
+      "usage": null
+    },
+    {
+      "number": 3,
+      "email": "api-key-3@token.local",
+      "organizationName": "",
+      "organizationUuid": "",
+      "isOrganization": false,
+      "active": false,
+      "usageStatus": "api_key",
+      "usage": null
+    },
+    {
+      "number": 4,
+      "email": "setup-token-4@token.local",
+      "organizationName": "",
+      "organizationUuid": "",
+      "isOrganization": false,
+      "active": false,
+      "usageStatus": "no_credentials",
+      "usage": null
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "switched": false,
+  "from": {
+    "number": 6,
+    "email": "user6@example.com"
+  },
+  "to": {
+    "number": 6,
+    "email": "user6@example.com"
+  },
+  "strategy": "next-available",
+  "reason": "candidates-exhausted",
+  "message": "All other accounts are at their 5h/7d limit — staying on Account-6.",
+  "warnings": [
+    "Skipped Account-1 (at 5h/7d limit)",
+    "Skipped Account-3 (at 5h/7d limit)"
+  ]
+}

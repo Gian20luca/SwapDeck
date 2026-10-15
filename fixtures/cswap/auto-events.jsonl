@@ -1,0 +1,7 @@
+{"schemaVersion": 1, "event": "poll", "ts": "2026-10-15T19:30:00Z", "active": {"number": 6, "email": "user6@example.com"}, "headroomPct": {"1": 50.0, "3": 79.0, "6": 7.0}, "threshold": 90.0, "fetchErrors": {"2": "http-429"}, "windowsPct": {"1": {"5h": 0.0, "7d": 50.0}, "3": {"5h": 1.0, "7d": 21.0}, "6": {"5h": 93.0, "7d": 74.0}}}
+{"schemaVersion": 1, "event": "switch", "ts": "2026-10-15T19:30:02Z", "trigger": "proactive", "from": {"number": 6, "email": "user6@example.com"}, "to": {"number": 3, "email": "user3@example.com"}, "warnings": [], "dryRun": false}
+{"schemaVersion": 1, "event": "no-switch", "ts": "2026-10-15T19:31:00Z", "reason": "cooldown", "detail": ""}
+{"schemaVersion": 1, "event": "sleep", "ts": "2026-10-15T19:31:00Z", "seconds": 60.0, "until": "2026-10-15T19:32:00Z"}
+{"schemaVersion": 1, "event": "error", "ts": "2026-10-15T19:32:00Z", "message": "usage fetch failed for Account-3: timeout", "transient": true}
+{"schemaVersion": 1, "event": "all-exhausted", "ts": "2026-10-15T19:40:00Z", "earliestResetAt": "2026-10-15T22:19:59Z"}
+{"schemaVersion": 1, "error": {"type": "ConfigError", "message": "No accounts are managed yet"}}

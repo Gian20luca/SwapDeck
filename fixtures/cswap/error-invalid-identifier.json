@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "error": {
+    "type": "ValidationError",
+    "message": "Invalid account identifier: bad id!"
+  }
+}

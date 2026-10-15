@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "activeAccountNumber": 1,
+  "accounts": [
+    {
+      "number": 1,
+      "email": "user1@example.com",
+      "organizationName": "Example Org 1",
+      "organizationUuid": "00000000-0000-4000-8000-000000000001",
+      "isOrganization": true,
+      "active": true,
+      "usageStatus": "ok",
+      "usage": {
+        "fiveHour": {
+          "pct": 12.0,
+          "resetsAt": "2026-10-15T22:00:00.000000+00:00",
+          "countdown": "2h 30m",
+          "clock": "Oct 16 00:00"
+        },
+        "sevenDay": {
+          "pct": 40.0,
+          "resetsAt": "2026-10-19T17:00:00.000000+00:00",
+          "countdown": "3d 21h",
+          "clock": "Oct 19 19:00",
+          "expectedPct": 44.3,
+          "aheadOfPace": false,
+          "willLastToReset": true
+        }
+      },
+      "usageFetchedAt": "2026-10-15T19:28:00Z",
+      "usageAgeSeconds": 92.4
+    },
+    {
+      "number": 2,
+      "email": "user2@example.com",
+      "organizationName": "",
+      "organizationUuid": "",
+      "isOrganization": false,
+      "active": false,
+      "usageStatus": "ok",
+      "usage": {
+        "fiveHour": {
+          "pct": 0.0
+        },
+        "sevenDay": {
+          "pct": 5.0,
+          "resetsAt": "2026-10-21T08:00:00.000000+00:00",
+          "countdown": "5d 12h",
+          "clock": "Oct 21 10:00",
+          "expectedPct": 22.1,
+          "aheadOfPace": false,
+          "willLastToReset": true
+        }
+      },
+      "alias": "alias2",
+      "disabled": true,
+      "usageFetchedAt": "2026-10-15T19:26:10Z",
+      "usageAgeSeconds": 202.7
+    }
+  ]
+}

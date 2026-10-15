@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "error": {
+    "type": "ConfigError",
+    "message": "No accounts are managed yet"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "activeAccountNumber": 1,
+  "accounts": [
+    {
+      "number": 1,
+      "email": "user1@example.com",
+      "organizationName": "Example Org 1",
+      "organizationUuid": "00000000-0000-4000-8000-000000000001",
+      "isOrganization": true,
+      "active": true,
+      "usageStatus": "token_expired",
+      "usage": null,
+      "lastGoodUsage": {
+        "fiveHour": {
+          "pct": 20.0,
+          "resetsAt": "2026-10-15T22:00:00.000000+00:00",
+          "countdown": "2h 30m",
+          "clock": "Oct 16 00:00"
+        },
+        "sevenDay": {
+          "pct": 33.0,
+          "resetsAt": "2026-10-19T17:00:00.000000+00:00",
+          "countdown": "3d 21h",
+          "clock": "Oct 19 19:00",
+          "expectedPct": 44.3,
+          "aheadOfPace": false,
+          "willLastToReset": true
+        }
+      },
+      "lastGoodFetchedAt": "2026-10-15T19:20:00Z",
+      "lastGoodAgeSeconds": 600.0
+    },
+    {
+      "number": 2,
+      "email": "user2@example.com",
+      "organizationName": "Example Org 2",
+      "organizationUuid": "00000000-0000-4000-8000-000000000002",
+      "isOrganization": true,
+      "active": false,
+      "usageStatus": "relogin_required",
+      "usage": null
+    }
+  ]
+}

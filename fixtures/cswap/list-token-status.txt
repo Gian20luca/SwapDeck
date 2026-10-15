@@ -1,0 +1,32 @@
+Accounts:
+  1: alias1 (user1@example.com) [Example Org 1]
+     ├ 5h:      0%
+     ├ 7d:     50%   resets Oct 19 18:59  in 3d 21h
+     └ Fable:   0%   resets Oct 19 19:00  in 3d 21h
+     • stored backup: fresh, refresh token yes, expires Oct 16 05:30 in 7h 57m
+
+  2: alias2 (user2@example.com) [Example Org 2]
+     re-login needed — refresh token dead; log in with Claude Code, then run: cswap add
+     └ last seen 87% used · 9d ago
+     • stored backup: expired, refresh token yes, expires Oct 6 20:29 in 0m
+
+  3: alias3 (user3@example.com) [Example Org 1]
+     ├ 5h:      1%   resets 23:29         in 1h 57m
+     ├ 7d:     21%   resets Oct 20 03:59  in 4d 6h
+     └ Fable:   0%   resets Oct 20 04:00  in 4d 6h · 7m ago
+     • stored backup: fresh, refresh token yes, expires 22:47 in 1h 14m
+
+  5: alias5 (user5@example.com) [Example Org 1]
+     re-login needed — refresh token dead; log in with Claude Code, then run: cswap add
+     └ last seen 18% used · 8d ago
+     • stored backup: expired, refresh token yes, expires Oct 7 00:53 in 0m
+
+  6: alias6 (user6@example.com) [Example Org 1] (active)
+     ├ 5h:     47%   resets Oct 16 00:19  in 2h 47m
+     ├ 7d:     74%   resets Oct 21 02:59  in 5d 5h  (ahead of pace)
+     └ Fable:   0%   resets Oct 21 03:00  in 5d 5h
+     • active profile: fresh, refresh token yes, expires 22:29 in 56m
+
+Running instances:
+  ● VS Code   c:\work\project-a  (1 session, IDE)
+  ● Claude CLI   ~/work/project-b  (1 session)

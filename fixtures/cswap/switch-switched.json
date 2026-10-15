@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "switched": true,
+  "from": {
+    "number": 6,
+    "email": "user6@example.com"
+  },
+  "to": {
+    "number": 1,
+    "email": "user1@example.com"
+  },
+  "strategy": "next-available",
+  "reason": "switched",
+  "message": "Switched to Account-1 (user1@example.com)",
+  "warnings": [
+    "Skipped Account-2 (disabled)",
+    "Skipped Account-3 (at 5h/7d limit)"
+  ]
+}

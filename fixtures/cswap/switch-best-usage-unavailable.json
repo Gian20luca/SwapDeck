@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "switched": false,
+  "from": {
+    "number": 6,
+    "email": "user6@example.com"
+  },
+  "to": {
+    "number": 6,
+    "email": "user6@example.com"
+  },
+  "strategy": "best",
+  "reason": "usage-unavailable",
+  "message": "Current account usage is unavailable — staying on Account-6.",
+  "warnings": [],
+  "models": [
+    "Fable"
+  ],
+  "modelSource": "cli"
+}

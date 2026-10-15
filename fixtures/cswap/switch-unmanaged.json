@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "switched": false,
+  "from": {
+    "number": null,
+    "email": "user9@example.com"
+  },
+  "to": {
+    "number": null,
+    "email": "user9@example.com"
+  },
+  "strategy": "rotation",
+  "reason": "unmanaged-account",
+  "message": "Active account is not managed; run cswap --add-account",
+  "warnings": []
+}

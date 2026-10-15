@@ -1,0 +1,5 @@
+Status: Account-6 (user6@example.com [Example Org 1])
+  Total managed accounts: 5
+  ├ 5h:     47%   resets Oct 16 00:19  in 2h 46m
+  ├ 7d:     74%   resets Oct 21 02:59  in 5d 5h  (ahead of pace)
+  └ Fable:   0%   resets Oct 21 03:00  in 5d 5h

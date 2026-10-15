@@ -1,0 +1,2 @@
+No directory mappings yet.
+Map one with: cswap map <NUM|EMAIL> [PATH]

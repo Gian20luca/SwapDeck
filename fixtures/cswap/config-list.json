@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "path": "C:\\Users\\user\\.claude-swap-backup\\settings.json",
+  "settings": [
+    {
+      "key": "autoswitch.threshold",
+      "value": 90.0,
+      "isSet": false
+    },
+    {
+      "key": "autoswitch.intervalSeconds",
+      "value": 60.0,
+      "isSet": false
+    },
+    {
+      "key": "autoswitch.cooldownSeconds",
+      "value": 300.0,
+      "isSet": false
+    },
+    {
+      "key": "autoswitch.hysteresisPct",
+      "value": 10.0,
+      "isSet": false
+    },
+    {
+      "key": "autoswitch.strategy",
+      "value": "best",
+      "isSet": false
+    },
+    {
+      "key": "autoswitch.includeApiKeyAccounts",
+      "value": false,
+      "isSet": false
+    },
+    {
+      "key": "autoswitch.unhealthyTicks",
+      "value": 3,
+      "isSet": false
+    },
+    {
+      "key": "autoswitch.model",
+      "value": null,
+      "isSet": false
+    },
+    {
+      "key": "ui.theme",
+      "value": "auto",
+      "isSet": false
+    }
+  ]
+}
