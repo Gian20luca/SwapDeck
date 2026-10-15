@@ -1,0 +1,17 @@
+[package]
+name = "swapdeck-desktop"
+description = "App desktop di SwapDeck (Tauri 2 dallo step 4; per ora segnaposto)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "swapdeck"
+path = "src/main.rs"
+
+[dependencies]
+swapdeck-core = { path = "../../../crates/swapdeck-core" }
+
+[lints]
+workspace = true

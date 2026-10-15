@@ -1,0 +1,18 @@
+packages:
+  - packages/*
+  - apps/vscode
+
+catalog:
+  '@types/node': ^22.0.0
+  prettier: ^3.9.10
+  typescript: ^7.0.2
+  vitest: ^4.1.12
+
+# Vite 7+ (rolldown) richiede Node >= 22.12; sulle macchine attuali c'è Node 22.10.
+# Si resta su Vite 6 finché Node non è aggiornato ovunque.
+overrides:
+  vite: ^6.4.0
+
+# Solo questi pacchetti possono eseguire script di installazione.
+onlyBuiltDependencies:
+  - esbuild

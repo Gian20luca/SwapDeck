@@ -7,3 +7,4 @@ target/
 HANDOFF.md
 *.log
 .DS_Store
+coverage/

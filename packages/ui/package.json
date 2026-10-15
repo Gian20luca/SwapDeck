@@ -1,0 +1,25 @@
+{
+  "name": "@swapdeck/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Interfaccia condivisa tra app desktop ed estensione VS Code",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
