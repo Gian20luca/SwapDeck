@@ -22,3 +22,10 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 - Da verificare su un profilo con account usa e getta: `switch --json` riuscito, prompt di `remove`/`purge`, `auto --json`, 429 reale (fixture [S] costruite dai sorgenti).
 - Node installato 22.10: Vite fermo alla 6 con override (Vite 7+ vuole 22.12). Aggiornare Node e togliere l'override (Node di sistema: serve l'utente).
 - Toolchain Rust predefinito cambiato in `stable-x86_64-pc-windows-gnullvm` e cartella bin di llvm-mingw aggiunta al PATH utente (fuori dal repo, reversibile).
+
+## Decisioni dell'utente (sera del 15/10)
+- CI GitHub Actions su Windows, Linux e Mac; priorità assoluta a Windows.
+- **Build Windows locale pronta per la mattina** (installer NSIS per utente se riesce col toolchain locale, altrimenti cartella portatile) in `dist-locale/`, più l'installer MSVC dalla CI.
+- Chiave di firma dell'updater: generarla, parte privata in un segreto del repo (gh) e copia nel profilo utente.
+- Si possono avviare l'app e installare l'estensione sul PC per le prove, ma **mai switch reali** né altre scritture sul cswap reale (regola nel CLAUDE.md).
+- A fine lavoro: release in bozza su GitHub con installer e .vsix.

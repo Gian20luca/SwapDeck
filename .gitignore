@@ -8,3 +8,4 @@ HANDOFF.md
 *.log
 .DS_Store
 coverage/
+dist-locale/
