@@ -7,10 +7,11 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Child;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -19,7 +20,8 @@ use zeroize::Zeroizing;
 
 use super::action::{AutoOptions, CswapAction, RunOptions, SwitchStrategy};
 use super::error::{
-    CswapError, CswapErrorKind, CswapVersion, check_schema_version, classify_failure, from_envelope,
+    CswapError, CswapErrorKind, CswapVersion, check_schema_version, classify_failure,
+    classify_uv_failure, from_envelope,
 };
 use super::locate::{SearchEnv, locate_cswap, locate_uv};
 use super::model::{
@@ -34,7 +36,9 @@ use super::secret::SecretToken;
 pub struct Timeouts {
     /// `list`, `status`, `switch` (possono fare fetch di rete e rinnovi token).
     pub data: Duration,
-    /// Tutti gli altri comandi di cswap.
+    /// Comandi che scrivono: attesa del lock di cswap (fino a 10 s) più l'avvio (2–4 s).
+    pub write: Duration,
+    /// Altri comandi in lettura.
     pub other: Duration,
     /// `uv tool upgrade claude-swap` (scarica da PyPI).
     pub upgrade: Duration,
@@ -44,6 +48,7 @@ impl Default for Timeouts {
     fn default() -> Self {
         Self {
             data: Duration::from_secs(30),
+            write: Duration::from_secs(30),
             other: Duration::from_secs(10),
             upgrade: Duration::from_secs(180),
         }
@@ -74,6 +79,10 @@ pub struct ActionOutcome {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub command: Option<CommandSpec>,
+    /// Azione riuscita ma non verificata (es. rilettura fallita dopo `switch`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub warning: Option<String>,
 }
 
 impl ActionOutcome {
@@ -83,6 +92,14 @@ impl ActionOutcome {
             list: None,
             switch: None,
             command: None,
+            warning: None,
+        }
+    }
+
+    fn with_list(message: String, list: Option<ListResponse>) -> Self {
+        Self {
+            list,
+            ..Self::text(message)
         }
     }
 }
@@ -96,6 +113,11 @@ pub struct CswapClient {
 }
 
 type Res<T> = Result<T, CswapError>;
+
+/// Limiti di `cswap auto` (secondi e percentuale), controllati prima dell'avvio.
+const AUTO_INTERVAL_RANGE: (f64, f64) = (15.0, 3600.0);
+const AUTO_THRESHOLD_RANGE: (f64, f64) = (50.0, 99.9);
+const AUTO_COOLDOWN_RANGE: (f64, f64) = (0.0, 86400.0);
 
 fn invalid(msg: impl AsRef<str>) -> CswapError {
     CswapError::new(CswapErrorKind::InvalidUsage, msg)
@@ -131,6 +153,14 @@ impl Args {
         self.0.push(v.into());
         Ok(self)
     }
+    /// Percorso di file: come [`Args::value`], ma solo assoluto (cswap risolve i
+    /// relativi sulla propria cartella corrente, che non è quella dell'utente).
+    fn abs_path(self, p: &str) -> Res<Self> {
+        if !Path::new(p).is_absolute() {
+            return Err(invalid(format!("serve un percorso assoluto: {p:?}")));
+        }
+        self.value(p)
+    }
     fn opt_value(self, f: &str, v: Option<&str>) -> Res<Self> {
         match v {
             Some(v) => self.flag(f).value(v),
@@ -143,10 +173,14 @@ impl Args {
             None => Ok(self),
         }
     }
-    fn opt_f64(mut self, f: &str, v: Option<f64>) -> Res<Self> {
+    /// Numero facoltativo nell'intervallo chiuso `range`.
+    fn opt_f64(mut self, f: &str, v: Option<f64>, range: (f64, f64)) -> Res<Self> {
         if let Some(v) = v {
-            if !v.is_finite() || v < 0.0 {
-                return Err(invalid(format!("{f}: valore non valido")));
+            if !v.is_finite() || v < range.0 || v > range.1 {
+                return Err(invalid(format!(
+                    "{f}: il valore deve stare tra {} e {}",
+                    range.0, range.1
+                )));
             }
             self.0.push(f.into());
             self.0.push(v.to_string().into());
@@ -247,6 +281,27 @@ impl CswapClient {
         }
     }
 
+    /// Comando che scrive: uscita solo con codice 0; dopo un timeout rilegge
+    /// `list --json` e restituisce un esito incerto.
+    fn write_ok(&self, args: Args, input: &[u8]) -> Res<RawOutput> {
+        let out = self
+            .exec(args, input, self.timeouts.write)
+            .map_err(|e| self.uncertain_on_timeout(e))?;
+        if out.success() {
+            Ok(out)
+        } else {
+            Err(classify_failure(out.code, &out.stdout, &out.stderr))
+        }
+    }
+
+    fn uncertain_on_timeout(&self, e: CswapError) -> CswapError {
+        if e.kind == CswapErrorKind::Timeout {
+            CswapError::uncertain(&e, self.list().ok())
+        } else {
+            e
+        }
+    }
+
     fn exec_json<T: DeserializeOwned>(&self, args: Args, timeout: Duration) -> Res<T> {
         let out = self.exec(args, b"", timeout)?;
         if !out.success() {
@@ -261,16 +316,23 @@ impl CswapClient {
 
     /// Azione che cambia gli account: messaggio più elenco riletto (se leggibile).
     fn mutate(&self, args: Args, input: &[u8]) -> Res<ActionOutcome> {
-        let out = self.exec_ok(args, input)?;
+        let out = self.write_ok(args, input)?;
         if was_cancelled(&out.stdout) {
             return Err(CswapError::new(
                 CswapErrorKind::Cancelled,
                 "operazione annullata",
             ));
         }
-        let mut outcome = ActionOutcome::text(plain(&out.stdout));
-        outcome.list = self.list().ok();
-        Ok(outcome)
+        Ok(ActionOutcome::with_list(
+            plain(&out.stdout),
+            self.list().ok(),
+        ))
+    }
+
+    /// Comando che scrive senza rilettura: messaggio di cswap.
+    fn write_text(&self, args: Args) -> Res<ActionOutcome> {
+        let out = self.write_ok(args, b"")?;
+        Ok(ActionOutcome::text(plain(&out.stdout)))
     }
 
     // ---- lettura -------------------------------------------------------------
@@ -378,22 +440,43 @@ impl CswapClient {
             args = args.flag("--model").value(&models_arg(m)?)?;
         }
         let args = args.flag_if(force, "--force").flag("--json");
-        let resp: SwitchResponse = self.exec_json(args, self.timeouts.data)?;
-        let list = self.list()?;
-        if resp.switched {
-            let expected = resp.to.as_ref().and_then(|t| t.number);
-            if expected.is_some() && list.active_account_number != expected {
-                return Err(CswapError::new(
-                    CswapErrorKind::Failed,
-                    "cambio di account non confermato da list --json",
-                ));
+        let resp: SwitchResponse = self
+            .exec_json(args, self.timeouts.data)
+            .map_err(|e| self.uncertain_on_timeout(e))?;
+        // cswap ha risposto: l'esito è il suo. Una rilettura fallita o un account
+        // attivo diverso (cambiato nel frattempo da un altro processo) diventano un
+        // avviso, non un errore che inviterebbe a ripetere il cambio.
+        let expected = resp
+            .to
+            .as_ref()
+            .and_then(|t| t.number)
+            .filter(|_| resp.switched);
+        let (list, warning) = match self.list() {
+            Ok(list) => {
+                let warning = match expected {
+                    Some(n) if list.active_account_number != Some(n) => Some(format!(
+                        "cambio ad Account-{n} non confermato: ora l'account attivo è {}",
+                        list.active_account_number
+                            .map_or_else(|| "nessuno".to_owned(), |a| format!("Account-{a}"))
+                    )),
+                    _ => None,
+                };
+                (Some(list), warning)
             }
-        }
+            Err(e) => (
+                None,
+                Some(format!(
+                    "cambio non verificato: rilettura dell'elenco non riuscita ({})",
+                    e.message
+                )),
+            ),
+        };
         Ok(ActionOutcome {
             message: resp.message.clone(),
-            list: Some(list),
+            list,
             switch: Some(resp),
             command: None,
+            warning,
         })
     }
 
@@ -427,27 +510,12 @@ impl CswapClient {
         let mut input = Zeroizing::new(Vec::with_capacity(token.expose().len() + 4));
         input.extend_from_slice(token.expose().as_bytes());
         input.extend_from_slice(if overwrite { b"\ny\n" } else { b"\nn\n" });
-        let out = self.exec(args, &input, self.timeouts.other)?;
-        if !out.success() {
-            return Err(classify_failure(out.code, &out.stdout, &out.stderr));
-        }
-        if was_cancelled(&out.stdout) {
-            return Err(CswapError::new(
-                CswapErrorKind::Cancelled,
-                "operazione annullata",
-            ));
-        }
-        Ok(ActionOutcome {
-            message: plain(&out.stdout),
-            list: self.list().ok(),
-            switch: None,
-            command: None,
-        })
+        self.mutate(args, &input[..])
     }
 
     /// `cswap remove <n>` con risposta `y`; verificato con `list`.
     pub fn remove(&self, account: u32) -> Res<ActionOutcome> {
-        let out = self.exec_ok(Args::new(&["remove"]).num(account)?, b"y\n")?;
+        let out = self.write_ok(Args::new(&["remove"]).num(account)?, b"y\n")?;
         let list = self.list()?;
         if list.accounts.iter().any(|a| a.number == account) {
             return Err(CswapError::new(
@@ -455,25 +523,17 @@ impl CswapClient {
                 format!("Account-{account} non rimosso"),
             ));
         }
-        Ok(ActionOutcome {
-            message: plain(&out.stdout),
-            list: Some(list),
-            switch: None,
-            command: None,
-        })
+        Ok(ActionOutcome::with_list(plain(&out.stdout), Some(list)))
     }
 
     fn set_disabled(&self, account: u32, disabled: bool) -> Res<ActionOutcome> {
         let cmd = if disabled { "disable" } else { "enable" };
-        let out = self.exec_ok(Args::new(&[cmd]).num(account)?, b"")?;
+        let out = self.write_ok(Args::new(&[cmd]).num(account)?, b"")?;
         let list = self.list()?;
         match list.accounts.iter().find(|a| a.number == account) {
-            Some(a) if a.is_disabled() == disabled => Ok(ActionOutcome {
-                message: plain(&out.stdout),
-                list: Some(list),
-                switch: None,
-                command: None,
-            }),
+            Some(a) if a.is_disabled() == disabled => {
+                Ok(ActionOutcome::with_list(plain(&out.stdout), Some(list)))
+            }
             _ => Err(CswapError::new(
                 CswapErrorKind::Failed,
                 format!("{cmd} di Account-{account} non confermato da list --json"),
@@ -514,45 +574,42 @@ impl CswapClient {
         self.mutate(Args::new(&["move"]).num(account)?.num(slot)?, b"")
     }
 
-    /// `cswap map <n> <path>`.
+    /// `cswap map <n> <path>` (percorso assoluto).
     pub fn map(&self, account: u32, path: &str) -> Res<ActionOutcome> {
-        let out = self.exec_ok(Args::new(&["map"]).num(account)?.value(path)?, b"")?;
-        Ok(ActionOutcome::text(plain(&out.stdout)))
+        self.write_text(Args::new(&["map"]).num(account)?.abs_path(path)?)
     }
 
-    /// `cswap unmap <path>` (uscita 0 anche senza mappatura).
+    /// `cswap unmap <path>` (percorso assoluto; uscita 0 anche senza mappatura).
     pub fn unmap(&self, path: &str) -> Res<ActionOutcome> {
-        let out = self.exec_ok(Args::new(&["unmap"]).value(path)?, b"")?;
-        Ok(ActionOutcome::text(plain(&out.stdout)))
+        self.write_text(Args::new(&["unmap"]).abs_path(path)?)
     }
 
     /// `cswap config set KEY VALUE` (cswap valida chiave e intervallo).
     pub fn config_set(&self, key: &str, value: &str) -> Res<ActionOutcome> {
-        let out = self.exec_ok(Args::new(&["config", "set"]).value(key)?.value(value)?, b"")?;
-        Ok(ActionOutcome::text(plain(&out.stdout)))
+        self.write_text(Args::new(&["config", "set"]).value(key)?.value(value)?)
     }
 
     /// `cswap config unset KEY`.
     pub fn config_unset(&self, key: &str) -> Res<ActionOutcome> {
-        let out = self.exec_ok(Args::new(&["config", "unset"]).value(key)?, b"")?;
-        Ok(ActionOutcome::text(plain(&out.stdout)))
+        self.write_text(Args::new(&["config", "unset"]).value(key)?)
     }
 
-    /// `cswap export <path> [--account <n>] [--full]`. Solo su file, mai su stdout.
+    /// `cswap export <path> [--account <n>] [--full]`. Solo su file con percorso
+    /// assoluto, mai su stdout.
     pub fn export(&self, path: &str, account: Option<u32>, full: bool) -> Res<ActionOutcome> {
-        let args = Args::new(&["export"])
-            .value(path)?
-            .opt_num("--account", account)?
-            .flag_if(full, "--full");
-        let out = self.exec_ok(args, b"")?;
-        Ok(ActionOutcome::text(plain(&out.stdout)))
+        self.write_text(
+            Args::new(&["export"])
+                .abs_path(path)?
+                .opt_num("--account", account)?
+                .flag_if(full, "--full"),
+        )
     }
 
-    /// `cswap import <path> [--force]`. Solo da file.
+    /// `cswap import <path> [--force]`. Solo da file con percorso assoluto.
     pub fn import(&self, path: &str, force: bool) -> Res<ActionOutcome> {
         self.mutate(
             Args::new(&["import"])
-                .value(path)?
+                .abs_path(path)?
                 .flag_if(force, "--force"),
             b"",
         )
@@ -560,13 +617,12 @@ impl CswapClient {
 
     /// `cswap unclaimed --purge <id>`.
     pub fn unclaimed_purge(&self, id: &str) -> Res<ActionOutcome> {
-        let out = self.exec_ok(Args::new(&["unclaimed", "--purge"]).value(id)?, b"")?;
-        Ok(ActionOutcome::text(plain(&out.stdout)))
+        self.write_text(Args::new(&["unclaimed", "--purge"]).value(id)?)
     }
 
     /// `cswap purge` con risposta `y`; verificato con `list` (nessun account rimasto).
     pub fn purge(&self) -> Res<ActionOutcome> {
-        let out = self.exec_ok(Args::new(&["purge"]), b"y\n")?;
+        let out = self.write_ok(Args::new(&["purge"]), b"y\n")?;
         let list = self.list()?;
         if !list.accounts.is_empty() {
             return Err(CswapError::new(
@@ -574,12 +630,7 @@ impl CswapClient {
                 "purge non eseguito: gli account sono ancora presenti",
             ));
         }
-        Ok(ActionOutcome {
-            message: plain(&out.stdout),
-            list: Some(list),
-            switch: None,
-            command: None,
-        })
+        Ok(ActionOutcome::with_list(plain(&out.stdout), Some(list)))
     }
 
     /// `uv tool upgrade claude-swap` (su Windows `cswap upgrade` non aggiorna).
@@ -595,7 +646,7 @@ impl CswapClient {
             .collect();
         let out = process::run(uv, &args, Zeroizing::new(Vec::new()), self.timeouts.upgrade)?;
         if !out.success() {
-            return Err(classify_failure(out.code, &out.stdout, &out.stderr));
+            return Err(classify_uv_failure(out.code, &out.stdout, &out.stderr));
         }
         let version = self.check_version()?;
         let mut msg = plain(&format!("{}\n{}", out.stdout, out.stderr));
@@ -639,9 +690,9 @@ impl CswapClient {
     pub fn start_auto(&self, opts: &AutoOptions) -> Res<AutoProcess> {
         let mut args = Args::new(&["auto", "--json"])
             .flag_if(opts.once, "--once")
-            .opt_f64("--interval", opts.interval_seconds)?
-            .opt_f64("--threshold", opts.threshold)?
-            .opt_f64("--cooldown", opts.cooldown_seconds)?;
+            .opt_f64("--interval", opts.interval_seconds, AUTO_INTERVAL_RANGE)?
+            .opt_f64("--threshold", opts.threshold, AUTO_THRESHOLD_RANGE)?
+            .opt_f64("--cooldown", opts.cooldown_seconds, AUTO_COOLDOWN_RANGE)?;
         if let Some(m) = &opts.models {
             args = args.flag("--model").value(&models_arg(m)?)?;
         }
@@ -654,7 +705,7 @@ impl CswapClient {
             args = args.flag("--strategy").flag(s.as_arg());
         }
         let args = args.flag_if(opts.dry_run, "--dry-run");
-        AutoProcess::spawn(&self.program, &args.0)
+        AutoProcess::spawn(&self.program, &args.0, opts.once)
     }
 
     /// Esegue un'azione dell'interfaccia (la conferma va chiesta prima, vedi
@@ -708,10 +759,8 @@ impl CswapClient {
             A::Run { options } => {
                 let cmd = self.run_command(options)?;
                 Ok(ActionOutcome {
-                    message: String::new(),
-                    list: None,
-                    switch: None,
                     command: Some(cmd),
+                    ..ActionOutcome::text(String::new())
                 })
             }
             A::AutoStart { .. } | A::AutoStop => Err(invalid(
@@ -762,33 +811,54 @@ pub enum AutoMessage {
 
 /// `cswap auto` in esecuzione; si ferma con [`AutoProcess::stop`] o al rilascio.
 pub struct AutoProcess {
+    /// `None` dopo l'uscita raccolta o dopo lo stop: niente segnali a un PID riciclato.
     child: Option<Child>,
+    /// Codice di uscita già raccolto da [`AutoProcess::try_exit`].
+    exited: Option<Option<i32>>,
+    /// Avviato con `--once` (solo allora le uscite 2 e 3 non sono errori).
+    once: bool,
     events: Receiver<AutoMessage>,
+    /// `true` dopo un evento `sleep`, `false` dopo qualsiasi altra riga: auto è
+    /// fermo tra un giro e l'altro e si può chiudere senza interrompere un cambio.
+    idle: Arc<AtomicBool>,
     stderr_tail: Arc<Mutex<String>>,
-    readers: Vec<JoinHandle<()>>,
+    stdout_reader: Option<JoinHandle<()>>,
+    stderr_reader: Option<JoinHandle<()>>,
 }
 
 const STDERR_TAIL_BYTES: usize = 16 * 1024;
+/// Attesa massima del lettore di stderr prima di classificare un'uscita.
+const STDERR_WAIT: Duration = Duration::from_secs(2);
+/// Attesa massima della pausa tra due giri (evento `sleep`) prima della chiusura:
+/// un giro comprende la lettura dei consumi e un cambio con attesa del lock.
+pub const AUTO_IDLE_WAIT: Duration = Duration::from_secs(20);
+/// Attesa dopo SIGTERM (Unix) prima di SIGKILL.
+const AUTO_TERM_GRACE: Duration = Duration::from_secs(3);
+const AUTO_POLL: Duration = Duration::from_millis(50);
 
 impl AutoProcess {
-    fn spawn(program: &Path, args: &[OsString]) -> Res<Self> {
+    fn spawn(program: &Path, args: &[OsString], once: bool) -> Res<Self> {
         let mut child = process::spawn(process::command(program, args), program)?;
         drop(child.stdin.take());
         let (tx, rx) = mpsc::channel();
-        let stdout = child.stdout.take();
-        let stderr = child.stderr.take();
-        let mut readers = Vec::new();
-        if let Some(stdout) = stdout {
-            readers.push(process::line_reader(stdout, move |line| {
-                if let Some(msg) = parse_auto_line(&line) {
+        let idle = Arc::new(AtomicBool::new(false));
+        let stdout_reader = child.stdout.take().map(|stdout| {
+            let idle = Arc::clone(&idle);
+            process::line_reader(stdout, move |line| {
+                let msg = parse_auto_line(&line);
+                if !line.is_empty() {
+                    let sleeping = matches!(msg, Some(AutoMessage::Event(AutoEvent::Sleep { .. })));
+                    idle.store(sleeping, Ordering::Release);
+                }
+                if let Some(msg) = msg {
                     let _ = tx.send(msg);
                 }
-            }));
-        }
+            })
+        });
         let tail = Arc::new(Mutex::new(String::new()));
-        if let Some(stderr) = stderr {
-            let tail2 = Arc::clone(&tail);
-            readers.push(std::thread::spawn(move || {
+        let stderr_reader = child.stderr.take().map(|stderr| {
+            let tail = Arc::clone(&tail);
+            std::thread::spawn(move || {
                 use std::io::Read;
                 let mut stderr = stderr;
                 let mut chunk = [0u8; 4096];
@@ -796,7 +866,7 @@ impl AutoProcess {
                     if n == 0 {
                         break;
                     }
-                    if let Ok(mut t) = tail2.lock() {
+                    if let Ok(mut t) = tail.lock() {
                         t.push_str(&String::from_utf8_lossy(&chunk[..n]));
                         if t.len() > STDERR_TAIL_BYTES {
                             let cut = t.len() - STDERR_TAIL_BYTES;
@@ -807,13 +877,17 @@ impl AutoProcess {
                         }
                     }
                 }
-            }));
-        }
+            })
+        });
         Ok(Self {
             child: Some(child),
+            exited: None,
+            once,
             events: rx,
+            idle,
             stderr_tail: tail,
-            readers,
+            stdout_reader,
+            stderr_reader,
         })
     }
 
@@ -822,42 +896,84 @@ impl AutoProcess {
         &self.events
     }
 
-    /// PID del processo figlio.
+    /// PID del processo figlio, finché non è uscito.
     pub fn pid(&self) -> Option<u32> {
         self.child.as_ref().map(Child::id)
     }
 
     /// Codice di uscita se è terminato (`Some(None)` = terminato da un segnale).
+    /// Dopo l'uscita il processo non si tocca più.
     pub fn try_exit(&mut self) -> Option<Option<i32>> {
-        let child = self.child.as_mut()?;
-        match child.try_wait() {
-            Ok(Some(status)) => Some(status.code()),
-            _ => None,
+        if self.exited.is_none() {
+            if let Some(Ok(Some(status))) = self.child.as_mut().map(Child::try_wait) {
+                self.exited = Some(status.code());
+                self.child = None;
+            }
         }
+        self.exited
     }
 
     /// Errore classificato di un'uscita non riuscita (da chiamare dopo `try_exit`).
-    pub fn exit_error(&self, code: Option<i32>) -> Option<CswapError> {
-        // auto --once: 0 cambiato, 2 nessuna azione, 3 bloccato: non sono errori.
-        if matches!(code, Some(0 | 2 | 3)) {
+    /// Attende al massimo [`STDERR_WAIT`] che stderr sia letto tutto.
+    pub fn exit_error(&mut self, code: Option<i32>) -> Option<CswapError> {
+        if code == Some(0) {
             return None;
         }
+        self.wait_stderr(STDERR_WAIT);
         let tail = self
             .stderr_tail
             .lock()
             .map(|t| t.clone())
             .unwrap_or_default();
+        // auto --once: 2 nessuna azione, 3 bloccato; non sono errori, salvo uso errato
+        // (argparse esce anch'esso con 2).
+        let usage = tail.contains("usage:") || tail.contains(": error:");
+        if self.once && matches!(code, Some(2 | 3)) && !usage {
+            return None;
+        }
         Some(classify_failure(code, "", &tail))
     }
 
-    /// Ferma cswap auto e i suoi discendenti.
+    fn wait_stderr(&mut self, max: Duration) {
+        let deadline = Instant::now() + max;
+        if let Some(reader) = &self.stderr_reader {
+            while !reader.is_finished() && Instant::now() < deadline {
+                std::thread::sleep(AUTO_POLL);
+            }
+            if reader.is_finished() {
+                if let Some(reader) = self.stderr_reader.take() {
+                    let _ = reader.join();
+                }
+            }
+        }
+    }
+
+    /// Ferma cswap auto e i suoi discendenti, attendendo al massimo
+    /// [`AUTO_IDLE_WAIT`] la pausa tra due giri.
     pub fn stop(&mut self) {
+        self.stop_within(AUTO_IDLE_WAIT);
+    }
+
+    /// Come [`AutoProcess::stop`], con attesa massima `idle_wait`: si chiude dopo un
+    /// evento `sleep`, così un cambio di account in corso non resta a metà; allo
+    /// scadere si chiude comunque (SIGTERM e poi SIGKILL su Unix, `taskkill /T /F`
+    /// su Windows, dove a un processo senza console non arriva CTRL_BREAK).
+    pub fn stop_within(&mut self, idle_wait: Duration) {
+        let deadline = Instant::now() + idle_wait;
+        while self.try_exit().is_none()
+            && self.child.is_some()
+            && !self.idle.load(Ordering::Acquire)
+            && Instant::now() < deadline
+        {
+            std::thread::sleep(AUTO_POLL);
+        }
         if let Some(mut child) = self.child.take() {
-            process::terminate_tree(&mut child, Duration::from_secs(3));
+            process::terminate_tree(&mut child, AUTO_TERM_GRACE);
         }
         // I lettori finiscono da soli quando le pipe si chiudono: non si attendono,
         // così un discendente rimasto con la pipe aperta non blocca lo stop.
-        self.readers.clear();
+        self.stdout_reader = None;
+        self.stderr_reader = None;
     }
 }
 
@@ -894,7 +1010,11 @@ mod tests {
         assert!(Args::default().value("").is_err());
         assert!(Args::default().value("a\nb").is_err());
         assert!(Args::default().num(0).is_err());
-        assert!(Args::default().opt_f64("--x", Some(f64::NAN)).is_err());
+        assert!(
+            Args::default()
+                .opt_f64("--x", Some(f64::NAN), (0.0, 1.0))
+                .is_err()
+        );
         assert!(models_arg(&["a,b".into()]).is_err());
         assert_eq!(
             models_arg(&["Fable".into(), "all".into()]).unwrap(),

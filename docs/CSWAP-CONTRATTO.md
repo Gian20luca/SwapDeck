@@ -9,7 +9,7 @@ Per ogni voce: **[V]** = verificato eseguendo cswap, **[S]** = ricavato dai sorg
 - **Mai `cswap` senza argomenti.** Se stdin e stdout sono un terminale apre la TUI. Su Windows il dispositivo `NUL` conta come terminale: `cswap <NUL >NUL` ha aperto la TUI ed è rimasto appeso fino al timeout [V]. Il client passa sempre un comando e usa **pipe** su stdin, stdout e stderr, mai `NUL` né l'ereditarietà della console.
 - **Sempre `--json` dove esiste** (`list`, `status`, `switch`, `config list|get`, `auto`). In JSON cswap non chiede mai input e non fa effetti collaterali impliciti [S].
 - **Processo:** su Windows `cswap.exe` è un trampolino uv che avvia `…\uv\tools\claude-swap\Scripts\python.exe "…\cswap.exe" <args>` e una `conhost.exe` [V]. Da una GUI va lanciato con `CREATE_NO_WINDOW`, altrimenti lampeggia una console. Su Linux `~/.local/bin/cswap` è uno script Python [S].
-- **Tempo di avvio:** 2–4 s anche per `--version` [V]. Timeout consigliato 30 s per `list`/`status`/`switch` (vedi §4), 10 s per gli altri; allo scadere si chiude l'albero del processo (trampolino e figlio `python.exe`).
+- **Tempo di avvio:** 2–4 s anche per `--version` [V]. Timeout consigliato 30 s per `list`/`status`/`switch` (vedi §4) e per i comandi che scrivono (attesa del lock fino a 10 s più l'avvio), 10 s per le altre letture; allo scadere si chiude l'albero del processo (trampolino e figlio `python.exe`). Dopo il timeout di un comando che scrive l'esito è incerto: SwapDeck rilegge `list --json` e restituisce l'errore `uncertain` con l'elenco riletto.
 - **Codifica:** stdout e stderr sono forzati a UTF-8 con `errors="replace"` [S][V]. Decodificare in UTF-8 con sostituzione. In JSON i caratteri non ASCII arrivano come `\uXXXX`.
 - **Colori:** disattivati quando stdout non è un terminale; `NO_COLOR` li spegne comunque [S]. Impostare `NO_COLOR=1` per sicurezza.
 - **Ambiente:** non ereditare `CLAUDE_CONFIG_DIR` che punta dentro `<backup>/sessions/` (shell di `cswap run`): ogni comando che modifica fallisce con `SwitchError` «This shell is inside a cswap run session profile…» [S]. Non ereditare `CLAUDE_SECURESTORAGE_CONFIG_DIR`.
@@ -192,7 +192,7 @@ Nessuno ha `--json`: il client rilegge `list --json` dopo l'azione.
 ### 3.9 `auto` [S]
 
 `cswap auto [--once] [--json] [--interval S] [--threshold P] [--cooldown S] [--model N] [--[no-]include-api-key-accounts] [--strategy best|consume-first] [--dry-run]`. Le opzioni sovrascrivono `config`.
-- Senza `--once`: ciclo in primo piano; si ferma con SIGTERM o Ctrl-C (130).
+- Senza `--once`: ciclo in primo piano; si ferma con SIGTERM o Ctrl-C (130). SwapDeck lo chiude dopo l'evento `sleep` (pausa tra due giri, al massimo 20 s di attesa) per non interrompere un cambio; poi SIGTERM e SIGKILL su Unix, `taskkill /T /F` su Windows (un processo senza console non riceve CTRL_BREAK). Con `--once` le uscite 2 e 3 non sono errori, salvo `usage:` o `: error:` su stderr (argparse esce anch'esso con 2).
 - `--json`: una riga JSON per evento (fixture `auto-events.jsonl`). Campi comuni `schemaVersion`, `event`, `ts`. Eventi: `poll` (`active`, `headroomPct{num:pct|null}`, `threshold`, `fetchErrors?{num:causa}`, `windowsPct?`), `switch` (`trigger`: `proactive|at-limit|failover|consume-first`, `from`, `to`, `warnings`, `dryRun`), `no-switch` (`reason`, `detail`), `account-quarantined` / `account-unquarantined` (`number`, `email`, `reason`), `all-exhausted` (`earliestResetAt|null`), `sleep` (`seconds`, `until`), `error` (`message`, `transient`), `config-warning` (`message`). Eventi e campi sconosciuti vanno ignorati.
 - Motivi di `no-switch`: `unmanaged-active-account`, `no-active-account`, `active-api-key`, `below-threshold`, `active-idle`, `active-usage-unknown`, `cooldown`, `no-candidates`, `no-comparison`, `reset-unknown`, `already-consuming-soonest`, `no-qualifying-candidate`, `stale-usage`, `no-viable-target`.
 
@@ -266,12 +266,12 @@ Regole per il client:
 ## 8. Installazione
 
 - `uv tool install claude-swap` installa `cswap` e `claude-swap` in `~/.local/bin` (Windows `%USERPROFILE%\.local\bin\cswap.exe`) e l'ambiente in `uv tool dir` (Windows `%APPDATA%\uv\tools\claude-swap`). Nessun privilegio di amministratore.
-- Rilevamento: `cswap --version` nel PATH, poi `~/.local/bin/cswap[.exe]`, poi `uv tool list` (riga `claude-swap vX.Y.Z`).
+- Rilevamento in SwapDeck: `SWAPDECK_CSWAP` (assoluto), poi `UV_TOOL_BIN_DIR`, poi il PATH (solo voci assolute), poi `$XDG_BIN_HOME` e `~/.local/bin/cswap[.exe]`; `uv` nel PATH, in `~/.local/bin`, in `~/.cargo/bin` e su macOS in `/opt/homebrew/bin` e `/usr/local/bin`. In alternativa `uv tool list` (riga `claude-swap vX.Y.Z`).
 
 ## 9. Aggiornamento
 
 - `cswap upgrade` (alias `update`): rileva uv o pipx da `sys.prefix`. Su Linux e macOS esegue `uv tool upgrade claude-swap` e ne restituisce il codice. **Su Windows non aggiorna**: stampa `To upgrade claude-swap on Windows, run:\n  uv tool upgrade claude-swap` ed esce con 1, perché `cswap.exe` in esecuzione è bloccato.
-- SwapDeck quindi lancia direttamente `uv tool upgrade claude-swap`, **dopo** aver atteso o chiuso i propri processi cswap. Se gira un `cswap auto`, `tui` o `watch` esterno, avvisa: su Windows l'aggiornamento può fallire.
+- SwapDeck quindi lancia direttamente `uv tool upgrade claude-swap`, **dopo** aver atteso o chiuso i propri processi cswap. Se gira un `cswap auto`, `tui` o `watch` esterno, avvisa: su Windows l'aggiornamento può fallire. Un'uscita non riuscita di uv (che usa 2 per quasi tutti gli errori) è `failed`, oppure `busy` se un file è in uso (`os error 32`, «used by another process»).
 
 ## 10. Rischi per SwapDeck
 

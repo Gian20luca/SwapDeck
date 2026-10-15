@@ -25,12 +25,12 @@ Struttura iniziale (step 0). Ogni step aggiorna la sezione che tocca.
 |---|---|
 | `cswap::model` | tipi serde del JSON di cswap: `ListResponse`, `Account`, `Usage`, `StatusResponse`, `SwitchResponse`, `ErrorEnvelope`, `ConfigListResponse`, `AutoEvent` |
 | `cswap::action` | `CswapAction` (azioni dell'interfaccia, solo `Deserialize`), `Confirmation`, `AutoOptions`, `RunOptions` |
-| `cswap::error` | `CswapError`/`CswapErrorKind`, `classify_failure`, `account_issue`, `CswapVersion`, pulizia dei messaggi |
-| `cswap::client` | `CswapClient` (un metodo per comando di F0, verifica con `list --json`), `ActionOutcome`, `AutoProcess` |
+| `cswap::error` | `CswapError`/`CswapErrorKind` (`uncertain` porta l'elenco riletto), `classify_failure`, `classify_uv_failure`, `account_issue`, `CswapVersion`, pulizia dei messaggi |
+| `cswap::client` | `CswapClient` (un metodo per comando di F0, verifica con `list --json`; timeout 30 s per i comandi che scrivono, poi esito `uncertain`; `switch` riuscito ma non verificato = `Ok` con `warning`; percorsi di file solo assoluti), `ActionOutcome`, `AutoProcess` (limiti di `auto` controllati prima dell'avvio, stop dopo l'evento `sleep` entro `AUTO_IDLE_WAIT`, uscita raccolta una volta sola) |
 | `cswap::process` | esecuzione con pipe, timeout e chiusura dell'albero dei processi, `CREATE_NO_WINDOW` |
-| `cswap::locate` | ricerca di cswap (`SWAPDECK_CSWAP`, `PATH`, `~/.local/bin`) e di uv |
+| `cswap::locate` | ricerca di cswap (`SWAPDECK_CSWAP`, `UV_TOOL_BIN_DIR`, `PATH`, `~/.local/bin`) e di uv (anche `~/.cargo/bin` e Homebrew su macOS) |
 | `cswap::secret` | `SecretToken` (Debug oscurato, azzerato al rilascio) |
-| `config` | `AppConfig` (`config.json`): default, `validate`, `normalize`, `load`, `save` atomico |
+| `config` | `AppConfig` (`config.json`): default, `validate`, `normalize`, `load`, `save` atomico; `language`/`theme` sconosciuti → default con avviso, valore originale conservato in `preserved` |
 | `paths` | `AppPaths`: cartelle per utente |
 | `ts_export` (test) | genera `packages/types/src/generated/` (`pnpm gen:types`) e ne controlla l'aggiornamento |
 

@@ -305,6 +305,14 @@ impl Fake {
                 }
             }
             "auto" if json_flag => {
+                let once = rest.contains(&"--once");
+                if !once {
+                    // Ucciso dal client prima di uscire: registra la chiamata prima degli eventi.
+                    let all: Vec<String> = std::iter::once(sub.clone())
+                        .chain(rest.iter().map(|s| s.to_string()))
+                        .collect();
+                    self.log(&all, 0);
+                }
                 let events = self.fixture("auto-events.jsonl");
                 let mut out = std::io::stdout().lock();
                 for line in events.lines().filter(|l| !l.contains("\"error\": {")) {
@@ -315,16 +323,19 @@ impl Fake {
                     "{{\"schemaVersion\": 1, \"event\": \"future-event\", \"ts\": \"x\"}}"
                 )
                 .unwrap();
+                // Pausa tra due giri, salvo `autoBusy` (giro in corso fino alla chiusura).
+                if self.cfg.get("autoBusy").and_then(Value::as_bool) != Some(true) {
+                    writeln!(
+                        out,
+                        "{{\"schemaVersion\": 1, \"event\": \"sleep\", \"ts\": \"x\", \"seconds\": 60.0, \"until\": \"x\"}}"
+                    )
+                    .unwrap();
+                }
                 out.flush().unwrap();
                 drop(out);
-                if rest.contains(&"--once") {
+                if once {
                     return 2;
                 }
-                // Ucciso dal client prima di uscire: registra subito la chiamata.
-                let all: Vec<String> = std::iter::once(sub.clone())
-                    .chain(rest.iter().map(|s| s.to_string()))
-                    .collect();
-                self.log(&all, 0);
                 std::thread::sleep(Duration::from_secs(60));
                 0
             }

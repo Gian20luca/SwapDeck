@@ -6,8 +6,8 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 use swapdeck_core::cswap::{
-    AutoEvent, AutoMessage, AutoOptions, CswapAction, CswapClient, CswapErrorKind, RunOptions,
-    SecretToken, SwitchReason, SwitchStrategy, Timeouts,
+    AUTO_IDLE_WAIT, AutoEvent, AutoMessage, AutoOptions, CswapAction, CswapClient, CswapErrorKind,
+    RunOptions, SecretToken, SwitchReason, SwitchStrategy, Timeouts,
 };
 use tempfile::TempDir;
 
@@ -33,7 +33,10 @@ fn exe(dir: &Path, base: &str) -> PathBuf {
 impl Fake {
     /// Finto cswap con lo stato iniziale di `state` (fixture) e la config `extra`.
     fn new(state: Option<&str>, extra: Value) -> Self {
-        let dir = tempfile::tempdir().unwrap();
+        // Nella cartella temporanea del target: stesso file system dell'eseguibile, quindi
+        // collegamento fisico e niente copia (su Linux una copia appena scritta può dare
+        // ETXTBSY se un altro thread del test fa fork mentre il file è aperto).
+        let dir = tempfile::tempdir_in(env!("CARGO_TARGET_TMPDIR")).unwrap();
         let program = exe(dir.path(), "cswap");
         let mut cfg = json!({
             "fixtures": fixtures(),
@@ -49,6 +52,7 @@ impl Fake {
         }
         let client = CswapClient::new(program).with_timeouts(Timeouts {
             data: Duration::from_secs(20),
+            write: Duration::from_secs(20),
             other: Duration::from_secs(20),
             upgrade: Duration::from_secs(20),
         });
@@ -76,6 +80,7 @@ impl Fake {
     fn timeouts(mut self, t: Duration) -> Self {
         self.client = self.client.clone().with_timeouts(Timeouts {
             data: t,
+            write: t,
             other: t,
             upgrade: t,
         });
@@ -222,9 +227,42 @@ fn switch_errors_and_unconfirmed() {
     let empty = Fake::new(None, json!({}));
     let e = empty.client.switch(None, None, None, false).unwrap_err();
     assert_eq!(e.message, "No accounts are managed yet");
+    // Cambio dichiarato ma non visto in list: esito di cswap con avviso, non un errore.
     let liar = Fake::new(Some("list.json"), json!({"ignoreSwitch": true}));
-    let e = liar.client.switch(Some(1), None, None, false).unwrap_err();
-    assert_eq!(e.kind, CswapErrorKind::Failed);
+    let o = liar.client.switch(Some(1), None, None, false).unwrap();
+    assert!(o.switch.unwrap().switched);
+    assert!(o.list.is_some());
+    assert!(o.warning.unwrap().contains("non confermato"));
+    // Rilettura fallita: stesso esito, senza lista.
+    let blind = Fake::new(
+        Some("list.json"),
+        json!({"overrides": {"list": {"exit": 1, "stderr": "Error: boom\n"}}}),
+    );
+    let o = blind.client.switch(Some(1), None, None, false).unwrap();
+    assert!(o.switch.unwrap().switched);
+    assert!(o.list.is_none());
+    assert!(o.warning.unwrap().contains("non verificato"));
+    let ok = Fake::std()
+        .client
+        .switch(Some(1), None, None, false)
+        .unwrap();
+    assert!(ok.warning.is_none());
+}
+
+#[test]
+fn write_timeout_is_uncertain_with_list() {
+    let f = Fake::new(
+        Some("list.json"),
+        json!({"overrides": {"alias": {"sleep": 60, "exit": 0}}}),
+    );
+    let client = f.client.clone().with_timeouts(Timeouts {
+        write: Duration::from_secs(3),
+        ..Timeouts::default()
+    });
+    let e = client.set_alias(1, "lavoro").unwrap_err();
+    assert_eq!(e.kind, CswapErrorKind::Uncertain);
+    assert!(e.list.unwrap().accounts.iter().any(|a| a.number == 1));
+    assert_eq!(Timeouts::default().write, Duration::from_secs(30));
 }
 
 // ---- add, add-token, remove, purge (prompt su stdin) ------------------------
@@ -381,20 +419,32 @@ fn disable_enable_alias_swap_move() {
 #[test]
 fn map_config_export_import_unclaimed() {
     let f = Fake::std();
+    let work = f.dir.path().join("work");
+    let work = work.to_str().unwrap();
     assert!(
         f.client
-            .map(1, "/work/a")
+            .map(1, work)
             .unwrap()
             .message
-            .starts_with("Mapped /work/a")
+            .starts_with(&format!("Mapped {work}"))
     );
     assert!(
         f.client
-            .unmap("/work/a")
+            .unmap(work)
             .unwrap()
             .message
             .starts_with("No mapping")
     );
+    // Percorsi relativi rifiutati prima di lanciare cswap.
+    for e in [
+        f.client.map(1, "work"),
+        f.client.unmap("./work"),
+        f.client.export("out.json", None, false),
+        f.client.import("in.json", false),
+    ] {
+        assert_eq!(e.unwrap_err().kind, CswapErrorKind::InvalidUsage);
+    }
+    assert!(!f.calls().iter().any(|c| c["args"][0] == "export"));
     assert_eq!(
         f.client
             .config_set("autoswitch.threshold", "95")
@@ -422,7 +472,14 @@ fn map_config_export_import_unclaimed() {
         "mai export su stdout"
     );
     f.client.import(out.to_str().unwrap(), true).unwrap();
-    assert!(f.client.import("missing.json", false).is_err());
+    let missing = f.dir.path().join("missing.json");
+    assert_eq!(
+        f.client
+            .import(missing.to_str().unwrap(), false)
+            .unwrap_err()
+            .kind,
+        CswapErrorKind::Failed
+    );
 
     assert_eq!(
         f.client.unclaimed_purge("abc").unwrap().message,
@@ -444,6 +501,31 @@ fn upgrade_uses_uv() {
     let o = client.upgrade().unwrap();
     assert!(o.message.contains("Updated claude-swap"));
     assert!(o.message.contains("cswap 0.27.2"));
+}
+
+#[test]
+fn upgrade_errors_are_not_usage_errors() {
+    let cases = [
+        (
+            "error: Failed to upgrade claude-swap\n  Caused by: failed to remove file `cswap.exe`: The process cannot access the file because it is being used by another process. (os error 32)\n",
+            CswapErrorKind::Busy,
+        ),
+        (
+            "error: Failed to fetch: `https://pypi.org/simple/claude-swap/`\n",
+            CswapErrorKind::Failed,
+        ),
+    ];
+    for (stderr, kind) in cases {
+        let f = Fake::new(
+            Some("list.json"),
+            json!({"overrides": {"uv": {"exit": 2, "stderr": stderr}}}),
+        );
+        let uv = exe(f.dir.path(), "uv");
+        let e = f.client.clone().with_uv(Some(uv)).upgrade().unwrap_err();
+        assert_eq!(e.kind, kind, "{}", e.message);
+        assert_eq!(e.exit_code, Some(2));
+        assert!(e.message.starts_with("Failed to"), "{}", e.message);
+    }
 }
 
 #[test]
@@ -497,13 +579,25 @@ fn auto_streams_events_and_stops() {
     assert!(matches!(events[0], AutoEvent::Poll { .. }));
     assert!(matches!(events[5], AutoEvent::AllExhausted { .. }));
     assert!(auto.try_exit().is_none(), "auto deve restare attivo");
+    // L'ultimo evento è `sleep`: chiusura subito, senza attendere AUTO_IDLE_WAIT.
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while !matches!(
+        auto.events().recv_timeout(Duration::from_secs(20)).unwrap(),
+        AutoMessage::Event(AutoEvent::Sleep { .. })
+    ) {
+        assert!(Instant::now() < deadline);
+    }
+    let pid = auto.pid().unwrap().to_string();
     let start = Instant::now();
     auto.stop();
     assert!(
-        start.elapsed() < Duration::from_secs(30),
+        // Sotto AUTO_IDLE_WAIT: nessuna attesa della pausa (taskkill sotto carico è lento).
+        start.elapsed() < AUTO_IDLE_WAIT,
         "{:?}",
         start.elapsed()
     );
+    assert!(auto.pid().is_none());
+    wait_dead(&pid);
     let c = f.call("auto");
     assert_eq!(
         args(&c),
@@ -538,8 +632,134 @@ fn auto_once_exit_codes() {
         std::thread::sleep(Duration::from_millis(50));
     };
     assert_eq!(code, Some(2));
+    assert!(
+        auto.pid().is_none(),
+        "dopo l'uscita il processo non si tocca più"
+    );
+    assert_eq!(auto.try_exit(), Some(Some(2)));
     assert!(auto.exit_error(code).is_none());
+    assert!(auto.exit_error(Some(3)).is_none());
     assert!(auto.exit_error(Some(1)).is_some());
+    auto.stop();
+}
+
+fn wait_exit(auto: &mut swapdeck_core::cswap::AutoProcess) -> Option<i32> {
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        if let Some(code) = auto.try_exit() {
+            return code;
+        }
+        assert!(Instant::now() < deadline, "auto non è uscito");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
+fn auto_exit_2_is_an_error_without_once_or_with_usage() {
+    // Uso errato con --once: stderr di argparse letto tutto prima di classificare.
+    let f = Fake::new(
+        Some("list.json"),
+        json!({"overrides": {"auto": {"exit": 2, "stderr": "usage: cswap auto [-h]\ncswap auto: error: argument --threshold: invalid float value: 'x'\n"}}}),
+    );
+    let once = AutoOptions {
+        once: true,
+        ..Default::default()
+    };
+    let mut auto = f.client.start_auto(&once).unwrap();
+    let code = wait_exit(&mut auto);
+    let e = auto.exit_error(code).unwrap();
+    assert_eq!(e.kind, CswapErrorKind::InvalidUsage);
+    assert!(e.message.contains("invalid float value"), "{}", e.message);
+
+    // Senza --once le uscite 2 e 3 sono errori.
+    let f = Fake::new(
+        Some("list.json"),
+        json!({"overrides": {"auto": {"exit": 3}}}),
+    );
+    let mut auto = f.client.start_auto(&AutoOptions::default()).unwrap();
+    let code = wait_exit(&mut auto);
+    assert_eq!(code, Some(3));
+    assert!(auto.exit_error(code).is_some());
+}
+
+#[test]
+fn auto_options_are_validated() {
+    let f = Fake::std();
+    for opts in [
+        AutoOptions {
+            threshold: Some(49.9),
+            ..Default::default()
+        },
+        AutoOptions {
+            threshold: Some(100.0),
+            ..Default::default()
+        },
+        AutoOptions {
+            interval_seconds: Some(14.0),
+            ..Default::default()
+        },
+        AutoOptions {
+            interval_seconds: Some(3601.0),
+            ..Default::default()
+        },
+        AutoOptions {
+            cooldown_seconds: Some(-1.0),
+            ..Default::default()
+        },
+        AutoOptions {
+            cooldown_seconds: Some(86401.0),
+            ..Default::default()
+        },
+    ] {
+        assert_eq!(
+            f.client.start_auto(&opts).err().unwrap().kind,
+            CswapErrorKind::InvalidUsage
+        );
+    }
+    assert!(f.calls().is_empty(), "nessun cswap avviato");
+    let mut auto = f
+        .client
+        .start_auto(&AutoOptions {
+            once: true,
+            threshold: Some(99.9),
+            interval_seconds: Some(15.0),
+            cooldown_seconds: Some(0.0),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(wait_exit(&mut auto), Some(2));
+}
+
+#[test]
+fn auto_stop_is_forced_after_idle_wait() {
+    let f = Fake::new(Some("list.json"), json!({"autoBusy": true}));
+    let mut auto = f.client.start_auto(&AutoOptions::default()).unwrap();
+    // Attende l'ultimo evento noto (giro in corso, nessun `sleep`).
+    loop {
+        if let AutoMessage::Event(AutoEvent::AllExhausted { .. }) =
+            auto.events().recv_timeout(Duration::from_secs(20)).unwrap()
+        {
+            break;
+        }
+    }
+    std::thread::sleep(Duration::from_millis(300));
+    let pid = auto.pid().unwrap().to_string();
+    let start = Instant::now();
+    auto.stop_within(Duration::from_secs(2));
+    let took = start.elapsed();
+    assert!(
+        took >= Duration::from_secs(2) && took < Duration::from_secs(25),
+        "{took:?}"
+    );
+    wait_dead(&pid);
+}
+
+fn wait_dead(pid: &str) {
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while alive(pid) {
+        assert!(Instant::now() < deadline, "processo {pid} ancora vivo");
+        std::thread::sleep(Duration::from_millis(200));
+    }
 }
 
 // ---- classi di errore ---------------------------------------------------------

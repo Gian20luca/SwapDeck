@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::model::{Account, ErrorEnvelope, SUPPORTED_SCHEMA_VERSION, UsageStatus};
+use super::model::{Account, ErrorEnvelope, ListResponse, SUPPORTED_SCHEMA_VERSION, UsageStatus};
 
 /// Età oltre la quale un dato `ok` è considerato vecchio (cadenza normale di cswap).
 pub const FRESH_USAGE_MAX_AGE_SECONDS: f64 = 300.0;
@@ -37,12 +37,15 @@ pub enum CswapErrorKind {
     Interrupted,
     /// Prompt annullato o azione senza effetto verificato.
     Cancelled,
+    /// Comando che scrive interrotto per timeout: non si sa se ha avuto effetto
+    /// (l'errore porta l'elenco riletto, se leggibile).
+    Uncertain,
     /// Errore generico.
     Failed,
 }
 
 /// Errore di un comando cswap, pronto per l'interfaccia (niente token, email mascherate).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CswapError {
     pub kind: CswapErrorKind,
@@ -54,6 +57,10 @@ pub struct CswapError {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub error_type: Option<String>,
+    /// Elenco riletto dopo un esito incerto (`uncertain`), se leggibile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub list: Option<Box<ListResponse>>,
 }
 
 impl CswapError {
@@ -64,7 +71,21 @@ impl CswapError {
             message: clean_message(message.as_ref()),
             exit_code: None,
             error_type: None,
+            list: None,
         }
+    }
+
+    /// Esito incerto dopo il timeout di un comando che scrive, con l'elenco riletto.
+    pub fn uncertain(cause: &CswapError, list: Option<ListResponse>) -> Self {
+        let mut err = Self::new(
+            CswapErrorKind::Uncertain,
+            format!(
+                "esito incerto ({}): controllare l'elenco degli account",
+                cause.message
+            ),
+        );
+        err.list = list.map(Box::new);
+        err
     }
 
     fn with_exit(mut self, code: Option<i32>) -> Self {
@@ -183,6 +204,36 @@ pub fn classify_failure(exit_code: Option<i32>, stdout: &str, stderr: &str) -> C
         message
     };
     CswapError::new(kind_from("", &message), message).with_exit(exit_code)
+}
+
+/// Classifica un'uscita non riuscita di `uv tool upgrade`: uv esce con 2 per quasi
+/// tutti gli errori, quindi niente `InvalidUsage`; `Busy` se un file è in uso
+/// (cswap in esecuzione su Windows), altrimenti `Failed`.
+pub fn classify_uv_failure(exit_code: Option<i32>, stdout: &str, stderr: &str) -> CswapError {
+    if exit_code == Some(130) {
+        return CswapError::new(CswapErrorKind::Interrupted, "interrotto").with_exit(exit_code);
+    }
+    let all = format!("{stderr}\n{stdout}");
+    let lower = all.to_ascii_lowercase();
+    let kind = if lower.contains("os error 32") || lower.contains("used by another process") {
+        CswapErrorKind::Busy
+    } else {
+        CswapErrorKind::Failed
+    };
+    let message = stderr
+        .lines()
+        .map(str::trim)
+        .find_map(|l| l.strip_prefix("error:").map(|m| m.trim().to_owned()))
+        .unwrap_or_else(|| last_line(&all));
+    let message = if message.is_empty() {
+        format!(
+            "uv è uscito con codice {}",
+            exit_code.map_or("?".into(), |c| c.to_string())
+        )
+    } else {
+        message
+    };
+    CswapError::new(kind, message).with_exit(exit_code)
 }
 
 /// Errore dalla busta JSON di cswap.

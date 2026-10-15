@@ -93,6 +93,11 @@ pub struct AppConfig {
     #[serde(flatten)]
     #[ts(skip)]
     pub extra: serde_json::Map<String, serde_json::Value>,
+    /// Valori sconosciuti di `language` e `theme` letti dal file: si riscrivono al
+    /// salvataggio finché il campo vale ancora il default usato al loro posto.
+    #[serde(skip)]
+    #[ts(skip)]
+    pub preserved: serde_json::Map<String, serde_json::Value>,
 }
 
 impl Default for AppConfig {
@@ -104,6 +109,7 @@ impl Default for AppConfig {
             language: Language::default(),
             theme: Theme::default(),
             extra: serde_json::Map::new(),
+            preserved: serde_json::Map::new(),
         }
     }
 }
@@ -217,13 +223,34 @@ pub fn load(path: &Path) -> Result<Loaded, ConfigError> {
     Read::by_ref(&mut file)
         .take(MAX_CONFIG_BYTES)
         .read_to_string(&mut text)?;
-    let mut config: AppConfig = serde_json::from_str(text.trim_start_matches('\u{feff}'))
+    let mut value: serde_json::Value = serde_json::from_str(text.trim_start_matches('\u{feff}'))
         .map_err(|e| ConfigError::Invalid(e.to_string()))?;
+    let mut preserved = serde_json::Map::new();
+    let mut warnings = Vec::new();
+    if let Some(obj) = value.as_object_mut() {
+        // Lingua o tema sconosciuti (per esempio scritti da una versione più recente):
+        // default con avviso, e il valore originale torna nel file al salvataggio.
+        let known = |key: &str, v: &serde_json::Value| match key {
+            "language" => Language::deserialize(v).is_ok(),
+            _ => Theme::deserialize(v).is_ok(),
+        };
+        for key in ["language", "theme"] {
+            if let Some(v) = obj.get(key).filter(|v| !known(key, v)) {
+                warnings.push(format!("{key} {v} sconosciuto: si usa il default"));
+                let v = v.clone();
+                obj.remove(key);
+                preserved.insert(key.to_owned(), v);
+            }
+        }
+    }
+    let mut config: AppConfig =
+        serde_json::from_value(value).map_err(|e| ConfigError::Invalid(e.to_string()))?;
     if config.schema_version > CONFIG_SCHEMA_VERSION {
         return Err(ConfigError::UnsupportedVersion(config.schema_version));
     }
     config.schema_version = CONFIG_SCHEMA_VERSION;
-    let warnings = config.normalize();
+    config.preserved = preserved;
+    warnings.extend(config.normalize());
     Ok(Loaded {
         config,
         from_file: true,
@@ -239,8 +266,19 @@ pub fn save(path: &Path, config: &AppConfig) -> Result<(), ConfigError> {
         .filter(|d| !d.as_os_str().is_empty())
         .ok_or_else(|| ConfigError::Invalid("percorso senza cartella".into()))?;
     create_private_dir(dir)?;
+    let mut value =
+        serde_json::to_value(config).map_err(|e| ConfigError::Invalid(e.to_string()))?;
+    let defaults = serde_json::to_value(AppConfig::default())
+        .map_err(|e| ConfigError::Invalid(e.to_string()))?;
+    if let Some(obj) = value.as_object_mut() {
+        for (key, original) in &config.preserved {
+            if obj.get(key).is_some_and(|v| Some(v) == defaults.get(key)) {
+                obj.insert(key.clone(), original.clone());
+            }
+        }
+    }
     let mut json =
-        serde_json::to_vec_pretty(config).map_err(|e| ConfigError::Invalid(e.to_string()))?;
+        serde_json::to_vec_pretty(&value).map_err(|e| ConfigError::Invalid(e.to_string()))?;
     json.push(b'\n');
     let mut tmp = tempfile::Builder::new()
         .prefix(".config.")
@@ -340,6 +378,30 @@ mod tests {
             load(&path),
             Err(ConfigError::UnsupportedVersion(2))
         ));
+    }
+
+    #[test]
+    fn unknown_language_and_theme_are_kept() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(CONFIG_FILE);
+        std::fs::write(
+            &path,
+            r#"{"language": "fr", "theme": 3, "pollIntervalSeconds": 120}"#,
+        )
+        .unwrap();
+        let l = load(&path).unwrap();
+        assert_eq!(l.config.language, Language::It);
+        assert_eq!(l.config.theme, Theme::System);
+        assert_eq!(l.config.poll_interval_seconds, 120);
+        assert_eq!(l.warnings.len(), 2);
+        // Lingua invariata: torna "fr"; tema cambiato dall'utente: vale il nuovo.
+        let mut c = l.config;
+        c.theme = Theme::Dark;
+        save(&path, &c).unwrap();
+        let raw: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(raw["language"], "fr");
+        assert_eq!(raw["theme"], "dark");
     }
 
     #[cfg(unix)]

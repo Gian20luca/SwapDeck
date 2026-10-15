@@ -14,4 +14,8 @@ message: string,
 /**
  * Elenco riletto dopo l'azione, se l'azione cambia gli account.
  */
-list?: ListResponse, switch?: SwitchResponse, command?: CommandSpec, };
+list?: ListResponse, switch?: SwitchResponse, command?: CommandSpec, 
+/**
+ * Azione riuscita ma non verificata (es. rilettura fallita dopo `switch`).
+ */
+warning?: string, };
