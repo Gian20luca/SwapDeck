@@ -11,6 +11,7 @@ name = "swapdeck"
 path = "src/main.rs"
 
 [dependencies]
+ctrlc = "3.5.2"
 swapdeck-core = { path = "../../../crates/swapdeck-core" }
 
 [lints]

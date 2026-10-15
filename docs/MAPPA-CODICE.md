@@ -36,6 +36,17 @@ Struttura iniziale (step 0). Ogni step aggiorna la sezione che tocca.
 
 Test: `tests/fixtures_parse.rs` (tutte le fixture), `tests/cswap_client.rs` (ogni comando e classe d'errore con il finto cswap `tests/support/fake_cswap.rs`, bin `fake-cswap`).
 
+### Motore, lock, storico (step 2, `crates/swapdeck-core/src`)
+
+| Modulo | Contenuto |
+|---|---|
+| `engine.rs` | `EngineRules` (config, sezione `engine`), `EngineMemory`, `Decision`, funzione pura `decide(Observation, regole, memoria, ora)`. Scenari in `engine/tests.rs` |
+| `lock.rs` | `engine.lock` nella cartella dati: `try_acquire` (`create_new`, subentro con `engine.lock.takeover`), `LockGuard::heartbeat`, rilascio al `Drop`; scaduto dopo 3 intervalli o con PID morto/riusato |
+| `history.rs` | `History` (`history/AAAA-MM-GG.jsonl`, UTC): `read_range`, `prune` (30 giorni); `HistoryWriter` (solo con `LockGuard`): `append`, `record_samples` |
+| `conflicts.rs` | `SystemConflicts` (processi via sysinfo, attività via `Get-ScheduledTask`/`crontab -l`/`launchctl list`, cache 10 min); id stabili per `ignoredConflicts` |
+| `headless.rs` | trait `CswapPort` e `Clock`, `run(RunOptions, Runtime)`, `cli_main` per `swapdeck --headless [--once] [--dry-run]` (uscite 0/1/2/3). Test con finto cswap in `headless/tests.rs` |
+| `timeutil.rs` | secondi Unix, parsing RFC 3339 di cswap, giorni UTC |
+
 ## TypeScript
 
 Ogni pacchetto ha `src/index.ts`, test `src/*.test.ts` (vitest), `tsconfig.json` (typecheck, test inclusi)
