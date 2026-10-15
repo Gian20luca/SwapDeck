@@ -4,7 +4,7 @@ GUI per `cswap` (claude-swap): monitora i limiti di tutti gli account Claude, li
 Si distribuisce in due forme, a scelta di chi installa: **app nell'area di notifica (Tauri 2)** ed **estensione VS Code**.
 Gira su Windows (priorità), Linux e macOS, senza permessi di amministratore, con un consumo minimo di risorse.
 
-Stato: **piano, in attesa del via**. Prontezza circa 92% (manca l'URL del repo; il contratto di `cswap` si verifica allo step 0).
+Stato: **piano, in attesa del via**. Prontezza circa 95% (il contratto di `cswap` si verifica allo step 0).
 
 ## 1. Funzionalità confermate
 
@@ -97,5 +97,6 @@ Gli agenti si scelgono secondo le regole globali. Step 2 e 3 possono andare in p
 - L'estensione si distribuisce come .vsix, senza Marketplace.
 - `cswap-guard` resta com'è finché non decidi di passare a `swapdeck --headless`. I file in `~/.claude` non si toccano senza il tuo permesso.
 
-## 5. Aperto
-- URL del repo git: decide il formato della CI (GitHub Actions o GitLab CI) e l'endpoint dell'updater (F8).
+## 5. Repo
+- GitHub privato: https://github.com/Gian20luca/SwapDeck. CI con GitHub Actions; artefatti e updater sulle GitHub Releases.
+- Aperto: con il repo privato l'updater (F8) e i download dei colleghi richiedono un accesso al repo. Scelta provvisoria: updater predisposto ma spento di default finché il repo è privato; i colleghi vengono aggiunti come collaboratori.
