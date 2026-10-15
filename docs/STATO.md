@@ -5,12 +5,12 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 | Step | Stato | SHA | Note |
 |---|---|---|---|
 | 0 Fondamenta e contratto cswap | chiuso | bcbc8f3 | Rust gnullvm + llvm-mingw per utente; Tauri compila in locale (installer in CI con MSVC) |
-| 1 swapdeck-core: client cswap | verifica (10 rilievi) | 2a4a54a (tipi) | |
-| 2 Motore, lock, storico, headless | revisione | | |
+| 1 swapdeck-core: client cswap | chiuso | 2e24a84 | 10 rilievi corretti, copertura 91,6% |
+| 2 Motore, lock, storico, headless | verifica (10 rilievi) | | |
 | 3 packages/ui | chiuso | 99ac73c | 118 test unitari, 10 E2E, copertura 97,6% |
 | 4 App Tauri | in corso | | |
 | 5 Gestione completa in UI | | | |
-| 6 Installazione cswap | | | |
+| 6 Installazione cswap | in corso | | |
 | 7 Estensione VS Code | | | |
 | 8 Pacchetti e CI | | | GitHub Actions |
 | 9 Verifica finale e documenti | | | |
