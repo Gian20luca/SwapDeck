@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "main",
+  "description": "Finestra principale: lettura, azioni di cswap, impostazioni dell'app.",
+  "windows": ["main"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-list-accounts",
+    "allow-get-status",
+    "allow-get-config",
+    "allow-get-config-value",
+    "allow-get-history",
+    "allow-confirmation-for",
+    "allow-run-action",
+    "allow-get-app-settings",
+    "allow-set-autostart"
+  ]
+}

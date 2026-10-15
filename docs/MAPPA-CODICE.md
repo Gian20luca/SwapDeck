@@ -17,7 +17,7 @@ Struttura iniziale (step 0). Ogni step aggiorna la sezione che tocca.
 | Crate | Percorso | Contenuto |
 |---|---|---|
 | `swapdeck-core` | `crates/swapdeck-core` | client di cswap, config, cartelle dati (step 1) |
-| `swapdeck-desktop` (bin `swapdeck`) | `apps/desktop/src-tauri` | segnaposto; Tauri 2 dallo step 4 |
+| `swapdeck-desktop` (bin `swapdeck`) | `apps/desktop/src-tauri` | app Tauri 2 (vedi `apps/desktop` sotto) |
 
 ### `swapdeck-core` (step 1)
 
@@ -55,6 +55,7 @@ e `tsconfig.build.json` (emissione in `dist/`, test esclusi).
 | Pacchetto | Percorso | Contenuto |
 |---|---|---|
 | `@swapdeck/types` | `packages/types` | `SCHEMA_VERSION`; tipi ts-rs dallo step 1 |
+| `@swapdeck/desktop` | `apps/desktop` | pagina dell'app Tauri con `TauriBackend` (vedi sotto) |
 | `@swapdeck/ui` | `packages/ui` | React 19 + Vite 6: dashboard, mini-widget, grafici uPlot, i18n, tema (vedi sotto) |
 | `swapdeck-vscode` | `apps/vscode` | `swapdeckExecutable`; estensione dallo step 7 |
 
@@ -71,3 +72,21 @@ Esporta i sorgenti (`src/index.ts`), non una build: i consumatori (Tauri, webvie
 | `theme/`, `styles/index.css` | `ThemeProvider` (chiaro/scuro/auto via `data-theme`), variabili CSS, test di contrasto AA |
 | `lib/` | soglie e formattazione (`format.ts`), helper degli account (`account.ts`), `useNow` |
 | `e2e/`, `playwright.config.ts` (fuori da `src/`) | Playwright su Chromium contro l'anteprima (porta 5199): `pnpm --filter @swapdeck/ui e2e`; screenshot in `e2e/screenshots/` (ignorati da git). Copertura: `pnpm --filter @swapdeck/ui test:coverage` (v8, soglia 80% righe e funzioni, esclusi `src/dev/**`) |
+
+### `apps/desktop` (step 4)
+
+Binario `swapdeck` (Tauri 2). Pagina Vite in `src/` (porta 5175), crate in `src-tauri/`.
+Build di sviluppo: `pnpm --filter @swapdeck/desktop build`, poi `cargo build -p swapdeck-desktop --features custom-protocol` (pagina incorporata) oppure `pnpm --filter @swapdeck/desktop tauri dev`.
+
+| Percorso | Ruolo |
+|---|---|
+| `src/TauriBackend.ts` | `Backend` con `invoke` ed evento `state-changed` (`Snapshot`: lista, errore, motore sospeso); comandi dell'app (`getAppSettings`, `setAutostart`, `showMain`) |
+| `src/main.tsx` | dashboard nella finestra `main`, `MiniWidget` trascinabile nella finestra `mini` (scelta dall'etichetta della finestra); `AutostartToggle.tsx` |
+| `src-tauri/src/api.rs` | interfaccia sottile `CswapApi` (list, status, config, execute) e finto per i test |
+| `src-tauri/src/poller.rs` | ciclo di lettura: un thread, `list` a ogni intervallo e a richiesta, richieste unite |
+| `src-tauri/src/state.rs` | `Shared` (api, `Snapshot`, impostazioni, notifiche), evento `state-changed` |
+| `src-tauri/src/commands.rs` | comandi `invoke` (elenco in `build.rs`, permessi in `capabilities/`) |
+| `src-tauri/src/tray.rs`, `ring.rs` | icona ad anello disegnata a runtime, tooltip, menu con il cambio rapido |
+| `src-tauri/src/notify.rs`, `text.rs` | soglie e cambi di account (una volta per finestra di reset), testi it/en |
+| `src-tauri/src/windows.rs` | principale nascosta alla chiusura, mini-widget con posizione ricordata |
+| `src-tauri/src/settings.rs`, `terminal.rs`, `app.rs` | impostazioni dalla config, terminale di `cswap run`, avvio e plugin |

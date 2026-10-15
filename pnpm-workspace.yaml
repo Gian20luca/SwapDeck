@@ -1,6 +1,7 @@
 packages:
   - packages/*
   - apps/vscode
+  - apps/desktop
 
 catalog:
   '@types/node': ^22.0.0

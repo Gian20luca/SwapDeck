@@ -1,12 +1,23 @@
-//! Segnaposto dell'app desktop: Tauri 2 arriva con lo step 4.
-//! `swapdeck --headless [--once] [--dry-run]` avvia il motore senza interfaccia.
+//! Binario `swapdeck`: app nell'area di notifica (Tauri 2); con `--headless` il motore senza
+//! interfaccia (step 2).
+// In rilascio niente console su Windows (vedi HANDOFF: output di --headless).
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod api;
+mod app;
+mod commands;
+mod notify;
+mod poller;
+mod ring;
+mod settings;
+mod state;
+mod terminal;
+mod text;
+mod tray;
+mod windows;
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-
-fn banner() -> String {
-    format!("swapdeck {}", swapdeck_core::version())
-}
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -18,15 +29,5 @@ fn main() {
         }
         std::process::exit(swapdeck_core::headless::cli_main(&args[1..], &stop));
     }
-    println!("{}", banner());
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn banner_contains_version() {
-        assert_eq!(banner(), format!("swapdeck {}", swapdeck_core::version()));
-    }
+    app::run(Arc::new(api::MissingClient));
 }

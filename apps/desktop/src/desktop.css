@@ -1,0 +1,20 @@
+/* Ritocchi dell'app desktop sopra gli stili di @swapdeck/ui. */
+/* Mini-widget: occupa tutta la finestra senza cornice e si trascina. */
+html[data-window='mini'],
+html[data-window='mini'] body {
+  overflow: hidden;
+  height: 100%;
+  background: var(--sd-surface);
+}
+.sd-desktop-mini {
+  height: 100vh;
+  box-sizing: border-box;
+  border: 1px solid var(--sd-border);
+  cursor: default;
+  user-select: none;
+}
+.sd-desktop-mini .sd-mini {
+  max-width: none;
+  height: 100%;
+  box-sizing: border-box;
+}

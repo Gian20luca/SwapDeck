@@ -1,6 +1,6 @@
 [package]
 name = "swapdeck-desktop"
-description = "App desktop di SwapDeck (Tauri 2 dallo step 4; per ora segnaposto)"
+description = "App desktop di SwapDeck: Tauri 2 nell'area di notifica e modalità --headless"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,9 +10,23 @@ publish.workspace = true
 name = "swapdeck"
 path = "src/main.rs"
 
+[build-dependencies]
+tauri-build = { version = "2.7.3", features = [] }
+
 [dependencies]
 ctrlc = "3.5.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
 swapdeck-core = { path = "../../../crates/swapdeck-core" }
+sys-locale = "0.3.2"
+tauri = { version = "2.12.4", features = ["tray-icon"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-single-instance = "2"
+
+[features]
+# Incorpora la pagina compilata (`apps/desktop/dist`) invece di usare il server di Vite.
+custom-protocol = ["tauri/custom-protocol"]
 
 [lints]
 workspace = true
