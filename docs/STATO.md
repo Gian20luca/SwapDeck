@@ -18,5 +18,5 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 ## Domande aperte per l'utente
 (raccolte durante l'esecuzione, con scelta provvisoria)
 - Repo privato: l'updater e i download richiedono accesso al repo. Provvisorio: updater spento di default, colleghi come collaboratori.
-- cswap 0.27.2 è già su PyPI (installata 0.26.0, minimo supportato 0.26.0). Provvisorio: si sviluppa sulla 0.26.0, l'aggiornamento si decide alla fine.
+- cswap aggiornato alla 0.27.2 sul PC (richiesta dell'utente). Il JSON ha `schemaVersion` 1 con il campo nuovo `loginExpiresAt`; il contratto va riallineato nello step 1. Minimo supportato 0.26.0.
 - Da verificare su un profilo con account usa e getta: `switch --json` riuscito, prompt di `remove`/`purge`, `auto --json`, 429 reale (fixture [S] costruite dai sorgenti).
