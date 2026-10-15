@@ -9,3 +9,8 @@ HANDOFF.md
 .DS_Store
 coverage/
 dist-locale/
+
+# E2E di packages/ui
+packages/ui/e2e/screenshots/
+packages/ui/e2e/test-results/
+packages/ui/playwright-report/

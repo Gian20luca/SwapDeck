@@ -36,4 +36,13 @@ describe('PaceIndicator', () => {
     render(<PaceIndicator expectedPct={20} aheadOfPace willLastToReset />);
     expect(screen.getByRole('group')).toHaveAttribute('data-tone', 'warn');
   });
+
+  it('in linea ma che non dura: il titolo non è rosso, il rosso sta sull’esaurimento', () => {
+    render(<PaceIndicator expectedPct={45} aheadOfPace={false} willLastToReset={false} />);
+    expect(screen.getByRole('group')).toHaveAttribute('data-tone', 'danger');
+    expect(screen.getByText('In linea col ritmo').closest('.sd-pace__main')).toHaveAttribute(
+      'data-tone',
+      'ok',
+    );
+  });
 });

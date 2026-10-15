@@ -333,14 +333,18 @@ body {
 .sd-pace__main {
   font-weight: 600;
 }
-.sd-pace[data-tone='ok'] .sd-pace__main {
+.sd-pace__main[data-tone='ok'] {
   color: var(--sd-ok);
 }
-.sd-pace[data-tone='warn'] .sd-pace__main {
+.sd-pace__main[data-tone='warn'] {
   color: var(--sd-warn);
 }
-.sd-pace[data-tone='danger'] .sd-pace__main {
+.sd-pace__main[data-tone='danger'] {
   color: var(--sd-danger);
+}
+.sd-pace[data-tone='danger'] .sd-pace__last {
+  color: var(--sd-danger);
+  font-weight: 600;
 }
 .sd-pace__expected {
   font-weight: 400;

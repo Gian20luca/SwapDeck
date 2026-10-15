@@ -37,8 +37,9 @@ Esporta i sorgenti (`src/index.ts`), non una build: i consumatori (Tauri, webvie
 | Percorso (`src/`) | Ruolo |
 |---|---|
 | `backend/types.ts` | interfaccia `Backend` (async, `onStateChanged`), `HistoryPoint`, `BackendError`; `actions.ts` costruisce le `CswapAction`; `context.tsx`, `useAccounts.ts` |
-| `dev/` | `FakeBackend` (fixture di `fixtures/cswap/` con istanti riallineati a «ora», cambi simulati), `history.ts` (storico sintetico di 7 giorni), `main.tsx` (anteprima) |
+| `dev/` | `FakeBackend` (fixture di `fixtures/cswap/` con istanti riallineati a «ora», cambi simulati), `history.ts` (storico sintetico di 7 giorni), `main.tsx` (anteprima con demo dei dialoghi di conferma) |
 | `components/` | `Dashboard`, `AccountCard`, `UsageBar`, `PaceIndicator`, `QuickSwitch`, `HistoryPanel`, `UsageChart` (uPlot), `MiniWidget`, `ConfirmDialog` (anche a doppia conferma con parola), `PreferenceControls` |
 | `i18n/` | dizionari `it.ts` (fonte delle chiavi) ed `en.ts`, `I18nProvider`, `useI18n` |
 | `theme/`, `styles/index.css` | `ThemeProvider` (chiaro/scuro/auto via `data-theme`), variabili CSS, test di contrasto AA |
 | `lib/` | soglie e formattazione (`format.ts`), helper degli account (`account.ts`), `useNow` |
+| `e2e/`, `playwright.config.ts` (fuori da `src/`) | Playwright su Chromium contro l'anteprima (porta 5199): `pnpm --filter @swapdeck/ui e2e`; screenshot in `e2e/screenshots/` (ignorati da git). Copertura: `pnpm --filter @swapdeck/ui test:coverage` (v8, soglia 80% righe e funzioni, esclusi `src/dev/**`) |

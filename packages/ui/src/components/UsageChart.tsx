@@ -67,7 +67,7 @@ export function UsageChart({ title, x, lines, height = 160 }: UsageChartProps) {
           stroke: textColor,
           grid: { stroke: gridColor, width: 1 },
           ticks: { stroke: gridColor },
-          size: 40,
+          size: 52,
           values: (_u, ticks) => ticks.map((v) => `${v}%`),
         },
       ],

@@ -1,6 +1,8 @@
 import { StrictMode, useEffect, useId, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import type { CswapAction } from '@swapdeck/types';
 import { BackendProvider } from '../backend/context.js';
+import { ConfirmDialog } from '../components/ConfirmDialog.js';
 import { Dashboard } from '../components/Dashboard.js';
 import { MiniWidget } from '../components/MiniWidget.js';
 import { LanguageSelect, ThemeSelect } from '../components/PreferenceControls.js';
@@ -11,6 +13,50 @@ import { FakeBackend } from './FakeBackend.js';
 import { SCENARIO_NAMES, type ScenarioName } from './fixtures.js';
 
 type View = 'full' | 'mini';
+
+const DEMO_ACTIONS: Record<'simple' | 'typed', CswapAction> = {
+  simple: { kind: 'remove', account: 1 },
+  typed: { kind: 'purge' },
+};
+
+/** Prova dei dialoghi di conferma: la regola viene da `confirmationFor` del backend; l'azione non viene eseguita. */
+function ConfirmDemo({ backend }: { backend: FakeBackend }) {
+  const [pending, setPending] = useState<{
+    kind: 'simple' | 'typed';
+    word: string | undefined;
+  } | null>(null);
+  const [result, setResult] = useState('');
+  async function ask(kind: 'simple' | 'typed') {
+    const confirmation = await backend.confirmationFor(DEMO_ACTIONS[kind]);
+    setPending({ kind, word: confirmation.kind === 'typed' ? confirmation.word : undefined });
+  }
+  return (
+    <span className="sd-toolbar__group">
+      <button type="button" className="sd-btn" onClick={() => void ask('simple')}>
+        Demo conferma semplice
+      </button>
+      <button type="button" className="sd-btn" onClick={() => void ask('typed')}>
+        Demo doppia conferma
+      </button>
+      {result && <span role="status">{result}</span>}
+      <ConfirmDialog
+        open={pending !== null}
+        title={pending?.kind === 'typed' ? 'Eliminare tutti i dati?' : 'Rimuovere l’account?'}
+        message="Anteprima: l’azione non viene eseguita."
+        tone="danger"
+        {...(pending?.word ? { requireWord: pending.word } : {})}
+        onConfirm={() => {
+          setResult(`Confermato: ${pending?.kind}`);
+          setPending(null);
+        }}
+        onCancel={() => {
+          setResult('Annullato');
+          setPending(null);
+        }}
+      />
+    </span>
+  );
+}
 
 /** Anteprima di sviluppo: la dashboard con il FakeBackend, vista completa o mini-widget. */
 function Preview() {
@@ -65,6 +111,7 @@ function Preview() {
               ))}
             </select>
           </span>
+          <ConfirmDemo backend={backend} />
           {view === 'mini' && preferences}
         </div>
       </div>

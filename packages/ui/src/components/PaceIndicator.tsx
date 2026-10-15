@@ -23,6 +23,8 @@ export function PaceIndicator({
   const ahead = aheadOfPace === true;
   const exhausts = willLastToReset === false;
   const tone = exhausts ? 'danger' : ahead ? 'warn' : 'ok';
+  // Il titolo segue il ritmo (non va in rosso se «in linea»); il rosso sta sulla riga dell'esaurimento.
+  const mainTone = ahead ? tone : 'ok';
   const when =
     exhausts && projectedExhaustionAt && !Number.isNaN(Date.parse(projectedExhaustionAt))
       ? new Date(projectedExhaustionAt).toLocaleString(locale, {
@@ -35,7 +37,7 @@ export function PaceIndicator({
 
   return (
     <div className="sd-pace" data-tone={tone} aria-label={t('pace.label')} role="group">
-      <span className="sd-pace__main">
+      <span className="sd-pace__main" data-tone={mainTone}>
         <span aria-hidden="true">{ahead ? '▲' : '●'}</span>{' '}
         <span>{ahead ? t('pace.ahead') : t('pace.onTrack')}</span>
         <span className="sd-pace__expected">
