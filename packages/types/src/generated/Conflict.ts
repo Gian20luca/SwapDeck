@@ -7,7 +7,8 @@ import type { ConflictKind } from "./ConflictKind.js";
 export type Conflict = { 
 /**
  * Chiave stabile, usata da `EngineRules::ignored_conflicts`
- * (`process:auto`, `task:cswap-guard`, `cron:<riga>`, `launchd:<etichetta>`).
+ * (`process:auto`, `task:cswap-guard`, `cron:<hash della riga>`, `timer:<unità>`,
+ * `launchd:<etichetta>`). Mai il testo di una riga di crontab.
  */
 id: string, kind: ConflictKind, 
 /**

@@ -269,6 +269,103 @@ fn loop_keeps_going_after_errors_and_respects_memory() {
     assert!(o.output.contains("ok: su riserva"), "{}", o.output);
 }
 
+/// Orologio che al primo `sleep` rilascia il lock di un'altra istanza.
+struct ReleasingClock {
+    t: i64,
+    holder: Option<LockGuard>,
+}
+
+impl Clock for ReleasingClock {
+    fn now(&mut self) -> i64 {
+        self.t
+    }
+    fn sleep(&mut self, secs: u32, _stop: &AtomicBool) {
+        self.t += i64::from(secs);
+        self.holder.take();
+    }
+}
+
+#[test]
+fn decision_is_recorded_again_after_acquiring_the_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    let holder = match lock::try_acquire(dir.path(), 60, T0).unwrap() {
+        Acquire::Acquired(g) => g,
+        Acquire::Busy(_) => unreachable!(),
+    };
+    let mut opts = RunOptions::new(dir.path().to_path_buf(), user_rules());
+    opts.dry_run = true;
+    opts.max_ticks = Some(2);
+    let mut port = at_limit();
+    let mut out = Vec::new();
+    let stop = AtomicBool::new(false);
+    run(
+        &opts,
+        Runtime {
+            port: &mut port,
+            conflicts: &mut FakeConflicts(Vec::new()),
+            clock: &mut ReleasingClock {
+                t: T0,
+                holder: Some(holder),
+            },
+            out: &mut out,
+            stop: &stop,
+        },
+    )
+    .unwrap();
+    let out = String::from_utf8(out).unwrap();
+    assert!(out.contains("lock del motore acquisito"), "{out}");
+    assert!(
+        history(dir.path())
+            .iter()
+            .any(|r| matches!(r, HistoryRecord::Decision(d) if d.decision.target() == Some(3))),
+        "la decisione vista in attesa va nello storico: {out}"
+    );
+}
+
+/// Registra l'ordine delle letture: i conflitti vanno letti prima di `list`.
+struct OrderConflicts(std::rc::Rc<std::cell::RefCell<Vec<&'static str>>>);
+
+impl ConflictSource for OrderConflicts {
+    fn detect(&mut self) -> Vec<Conflict> {
+        self.0.borrow_mut().push("conflicts");
+        Vec::new()
+    }
+}
+
+struct OrderPort(FakePort, std::rc::Rc<std::cell::RefCell<Vec<&'static str>>>);
+
+impl CswapPort for OrderPort {
+    fn list(&mut self) -> Result<ListResponse, CswapError> {
+        self.1.borrow_mut().push("list");
+        self.0.list()
+    }
+    fn switch_to(&mut self, number: u32) -> Result<SwitchResponse, CswapError> {
+        self.0.switch_to(number)
+    }
+}
+
+#[test]
+fn conflicts_are_read_before_list() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut opts = RunOptions::new(dir.path().to_path_buf(), user_rules());
+    opts.once = true;
+    let order = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let mut port = OrderPort(at_limit(), order.clone());
+    let stop = AtomicBool::new(false);
+    run(
+        &opts,
+        Runtime {
+            port: &mut port,
+            conflicts: &mut OrderConflicts(order.clone()),
+            clock: &mut FakeClock(T0),
+            out: &mut Vec::new(),
+            stop: &stop,
+        },
+    )
+    .unwrap();
+    assert_eq!(*order.borrow(), vec!["conflicts", "list"]);
+}
+
 #[test]
 fn stop_flag_ends_after_current_tick() {
     let dir = tempfile::tempdir().unwrap();

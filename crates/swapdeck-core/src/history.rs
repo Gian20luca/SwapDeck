@@ -22,6 +22,8 @@ pub const HISTORY_DIR: &str = "history";
 pub const DEFAULT_RETENTION_DAYS: u32 = 30;
 /// Intervallo massimo leggibile in una volta.
 const MAX_RANGE_DAYS: i64 = 400;
+/// File cancellati al massimo per rotazione (una al giorno).
+pub const MAX_PRUNE_PER_CALL: usize = 5;
 
 /// Consumo di un account in un istante.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -172,7 +174,9 @@ impl History {
         Ok(out)
     }
 
-    /// Cancella i file più vecchi di `retention_days` giorni. Restituisce quanti.
+    /// Cancella i file più vecchi di `retention_days` giorni, al massimo
+    /// [`MAX_PRUNE_PER_CALL`] per chiamata e dai più vecchi: un salto dell'orologio non
+    /// svuota lo storico in un colpo. Restituisce quanti.
     pub fn prune(&self, now: i64, retention_days: u32) -> io::Result<usize> {
         let Some(today) = utc_date(now) else {
             return Ok(0);
@@ -182,23 +186,23 @@ impl History {
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(0),
             other => other?,
         };
-        let mut removed = 0;
-        for entry in entries.flatten() {
-            let name = entry.file_name();
-            let Some(date) = name.to_str().and_then(parse_file_name) else {
-                continue;
-            };
-            // Solo file regolari: i link simbolici non si seguono (si rimuove il link).
-            if date < cutoff
-                && entry
+        let mut old: Vec<(Date, PathBuf)> = entries
+            .flatten()
+            .filter_map(|entry| {
+                let date = entry.file_name().to_str().and_then(parse_file_name)?;
+                // Solo file regolari: i link simbolici non si seguono (si rimuove il link).
+                let removable = entry
                     .file_type()
-                    .is_ok_and(|t| t.is_file() || t.is_symlink())
-            {
-                fs::remove_file(entry.path())?;
-                removed += 1;
-            }
+                    .is_ok_and(|t| t.is_file() || t.is_symlink());
+                (date < cutoff && removable).then(|| (date, entry.path()))
+            })
+            .collect();
+        old.sort();
+        old.truncate(MAX_PRUNE_PER_CALL);
+        for (_, path) in &old {
+            fs::remove_file(path)?;
         }
-        Ok(removed)
+        Ok(old.len())
     }
 
     /// Apre la scrittura: richiede il lock del motore.
@@ -211,6 +215,8 @@ impl History {
             last_seen: HashMap::new(),
             pruned_day: None,
             primed: false,
+            last_prune_error: None,
+            pending_prune_error: None,
         })
     }
 }
@@ -269,17 +275,34 @@ pub struct HistoryWriter {
     last_seen: HashMap<u32, (UsageStatus, Option<String>)>,
     pruned_day: Option<Date>,
     primed: bool,
+    /// Ultimo errore di rotazione visto e quello non ancora segnalato (uno per tipo).
+    last_prune_error: Option<String>,
+    pending_prune_error: Option<String>,
 }
 
 impl HistoryWriter {
+    /// Errore della rotazione non ancora segnalato (lo registra il runner).
+    pub fn take_prune_error(&mut self) -> Option<String> {
+        self.pending_prune_error.take()
+    }
+
     /// Aggiunge una riga al file del giorno di `rec.ts()`.
     pub fn append(&mut self, rec: &HistoryRecord) -> io::Result<()> {
         let ts = rec.ts();
         let day = utc_date(ts)
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "data fuori scala"))?;
         if self.pruned_day != Some(day) {
-            self.pruned_day = Some(day);
-            self.history.prune(ts, self.retention_days)?;
+            // Una rotazione fallita non ferma la scrittura: si annota e si riprova alla prossima.
+            match self.history.prune(ts, self.retention_days) {
+                Ok(_) => self.pruned_day = Some(day),
+                Err(e) => {
+                    let msg = e.to_string();
+                    if self.last_prune_error.as_deref() != Some(msg.as_str()) {
+                        self.last_prune_error = Some(msg.clone());
+                        self.pending_prune_error = Some(msg);
+                    }
+                }
+            }
         }
         let mut file = open_append(&self.history.dir.join(file_name(day)))?;
         let mut line = serde_json::to_string(rec).map_err(io::Error::other)?;
@@ -431,5 +454,81 @@ mod tests {
         assert_eq!(names.len(), 3, "{names:?}");
         assert!(names.contains(&"note.txt".to_owned()));
         assert_eq!(parse_file_name("2026-02-30.jsonl"), None);
+    }
+
+    #[test]
+    fn clock_jump_prunes_a_few_files_per_day() {
+        let dir = tempfile::tempdir().unwrap();
+        let h = History::new(dir.path());
+        create_private_dir(h.dir()).unwrap();
+        for d in 0..8 {
+            let day = utc_date(T0 - d * DAY).unwrap();
+            fs::write(h.dir().join(file_name(day)), "").unwrap();
+        }
+        // Orologio avanti di un anno: tutto sarebbe da cancellare, si tolgono solo i più vecchi.
+        assert_eq!(h.prune(T0 + 365 * DAY, 30).unwrap(), MAX_PRUNE_PER_CALL);
+        let left = fs::read_dir(h.dir()).unwrap().count();
+        assert_eq!(left, 8 - MAX_PRUNE_PER_CALL);
+        assert!(h.dir().join(file_name(utc_date(T0).unwrap())).exists());
+        // Orologio indietro: niente da cancellare.
+        assert_eq!(h.prune(T0 - 100 * DAY, 30).unwrap(), 0);
+    }
+
+    #[test]
+    fn failed_rotation_is_reported_not_propagated() {
+        let dir = tempfile::tempdir().unwrap();
+        let g = guard(dir.path());
+        let h = History::new(dir.path());
+        let mut w = h.writer(&g, 30).unwrap();
+        w.append(&switch(T0 - 40 * DAY)).unwrap();
+        let old = h.dir().join(file_name(utc_date(T0 - 40 * DAY).unwrap()));
+        // Il file di oggi esiste già: su Unix la cartella diventa di sola lettura.
+        fs::write(h.dir().join(file_name(utc_date(T0).unwrap())), "").unwrap();
+        let hold = block_removal(&old);
+        if hold.is_none() {
+            return; // root su Linux: la rimozione non si può impedire.
+        }
+        w.append(&switch(T0)).unwrap();
+        assert!(w.take_prune_error().is_some());
+        assert_eq!(w.take_prune_error(), None);
+        assert_ne!(
+            w.pruned_day,
+            utc_date(T0),
+            "si riprova alla prossima scrittura"
+        );
+        restore_removal(&old, hold);
+        w.append(&switch(T0 + 1)).unwrap();
+        assert_eq!(w.pruned_day, utc_date(T0));
+        assert!(!old.exists());
+    }
+
+    /// Impedisce la rimozione di `path`: handle senza condivisione (Windows) o cartella in
+    /// sola lettura (Unix, non per root).
+    #[cfg(windows)]
+    fn block_removal(path: &Path) -> Option<File> {
+        use std::os::windows::fs::OpenOptionsExt;
+        OpenOptions::new().read(true).share_mode(0).open(path).ok()
+    }
+
+    #[cfg(windows)]
+    fn restore_removal(_path: &Path, hold: Option<File>) {
+        drop(hold);
+    }
+
+    #[cfg(unix)]
+    fn block_removal(path: &Path) -> Option<()> {
+        use std::os::unix::fs::PermissionsExt;
+        if rustix::process::geteuid().is_root() {
+            return None;
+        }
+        let dir = path.parent()?;
+        fs::set_permissions(dir, fs::Permissions::from_mode(0o500)).ok()
+    }
+
+    #[cfg(unix)]
+    fn restore_removal(path: &Path, _hold: Option<()>) {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = path.parent().unwrap();
+        fs::set_permissions(dir, fs::Permissions::from_mode(0o700)).unwrap();
     }
 }

@@ -154,6 +154,17 @@ pub struct EngineMemory {
     /// Reset della finestra che ha fatto lasciare il principale: prima non si torna.
     #[ts(type = "number | null")]
     pub primary_reset_at: Option<i64>,
+    /// Finestre al limite quando il motore ha lasciato il principale: l'isteresi del ritorno
+    /// vale solo per loro. `None` (memoria assente o vecchia) = solo la 5h.
+    pub primary_left_windows: Option<Vec<LimitWindow>>,
+}
+
+/// Finestra di consumo che ha fatto lasciare il principale.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub enum LimitWindow {
+    FiveHour,
+    SevenDay,
 }
 
 impl EngineMemory {
@@ -164,12 +175,13 @@ impl EngineMemory {
         if Some(to) == rules.primary {
             self.left_primary_at = None;
             self.primary_reset_at = None;
+            self.primary_left_windows = None;
         } else if from.is_some() && from == rules.primary {
+            let main = rules.primary.and_then(|p| find(list, p));
             self.left_primary_at = Some(now);
-            self.primary_reset_at = rules
-                .primary
-                .and_then(|p| find(list, p))
-                .and_then(|p| limiting_reset(p, rules, now));
+            self.primary_reset_at = main.and_then(|p| limiting_reset(p, rules, now));
+            self.primary_left_windows =
+                Some(main.map_or_else(Vec::new, |p| limiting_windows(p, rules, now)));
         }
     }
 }
@@ -374,7 +386,7 @@ pub fn decide(obs: Observation<'_>, rules: &EngineRules, mem: &EngineMemory, now
     if let Some(to) = pick_reserve(list, rules, now, from) {
         return Decision::Switch { from, to, cause };
     }
-    if main.is_some_and(|p| eligible(p, rules, now, 0.0)) {
+    if main.is_some_and(|p| eligible(p, rules, now, NO_MARGIN)) {
         return Decision::ReturnToPrimary {
             from,
             to: primary,
@@ -434,24 +446,59 @@ fn at_limit(a: &Account, rules: &EngineRules, now: i64, hard: bool) -> bool {
     effective_pct(u.five_hour.as_ref(), now) >= t5 || effective_pct(u.seven_day.as_ref(), now) >= t7
 }
 
-fn below(u: &Usage, rules: &EngineRules, now: i64, margin: f64) -> bool {
-    effective_pct(u.five_hour.as_ref(), now) < rules.five_hour_threshold - margin
-        && effective_pct(u.seven_day.as_ref(), now) < rules.seven_day_limit() - margin
+/// Margini sottratti alle soglie (5h, 7d).
+type Margins = (f64, f64);
+const NO_MARGIN: Margins = (0.0, 0.0);
+
+fn below(u: &Usage, rules: &EngineRules, now: i64, (m5, m7): Margins) -> bool {
+    effective_pct(u.five_hour.as_ref(), now) < rules.five_hour_threshold - m5
+        && effective_pct(u.seven_day.as_ref(), now) < rules.seven_day_limit() - m7
 }
 
 /// Account su cui il motore può cambiare: abilitato, non escluso, dati freschi, sotto soglia.
-fn eligible(a: &Account, rules: &EngineRules, now: i64, margin: f64) -> bool {
+fn eligible(a: &Account, rules: &EngineRules, now: i64, margins: Margins) -> bool {
     !a.is_disabled()
         && !rules.excluded.contains(&a.number)
         && fresh(a, rules, now)
         && a.usage
             .as_ref()
-            .is_some_and(|u| below(u, rules, now, margin))
+            .is_some_and(|u| below(u, rules, now, margins))
 }
 
+/// Ritorno al principale: reset passato e isteresi solo sulle finestre che l'hanno fatto lasciare.
 fn ready_to_return(p: &Account, rules: &EngineRules, mem: &EngineMemory, now: i64) -> bool {
-    mem.primary_reset_at.is_none_or(|r| now >= r)
-        && eligible(p, rules, now, rules.return_hysteresis)
+    let h = rules.return_hysteresis;
+    let margins = match mem.primary_left_windows.as_deref() {
+        None => (h, 0.0),
+        Some(w) => (
+            if w.contains(&LimitWindow::FiveHour) {
+                h
+            } else {
+                0.0
+            },
+            if w.contains(&LimitWindow::SevenDay) {
+                h
+            } else {
+                0.0
+            },
+        ),
+    };
+    mem.primary_reset_at.is_none_or(|r| now >= r) && eligible(p, rules, now, margins)
+}
+
+/// Finestre dell'account oltre le soglie del motore.
+fn limiting_windows(a: &Account, rules: &EngineRules, now: i64) -> Vec<LimitWindow> {
+    let Some(u) = a.usage.as_ref().or(a.last_good_usage.as_ref()) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    if effective_pct(u.five_hour.as_ref(), now) >= rules.five_hour_threshold {
+        out.push(LimitWindow::FiveHour);
+    }
+    if effective_pct(u.seven_day.as_ref(), now) >= rules.seven_day_limit() {
+        out.push(LimitWindow::SevenDay);
+    }
+    out
 }
 
 /// Reset più lontano tra le finestre al limite (quando il principale torna utilizzabile).
@@ -474,7 +521,7 @@ fn pick_reserve(list: &ListResponse, rules: &EngineRules, now: i64, active: u32)
         .enumerate()
         .filter(|(_, n)| *n != active && Some(*n) != rules.primary)
         .filter_map(|(i, n)| find(list, n).map(|a| (i, a)))
-        .filter(|(_, a)| eligible(a, rules, now, 0.0))
+        .filter(|(_, a)| eligible(a, rules, now, NO_MARGIN))
         .collect();
     let pct = |a: &Account, seven: bool| {
         let u = a.usage.as_ref();

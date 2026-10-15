@@ -196,6 +196,8 @@ impl Runner<'_, '_> {
                 let writer = history.writer(&guard, self.opts.retention_days)?;
                 let mem = load_memory(&self.opts.data_dir);
                 self.holder = Some(Holder { guard, writer, mem });
+                // La decisione vista in attesa del lock va registrata di nuovo da titolare.
+                self.last_decision = None;
                 self.log(now, "lock del motore acquisito");
                 Ok(None)
             }
@@ -236,6 +238,10 @@ impl Runner<'_, '_> {
     }
 
     fn tick(&mut self, now: i64) {
+        // Prima i conflitti (la lettura delle attività può durare a lungo), poi `list`:
+        // la decisione usa consumi appena letti.
+        let conflicts = self.rt.conflicts.detect();
+        self.note_conflicts(now, &conflicts);
         let list = match self.rt.port.list() {
             Ok(l) => l,
             Err(e) => {
@@ -248,8 +254,6 @@ impl Runner<'_, '_> {
                 self.log(now, &format!("storico non scritto: {e}"));
             }
         }
-        let conflicts = self.rt.conflicts.detect();
-        self.note_conflicts(now, &conflicts);
         let mem = self
             .holder
             .as_ref()
@@ -285,6 +289,16 @@ impl Runner<'_, '_> {
             if let (Some(to), Some(cause)) = (decision.target(), cause_of(&decision)) {
                 self.execute(now, &list, to, cause);
             }
+        }
+    }
+
+    fn report_prune_error(&mut self, now: i64) {
+        let err = self
+            .holder
+            .as_mut()
+            .and_then(|h| h.writer.take_prune_error());
+        if let Some(e) = err {
+            self.log(now, &format!("rotazione dello storico non riuscita: {e}"));
         }
     }
 
@@ -384,6 +398,7 @@ pub fn run(opts: &RunOptions, rt: Runtime<'_>) -> io::Result<RunOutcome> {
             busy_logged = false;
         }
         r.tick(now);
+        r.report_prune_error(now);
         // Secondo battito: il giro può durare molto (prima lettura delle attività, cswap lento).
         if r.holder.is_some() {
             let after = r.rt.clock.now();

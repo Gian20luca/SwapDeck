@@ -170,8 +170,10 @@ fn user_rule_scenarios() {
         last_switch_at: Some(NOW - 6 * 3600),
         left_primary_at: Some(NOW - 6 * 3600),
         primary_reset_at: Some(NOW - 60),
+        primary_left_windows: Some(vec![LimitWindow::FiveHour]),
     };
     let future = EngineMemory { primary_reset_at: Some(NOW + 600), ..passed.clone() };
+    let seven_day = EngineMemory { primary_left_windows: Some(vec![LimitWindow::SevenDay]), ..passed.clone() };
     let mut reset_window = acc(6, 97.0, 30.0);
     reset_window.usage.as_mut().unwrap().five_hour = Some(window(97.0, NOW - 1));
     let mut unknown = acc(1, 0.0, 0.0);
@@ -205,7 +207,11 @@ fn user_rule_scenarios() {
         with_mem("isteresi: principale al 90% resta", 3, vec![acc(6, 90.0, 31.0), acc(3, 20.0, 20.0)], passed.clone(), idle(OnReserve)),
         with_mem("reset non ancora passato", 3, vec![acc(6, 5.0, 31.0), acc(3, 20.0, 20.0)], future, idle(OnReserve)),
         with_mem("principale in re-login non torna", 3, vec![status(acc(6, 0.0, 0.0), UsageStatus::ReloginRequired), acc(3, 20.0, 20.0)], passed.clone(), idle(OnReserve)),
-        with_mem("principale vecchio non torna", 3, vec![stale(acc(6, 0.0, 0.0), 4000.0), acc(3, 20.0, 20.0)], passed, idle(OnReserve)),
+        with_mem("principale vecchio non torna", 3, vec![stale(acc(6, 0.0, 0.0), 4000.0), acc(3, 20.0, 20.0)], passed.clone(), idle(OnReserve)),
+        with_mem("lasciato per la 5h: 7d al 93% non frena", 3, vec![acc(6, 5.0, 93.0), acc(3, 20.0, 20.0)], passed.clone(), back(3, PrimaryReset)),
+        with_mem("senza memoria: 7d al 90% non frena", 3, vec![acc(6, 5.0, 90.0), acc(3, 20.0, 20.0)], EngineMemory::default(), back(3, PrimaryReset)),
+        with_mem("lasciato per la 7d: 7d al 93% resta", 3, vec![acc(6, 5.0, 93.0), acc(3, 20.0, 20.0)], seven_day.clone(), idle(OnReserve)),
+        with_mem("lasciato per la 7d: 7d all'85% torna", 3, vec![acc(6, 5.0, 85.0), acc(3, 20.0, 20.0)], seven_day, back(3, PrimaryReset)),
     ];
     let mut rules = user_rules();
     rules.excluded = vec![2];
@@ -369,6 +375,7 @@ fn no_oscillation_near_threshold() {
         }
         if min == 1 {
             assert_eq!(mem.primary_reset_at, Some(H5_RESET), "reset ricordato");
+            assert_eq!(mem.primary_left_windows, Some(vec![LimitWindow::FiveHour]));
         }
     }
     // 6→3 al minuto 1, ritorno 3→6 al 61; al 62 il 96% cade nella pausa minima; al 70 è al 4%.

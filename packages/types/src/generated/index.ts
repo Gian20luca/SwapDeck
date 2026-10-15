@@ -27,6 +27,7 @@ export type * from './ErrorEnvelope.js';
 export type * from './HistoryRecord.js';
 export type * from './IdleReason.js';
 export type * from './Language.js';
+export type * from './LimitWindow.js';
 export type * from './ListResponse.js';
 export type * from './LockInfo.js';
 export type * from './NotificationConfig.js';

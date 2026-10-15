@@ -1,8 +1,8 @@
 //! Lock unico del motore (F11): `engine.lock` nella cartella dati.
 //!
-//! Il file contiene PID, host, istanza, inizio del processo e battito. È scaduto dopo
-//! tre intervalli senza battito, oppure subito se sullo stesso host il PID non esiste più
-//! o appartiene a un altro processo (PID riusato: l'ora di avvio non coincide).
+//! Il file contiene PID, host, istanza, inizio del processo e battito. Sullo stesso host
+//! è scaduto solo se il PID non esiste più o appartiene a un altro processo (PID riusato:
+//! l'ora di avvio non coincide); tra host diversi dopo tre intervalli senza battito.
 //!
 //! - Acquisizione: `create_new` (atomica). Per subentrare a un lock scaduto si prende
 //!   prima `engine.lock.takeover` (anch'esso `create_new`), si rilegge il lock e lo si
@@ -51,21 +51,20 @@ pub struct LockInfo {
 }
 
 impl LockInfo {
-    /// `true` se il lock non va più rispettato.
+    /// `true` se il lock non va più rispettato. Sullo stesso host decide il processo: vivo con
+    /// la stessa ora di avvio = mai scaduto (anche se un giro lungo ha saltato il battito),
+    /// morto o PID riusato = scaduto subito. Il battito decide solo tra host diversi o se
+    /// l'ora di avvio non è nota.
     pub fn is_stale(&self, now: i64, host: &str) -> bool {
+        if self.host.eq_ignore_ascii_case(host) {
+            match (process_start(self.pid), self.process_start) {
+                (None, _) => return true,
+                (Some(start), Some(s)) => return s.abs_diff(start) > START_TOLERANCE,
+                (Some(_), None) => {}
+            }
+        }
         let ttl = MISSED_BEATS * i64::from(self.interval_secs.max(1));
-        if now > self.heartbeat_at.saturating_add(ttl) {
-            return true;
-        }
-        if !self.host.eq_ignore_ascii_case(host) {
-            return false;
-        }
-        match process_start(self.pid) {
-            None => true,
-            Some(start) => self
-                .process_start
-                .is_some_and(|s| s.abs_diff(start) > START_TOLERANCE),
-        }
+        now > self.heartbeat_at.saturating_add(ttl)
     }
 }
 
@@ -374,6 +373,12 @@ mod tests {
         assert!(foreign(me, "altro-host", NOW - 181).is_stale(NOW, &host));
         // Stesso host, processo vivo con la stessa ora di avvio: vivo.
         assert!(!foreign(me, &host, NOW).is_stale(NOW, &host));
+        // Stesso host e stesso processo, battito saltato da un giro lungo: ancora vivo.
+        assert!(!foreign(me, &host, NOW - 10_000).is_stale(NOW, &host));
+        // Stesso host senza ora di avvio: decide il battito.
+        let mut no_start = foreign(me, &host, NOW - 181);
+        no_start.process_start = None;
+        assert!(no_start.is_stale(NOW, &host));
         // Stesso host, PID riusato da un altro processo: scaduto subito.
         let mut reused = foreign(me, &host, NOW);
         reused.process_start = reused.process_start.map(|s| s - 1000);
