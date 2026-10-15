@@ -292,3 +292,235 @@ body {
   font-size: 13px;
   padding: 12px 0;
 }
+
+/* Campi di preferenza */
+.sd-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--sd-muted);
+}
+.sd-input--inline {
+  width: auto;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+/* Legenda del grafico */
+.sd-chart__legend {
+  list-style: none;
+  display: flex;
+  gap: 12px;
+  margin: 4px 0 0;
+  padding: 0;
+  font-size: 12px;
+  color: var(--sd-muted);
+}
+
+/* Indicatore del ritmo */
+.sd-pace {
+  display: grid;
+  gap: 1px;
+  font-size: 12px;
+  color: var(--sd-muted);
+}
+.sd-pace__main {
+  font-weight: 600;
+}
+.sd-pace[data-tone='ok'] .sd-pace__main {
+  color: var(--sd-ok);
+}
+.sd-pace[data-tone='warn'] .sd-pace__main {
+  color: var(--sd-warn);
+}
+.sd-pace[data-tone='danger'] .sd-pace__main {
+  color: var(--sd-danger);
+}
+.sd-pace__expected {
+  font-weight: 400;
+  color: var(--sd-muted);
+}
+
+/* Dashboard */
+.sd-app {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.sd-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sd-toolbar h1 {
+  margin: 0;
+  font-size: 16px;
+}
+.sd-toolbar__group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.sd-updated {
+  font-size: 12px;
+  color: var(--sd-muted);
+}
+.sd-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.sd-state {
+  text-align: center;
+  padding: 24px 12px;
+  color: var(--sd-muted);
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+.sd-state h2 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--sd-text);
+}
+.sd-state p {
+  margin: 0;
+}
+.sd-notice {
+  border: 1px solid var(--sd-border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  background: var(--sd-surface-2);
+}
+.sd-notice[data-tone='danger'] {
+  border-color: var(--sd-danger);
+  color: var(--sd-danger);
+}
+
+/* Scheda account */
+.sd-card {
+  background: var(--sd-surface);
+  border: 1px solid var(--sd-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+.sd-card[data-active='true'] {
+  border-color: var(--sd-accent);
+  box-shadow: 0 0 0 1px var(--sd-accent);
+}
+.sd-card[data-disabled='true'] {
+  opacity: 0.8;
+}
+.sd-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.sd-card__title {
+  display: grid;
+  min-width: 0;
+}
+.sd-card__name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sd-card__email {
+  font-size: 12px;
+  color: var(--sd-muted);
+}
+.sd-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+.sd-card__bars {
+  display: grid;
+  gap: 8px;
+}
+.sd-card__scoped {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid var(--sd-border);
+  padding-top: 6px;
+}
+.sd-card__scoped h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sd-muted);
+}
+.sd-card__foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sd-card__age {
+  font-size: 12px;
+  color: var(--sd-muted);
+}
+.sd-card__age[data-stale='true'] {
+  color: var(--sd-warn);
+}
+.sd-card__actions {
+  display: flex;
+  gap: 6px;
+}
+.sd-card__history {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--sd-border);
+  padding-top: 8px;
+}
+.sd-card__history h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sd-muted);
+}
+
+/* Mini-widget (~280×160) */
+.sd-mini {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  width: 100%;
+  max-width: 320px;
+  background: var(--sd-surface);
+  color: var(--sd-text);
+}
+.sd-mini__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.sd-mini__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sd-mini__foot {
+  font-size: 11px;
+  color: var(--sd-muted);
+}
+.sd-mini .sd-bar__track {
+  height: 6px;
+}

@@ -8,6 +8,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./fake": "./src/dev/index.ts",
     "./styles.css": "./src/styles/index.css"
   },
   "scripts": {
@@ -17,6 +18,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@swapdeck/types": "workspace:*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "uplot": "^1.6.31"

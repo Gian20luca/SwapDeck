@@ -45,7 +45,7 @@ export const en: Record<MessageKey, string> = {
   'account.personal': 'Personal',
   'account.slot': 'Account {number}',
   'account.switchTo': 'Switch to this account',
-  'account.switchToLabel': 'Switch to account {name}',
+  'account.switchToLabel': 'Switch to this account: {name}',
   'account.alreadyActive': 'Already active',
   'account.cannotSwitch.disabled': 'Account is disabled',
   'account.cannotSwitch.relogin': 'A new login in Claude Code is required',

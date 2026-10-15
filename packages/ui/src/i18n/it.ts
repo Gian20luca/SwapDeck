@@ -43,7 +43,7 @@ export const it = {
   'account.personal': 'Personale',
   'account.slot': 'Account {number}',
   'account.switchTo': 'Passa a questo account',
-  'account.switchToLabel': 'Passa all’account {name}',
+  'account.switchToLabel': 'Passa a questo account: {name}',
   'account.alreadyActive': 'Già attivo',
   'account.cannotSwitch.disabled': 'Account disabilitato',
   'account.cannotSwitch.relogin': 'Serve un nuovo login in Claude Code',
