@@ -1,0 +1,294 @@
+/* SwapDeck UI — variabili e stili base. Tema: `data-theme="light|dark"` su <html> (vedi ThemeProvider). */
+
+:root,
+:root[data-theme='light'] {
+  --sd-bg: #f4f5f8;
+  --sd-surface: #ffffff;
+  --sd-surface-2: #eceff4;
+  --sd-border: #cfd5df;
+  --sd-text: #181b21;
+  --sd-muted: #556070;
+  --sd-accent: #2358d6;
+  --sd-accent-contrast: #ffffff;
+  --sd-ok: #17703f;
+  --sd-warn: #8f5a00;
+  --sd-danger: #bf2323;
+  --sd-ok-fill: #2fa466;
+  --sd-warn-fill: #e0a21c;
+  --sd-danger-fill: #d64545;
+  --sd-track: #dfe3ea;
+  --sd-focus: #1b4fc4;
+  --sd-overlay: rgba(15, 18, 25, 0.5);
+  --sd-chart-grid: #e3e7ee;
+  --sd-chart-1: #2358d6;
+  --sd-chart-2: #c0560d;
+  --sd-chart-pace: #6b7585;
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --sd-bg: #11131a;
+  --sd-surface: #1a1d26;
+  --sd-surface-2: #232733;
+  --sd-border: #3a4152;
+  --sd-text: #e9ecf3;
+  --sd-muted: #a4adbd;
+  --sd-accent: #7fa6ff;
+  --sd-accent-contrast: #0b1020;
+  --sd-ok: #52c98d;
+  --sd-warn: #eab04a;
+  --sd-danger: #ff7a7a;
+  --sd-ok-fill: #36b377;
+  --sd-warn-fill: #d9a02a;
+  --sd-danger-fill: #e55a5a;
+  --sd-track: #2b3040;
+  --sd-focus: #9dbaff;
+  --sd-overlay: rgba(0, 0, 0, 0.65);
+  --sd-chart-grid: #2b3040;
+  --sd-chart-1: #7fa6ff;
+  --sd-chart-2: #f0a15e;
+  --sd-chart-pace: #8f99ab;
+  color-scheme: dark;
+}
+
+/* Senza JS (o prima del ThemeProvider) segue il sistema. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --sd-bg: #11131a;
+    --sd-surface: #1a1d26;
+    --sd-surface-2: #232733;
+    --sd-border: #3a4152;
+    --sd-text: #e9ecf3;
+    --sd-muted: #a4adbd;
+    --sd-accent: #7fa6ff;
+    --sd-accent-contrast: #0b1020;
+    --sd-ok: #52c98d;
+    --sd-warn: #eab04a;
+    --sd-danger: #ff7a7a;
+    --sd-ok-fill: #36b377;
+    --sd-warn-fill: #d9a02a;
+    --sd-danger-fill: #e55a5a;
+    --sd-track: #2b3040;
+    --sd-focus: #9dbaff;
+    --sd-overlay: rgba(0, 0, 0, 0.65);
+    --sd-chart-grid: #2b3040;
+    --sd-chart-1: #7fa6ff;
+    --sd-chart-2: #f0a15e;
+    --sd-chart-pace: #8f99ab;
+    color-scheme: dark;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--sd-bg);
+  color: var(--sd-text);
+  font: 14px/1.4 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+/* Focus ben visibile per la tastiera su ogni elemento interattivo. */
+:where(button, input, select, a, [tabindex]):focus-visible {
+  outline: 2px solid var(--sd-focus);
+  outline-offset: 2px;
+}
+
+.sd-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Pulsanti */
+.sd-btn {
+  appearance: none;
+  border: 1px solid var(--sd-border);
+  background: var(--sd-surface);
+  color: var(--sd-text);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font: inherit;
+  cursor: pointer;
+  min-height: 32px;
+}
+.sd-btn:hover:not(:disabled) {
+  background: var(--sd-surface-2);
+}
+.sd-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.sd-btn--primary {
+  background: var(--sd-accent);
+  border-color: var(--sd-accent);
+  color: var(--sd-accent-contrast);
+}
+.sd-btn--primary:hover:not(:disabled) {
+  background: var(--sd-accent);
+  filter: brightness(1.08);
+}
+.sd-btn--danger {
+  background: var(--sd-danger);
+  border-color: var(--sd-danger);
+  color: var(--sd-accent-contrast);
+}
+.sd-btn--danger:hover:not(:disabled) {
+  background: var(--sd-danger);
+  filter: brightness(1.08);
+}
+.sd-btn--small {
+  padding: 3px 8px;
+  min-height: 26px;
+  font-size: 13px;
+}
+
+/* Barre di consumo */
+.sd-bar {
+  display: grid;
+  gap: 2px;
+}
+.sd-bar__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--sd-muted);
+}
+.sd-bar__pct {
+  font-weight: 600;
+  color: var(--sd-text);
+  font-variant-numeric: tabular-nums;
+}
+.sd-bar__track {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--sd-track);
+  overflow: hidden;
+}
+.sd-bar__fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--sd-ok-fill);
+}
+.sd-bar[data-level='warn'] .sd-bar__fill {
+  background: var(--sd-warn-fill);
+}
+.sd-bar[data-level='danger'] .sd-bar__fill {
+  background: var(--sd-danger-fill);
+}
+.sd-bar[data-level='unknown'] .sd-bar__fill {
+  background: var(--sd-border);
+}
+.sd-bar__pace {
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  width: 2px;
+  background: var(--sd-text);
+  opacity: 0.75;
+}
+.sd-bar__foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--sd-muted);
+}
+
+/* Badge */
+.sd-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--sd-border);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sd-muted);
+  white-space: nowrap;
+}
+.sd-badge--ok {
+  color: var(--sd-ok);
+  border-color: var(--sd-ok);
+}
+.sd-badge--warn {
+  color: var(--sd-warn);
+  border-color: var(--sd-warn);
+}
+.sd-badge--danger {
+  color: var(--sd-danger);
+  border-color: var(--sd-danger);
+}
+
+/* Finestra di conferma */
+.sd-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--sd-overlay);
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  z-index: 1000;
+}
+.sd-dialog {
+  background: var(--sd-surface);
+  color: var(--sd-text);
+  border: 1px solid var(--sd-border);
+  border-radius: 10px;
+  padding: 16px;
+  width: min(100%, 380px);
+  display: grid;
+  gap: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+.sd-dialog h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.sd-dialog p {
+  margin: 0;
+}
+.sd-dialog__step {
+  font-size: 12px;
+  color: var(--sd-muted);
+}
+.sd-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+.sd-input {
+  font: inherit;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--sd-border);
+  background: var(--sd-bg);
+  color: var(--sd-text);
+  width: 100%;
+}
+
+/* Grafico */
+.sd-chart {
+  position: relative;
+  width: 100%;
+  min-height: 140px;
+}
+.sd-chart .u-legend {
+  font-size: 12px;
+  color: var(--sd-muted);
+}
+.sd-chart__state {
+  color: var(--sd-muted);
+  font-size: 13px;
+  padding: 12px 0;
+}

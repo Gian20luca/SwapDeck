@@ -4,22 +4,34 @@
   "private": true,
   "type": "module",
   "description": "Interfaccia condivisa tra app desktop ed estensione VS Code",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    }
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles/index.css"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "uplot": "^1.6.31"
+  },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.6.0",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
     "@types/node": "catalog:",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^26.0.0",
     "typescript": "catalog:",
+    "vite": "^6.4.0",
     "vitest": "catalog:"
   }
 }
