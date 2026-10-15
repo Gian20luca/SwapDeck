@@ -155,14 +155,14 @@ pub fn classify_failure(exit_code: Option<i32>, stdout: &str, stderr: &str) -> C
         return CswapError::new(CswapErrorKind::InvalidUsage, msg).with_exit(exit_code);
     }
     if let Some(env) = parse_error_envelope(stdout) {
-        let mut err = CswapError::new(
-            kind_from(&env.error.error_type, &env.error.message),
-            &env.error.message,
-        )
-        .with_exit(exit_code);
-        err.error_type = Some(env.error.error_type);
-        return err;
+        return from_envelope(env, exit_code);
     }
+    let filtered: String = stderr
+        .lines()
+        .filter(|l| !l.contains("A newer version of claude-swap"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let stderr = filtered.as_str();
     let message = if stderr.contains("Traceback (most recent call last)") {
         last_line(stderr)
     } else {
@@ -183,6 +183,17 @@ pub fn classify_failure(exit_code: Option<i32>, stdout: &str, stderr: &str) -> C
         message
     };
     CswapError::new(kind_from("", &message), message).with_exit(exit_code)
+}
+
+/// Errore dalla busta JSON di cswap.
+pub fn from_envelope(env: ErrorEnvelope, exit_code: Option<i32>) -> CswapError {
+    let mut err = CswapError::new(
+        kind_from(&env.error.error_type, &env.error.message),
+        &env.error.message,
+    )
+    .with_exit(exit_code);
+    err.error_type = Some(env.error.error_type);
+    err
 }
 
 /// Busta d'errore JSON su stdout, se c'è (anche come ultima riga di `auto --json`).

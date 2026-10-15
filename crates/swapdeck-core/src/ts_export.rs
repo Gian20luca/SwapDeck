@@ -9,9 +9,11 @@ use std::path::{Path, PathBuf};
 
 use ts_rs::{Config, TS};
 
+use crate::config::AppConfig;
 use crate::cswap::{
-    AutoEvent, ConfigGetResponse, ConfigListResponse, Confirmation, CswapAction, CswapError,
-    CswapVersion, ErrorEnvelope, ListResponse, StatusResponse, SwitchResponse,
+    ActionOutcome, AutoEvent, CommandSpec, ConfigGetResponse, ConfigListResponse, Confirmation,
+    CswapAction, CswapError, CswapVersion, ErrorEnvelope, ListResponse, StatusResponse,
+    SwitchResponse,
 };
 
 const HEADER: &str =
@@ -33,9 +35,12 @@ fn render(dir: &Path) -> BTreeMap<String, String> {
     ConfigGetResponse::export_all(&cfg).unwrap();
     AutoEvent::export_all(&cfg).unwrap();
     CswapAction::export_all(&cfg).unwrap();
+    ActionOutcome::export_all(&cfg).unwrap();
+    CommandSpec::export_all(&cfg).unwrap();
     Confirmation::export_all(&cfg).unwrap();
     CswapError::export_all(&cfg).unwrap();
     CswapVersion::export_all(&cfg).unwrap();
+    AppConfig::export_all(&cfg).unwrap();
 
     let mut files = BTreeMap::new();
     collect(dir, dir, &mut files);

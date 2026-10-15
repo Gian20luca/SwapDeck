@@ -1,7 +1,9 @@
-//! Logica di SwapDeck: client di cswap e config. Motore, lock, storico e
+//! Logica di SwapDeck: client di cswap, config e cartelle dati. Motore, lock, storico e
 //! rilevamento dei conflitti arrivano con lo step 2.
 
+pub mod config;
 pub mod cswap;
+pub mod paths;
 // Step 2: pub mod engine;
 // Step 2: pub mod lock;
 // Step 2: pub mod history;

@@ -6,7 +6,7 @@ Struttura iniziale (step 0). Ogni step aggiorna la sezione che tocca.
 
 | File | Ruolo |
 |---|---|
-| `package.json` | script `build`, `test`, `lint`, `format`, `test:rust`, `lint:rust` |
+| `package.json` | script `build`, `test`, `lint`, `format`, `test:rust`, `lint:rust`, `gen:types` |
 | `pnpm-workspace.yaml` | pacchetti, catalogo delle versioni, override di Vite, script di installazione ammessi |
 | `tsconfig.base.json` | opzioni TypeScript strict condivise |
 | `.prettierrc.json`, `.prettierignore` | formattazione (esclusi `docs/` e `fixtures/`) |
@@ -16,8 +16,25 @@ Struttura iniziale (step 0). Ogni step aggiorna la sezione che tocca.
 
 | Crate | Percorso | Contenuto |
 |---|---|---|
-| `swapdeck-core` | `crates/swapdeck-core` | `version()`; logica dallo step 1 |
+| `swapdeck-core` | `crates/swapdeck-core` | client di cswap, config, cartelle dati (step 1) |
 | `swapdeck-desktop` (bin `swapdeck`) | `apps/desktop/src-tauri` | segnaposto; Tauri 2 dallo step 4 |
+
+### `swapdeck-core` (step 1)
+
+| Modulo | Contenuto |
+|---|---|
+| `cswap::model` | tipi serde del JSON di cswap: `ListResponse`, `Account`, `Usage`, `StatusResponse`, `SwitchResponse`, `ErrorEnvelope`, `ConfigListResponse`, `AutoEvent` |
+| `cswap::action` | `CswapAction` (azioni dell'interfaccia, solo `Deserialize`), `Confirmation`, `AutoOptions`, `RunOptions` |
+| `cswap::error` | `CswapError`/`CswapErrorKind`, `classify_failure`, `account_issue`, `CswapVersion`, pulizia dei messaggi |
+| `cswap::client` | `CswapClient` (un metodo per comando di F0, verifica con `list --json`), `ActionOutcome`, `AutoProcess` |
+| `cswap::process` | esecuzione con pipe, timeout e chiusura dell'albero dei processi, `CREATE_NO_WINDOW` |
+| `cswap::locate` | ricerca di cswap (`SWAPDECK_CSWAP`, `PATH`, `~/.local/bin`) e di uv |
+| `cswap::secret` | `SecretToken` (Debug oscurato, azzerato al rilascio) |
+| `config` | `AppConfig` (`config.json`): default, `validate`, `normalize`, `load`, `save` atomico |
+| `paths` | `AppPaths`: cartelle per utente |
+| `ts_export` (test) | genera `packages/types/src/generated/` (`pnpm gen:types`) e ne controlla l'aggiornamento |
+
+Test: `tests/fixtures_parse.rs` (tutte le fixture), `tests/cswap_client.rs` (ogni comando e classe d'errore con il finto cswap `tests/support/fake_cswap.rs`, bin `fake-cswap`).
 
 ## TypeScript
 

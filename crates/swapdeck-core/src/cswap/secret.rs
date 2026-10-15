@@ -30,7 +30,6 @@ impl SecretToken {
     }
 
     /// Valore in chiaro, solo per scriverlo su stdin del processo.
-    #[allow(dead_code)] // lo usa il client (punto 2)
     pub(crate) fn expose(&self) -> &str {
         &self.0
     }

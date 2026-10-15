@@ -23,3 +23,10 @@ rustix = { version = "1.1.5", features = ["process", "fs"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
+
+# Finto cswap per i test di integrazione (tests/cswap_client.rs).
+[[bin]]
+name = "fake-cswap"
+path = "tests/support/fake_cswap.rs"
+test = false
+doc = false
