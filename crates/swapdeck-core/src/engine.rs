@@ -49,8 +49,6 @@ pub struct EngineRules {
     pub return_hysteresis: f64,
     /// Pausa minima tra due cambi, in secondi.
     pub min_switch_gap_secs: u32,
-    /// Intervallo di controllo, in secondi.
-    pub interval_secs: u32,
     /// Età massima di un consumo per fidarsene, in secondi.
     pub max_usage_age_secs: u32,
     /// Conflitti noti da ignorare (`Conflict::id`, senza distinzione di maiuscole).
@@ -71,16 +69,11 @@ impl Default for EngineRules {
             return_to_primary: true,
             return_hysteresis: 10.0,
             min_switch_gap_secs: 300,
-            interval_secs: 60,
             max_usage_age_secs: 900,
             ignored_conflicts: Vec::new(),
         }
     }
 }
-
-/// Limiti accettati per l'intervallo (sotto i 60 s cswap non ha dati nuovi).
-pub const MIN_INTERVAL_SECS: u32 = 30;
-pub const MAX_INTERVAL_SECS: u32 = 3600;
 
 impl EngineRules {
     /// Problemi che impediscono al motore di agire (messaggi per l'utente).
@@ -99,11 +92,6 @@ impl EngineRules {
         }
         if !(self.return_hysteresis.is_finite() && (0.0..=50.0).contains(&self.return_hysteresis)) {
             out.push("isteresi fuori da 0–50".to_owned());
-        }
-        if !(MIN_INTERVAL_SECS..=MAX_INTERVAL_SECS).contains(&self.interval_secs) {
-            out.push(format!(
-                "intervallo fuori da {MIN_INTERVAL_SECS}–{MAX_INTERVAL_SECS} s"
-            ));
         }
         if self.reserves.contains(&primary) {
             out.push("il principale non può essere anche una riserva".to_owned());
@@ -302,18 +290,19 @@ pub fn decide(obs: Observation<'_>, rules: &EngineRules, mem: &EngineMemory, now
     if !(rules.enabled || rules.dry_run) {
         return Decision::suspended(SuspendReason::Disabled);
     }
-    let problems = rules.validate();
-    if !problems.is_empty() {
-        return Decision::Suspended {
-            reason: SuspendReason::InvalidRules,
-            detail: problems,
-        };
-    }
+    // Prima i conflitti: un altro motore attivo conta più di regole incomplete.
     let blocking = blocking_conflicts(obs.conflicts, rules);
     if !blocking.is_empty() {
         return Decision::Suspended {
             reason: SuspendReason::Conflict,
             detail: blocking.iter().map(|c| c.id.clone()).collect(),
+        };
+    }
+    let problems = rules.validate();
+    if !problems.is_empty() {
+        return Decision::Suspended {
+            reason: SuspendReason::InvalidRules,
+            detail: problems,
         };
     }
     let list = obs.list;

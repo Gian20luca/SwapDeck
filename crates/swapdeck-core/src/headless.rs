@@ -10,17 +10,18 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::conflicts::{Conflict, ConflictSource};
-use crate::cswap::{CswapError, ListResponse, SwitchResponse};
+use crate::config::{self, MAX_POLL_INTERVAL_SECONDS, MIN_POLL_INTERVAL_SECONDS};
+use crate::conflicts::{Conflict, ConflictSource, SystemConflicts};
+use crate::cswap::{CswapClient, CswapError, CswapErrorKind, ListResponse, SwitchResponse};
 use crate::engine::{
-    Decision, EngineMemory, EngineRules, IdleReason, MAX_INTERVAL_SECS, MIN_INTERVAL_SECS,
-    Observation, SuspendReason, SwitchCause, decide,
+    Decision, EngineMemory, EngineRules, IdleReason, Observation, SuspendReason, SwitchCause,
+    decide,
 };
 use crate::history::{
     DEFAULT_RETENTION_DAYS, DecisionRecord, History, HistoryRecord, HistoryWriter, SwitchRecord,
-    create_private_dir,
 };
 use crate::lock::{self, Acquire, LockGuard, LockInfo};
+use crate::paths::{AppPaths, create_private_dir};
 use crate::timeutil::{format_iso, now_unix};
 
 /// Memoria del motore nella cartella dati.
@@ -32,6 +33,18 @@ pub trait CswapPort {
     fn list(&mut self) -> Result<ListResponse, CswapError>;
     /// `cswap switch <number> --json`.
     fn switch_to(&mut self, number: u32) -> Result<SwitchResponse, CswapError>;
+}
+
+impl CswapPort for CswapClient {
+    fn list(&mut self) -> Result<ListResponse, CswapError> {
+        CswapClient::list(self)
+    }
+
+    fn switch_to(&mut self, number: u32) -> Result<SwitchResponse, CswapError> {
+        self.switch(Some(number), None, None, false)?
+            .switch
+            .ok_or_else(|| CswapError::new(CswapErrorKind::Failed, "switch senza risposta JSON"))
+    }
 }
 
 /// Orologio del runner (finto nei test).
@@ -67,6 +80,8 @@ impl Clock for SystemClock {
 pub struct RunOptions {
     pub data_dir: PathBuf,
     pub rules: EngineRules,
+    /// Intervallo tra due giri (`pollIntervalSeconds` della config), riportato in 60–3600 s.
+    pub interval_secs: u32,
     /// Un solo giro.
     pub once: bool,
     /// Solo osservazione, anche se le regole dicono altro.
@@ -81,6 +96,7 @@ impl RunOptions {
         Self {
             data_dir,
             rules,
+            interval_secs: MIN_POLL_INTERVAL_SECONDS,
             once: false,
             dry_run: false,
             retention_days: DEFAULT_RETENTION_DAYS,
@@ -175,6 +191,7 @@ struct Holder {
 struct Runner<'o, 'r> {
     opts: &'o RunOptions,
     rules: EngineRules,
+    interval: u32,
     rt: Runtime<'r>,
     holder: Option<Holder>,
     last_decision: Option<Decision>,
@@ -190,7 +207,7 @@ impl Runner<'_, '_> {
     }
 
     fn try_lock(&mut self, now: i64) -> io::Result<Option<Option<LockInfo>>> {
-        match lock::try_acquire(&self.opts.data_dir, self.rules.interval_secs, now)? {
+        match lock::try_acquire(&self.opts.data_dir, self.interval, now)? {
             Acquire::Acquired(guard) => {
                 let history = History::new(&self.opts.data_dir);
                 let writer = history.writer(&guard, self.opts.retention_days)?;
@@ -360,13 +377,13 @@ pub fn run(opts: &RunOptions, rt: Runtime<'_>) -> io::Result<RunOutcome> {
     create_private_dir(&opts.data_dir)?;
     let mut rules = opts.rules.clone();
     rules.dry_run |= opts.dry_run;
-    let interval = rules
+    let interval = opts
         .interval_secs
-        .clamp(MIN_INTERVAL_SECS, MAX_INTERVAL_SECS);
-    rules.interval_secs = interval;
+        .clamp(MIN_POLL_INTERVAL_SECONDS, MAX_POLL_INTERVAL_SECONDS);
     let mut r = Runner {
         opts,
         rules,
+        interval,
         rt,
         holder: None,
         last_decision: None,
@@ -454,6 +471,8 @@ pub mod exit_code {
 }
 
 /// Ingresso di `swapdeck --headless`: `args` sono le opzioni dopo `--headless`.
+/// Cartelle per utente (o `SWAPDECK_HOME`), `config.json` (sezione `engine`,
+/// `pollIntervalSeconds`) e cswap trovato come nel client (`SWAPDECK_CSWAP`, `PATH`, …).
 pub fn cli_main(args: &[String], stop: &AtomicBool) -> i32 {
     let flags = match parse_flags(args) {
         Ok(f) => f,
@@ -462,13 +481,57 @@ pub fn cli_main(args: &[String], stop: &AtomicBool) -> i32 {
             return exit_code::USAGE;
         }
     };
-    let _ = (flags, stop);
-    // Integrazione con lo step 1: cartella dati, `config.json` (sezione `engine`) e
-    // adattatore `CswapPort` del client cswap. Poi:
-    // run(&opts, Runtime { port, conflicts: &mut SystemConflicts, clock: &mut SystemClock,
-    //     out: &mut io::stdout(), stop })
-    eprintln!("swapdeck --headless: client cswap e config non ancora collegati");
-    exit_code::ERROR
+    let Some(paths) = AppPaths::from_env_or_system() else {
+        eprintln!("cartelle dell'utente non determinabili");
+        return exit_code::ERROR;
+    };
+    let loaded = match config::load(&paths.config_file()) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("{e}");
+            return exit_code::ERROR;
+        }
+    };
+    for w in &loaded.warnings {
+        eprintln!("config: {w}");
+    }
+    let mut client = match CswapClient::locate() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{e}");
+            return exit_code::ERROR;
+        }
+    };
+    let mut opts = RunOptions::new(paths.data_dir.clone(), loaded.config.engine.clone());
+    opts.interval_secs = loaded.config.poll_interval_seconds;
+    opts.once = flags.once;
+    opts.dry_run = flags.dry_run;
+    let mut stdout = io::stdout();
+    let result = run(
+        &opts,
+        Runtime {
+            port: &mut client,
+            conflicts: &mut SystemConflicts::default(),
+            clock: &mut SystemClock,
+            out: &mut stdout,
+            stop,
+        },
+    );
+    match result {
+        Ok(RunOutcome::Finished { .. }) => exit_code::OK,
+        Ok(RunOutcome::LockBusy(info)) => {
+            let who = info.map_or_else(
+                || "un'altra istanza".to_owned(),
+                |i| format!("PID {} su {}", i.pid, i.host),
+            );
+            eprintln!("motore già attivo ({who})");
+            exit_code::LOCK_BUSY
+        }
+        Err(e) => {
+            eprintln!("motore fermato: {e}");
+            exit_code::ERROR
+        }
+    }
 }
 
 #[cfg(test)]

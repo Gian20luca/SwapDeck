@@ -1,8 +1,8 @@
 //! `config.json` di SwapDeck: default, validazione e scrittura atomica.
 //!
-//! Per ora: intervallo di controllo, soglie delle notifiche, lingua e tema.
-//! Le regole del motore arrivano con lo step 2; le chiavi sconosciute si
-//! conservano, così una versione vecchia non cancella quelle di una nuova.
+//! Intervallo di controllo (unico, usato anche dal motore), soglie delle notifiche,
+//! lingua, tema e regole del motore (`engine`). Le chiavi sconosciute si conservano,
+//! così una versione vecchia non cancella quelle di una nuova.
 
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write};
@@ -11,6 +11,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::engine::EngineRules;
 use crate::paths::create_private_dir;
 
 /// Nome del file.
@@ -89,6 +90,9 @@ pub struct AppConfig {
     pub language: Language,
     #[serde(default)]
     pub theme: Theme,
+    /// Regole del motore.
+    #[serde(default)]
+    pub engine: EngineRules,
     /// Chiavi non note a questa versione, conservate così come sono.
     #[serde(flatten)]
     #[ts(skip)]
@@ -108,6 +112,7 @@ impl Default for AppConfig {
             notifications: NotificationConfig::default(),
             language: Language::default(),
             theme: Theme::default(),
+            engine: EngineRules::default(),
             extra: serde_json::Map::new(),
             preserved: serde_json::Map::new(),
         }
@@ -199,6 +204,25 @@ pub struct Loaded {
     pub warnings: Vec<String>,
 }
 
+/// `engine.intervalSecs` (prime versioni dello step 2) diventa `pollIntervalSeconds`
+/// se questo manca; in ogni caso la chiave doppia si toglie.
+fn migrate_engine_interval(
+    obj: &mut serde_json::Map<String, serde_json::Value>,
+    warnings: &mut Vec<String>,
+) {
+    let Some(old) = obj
+        .get_mut("engine")
+        .and_then(serde_json::Value::as_object_mut)
+        .and_then(|e| e.remove("intervalSecs"))
+    else {
+        return;
+    };
+    if !obj.contains_key("pollIntervalSeconds") && old.is_u64() {
+        obj.insert("pollIntervalSeconds".to_owned(), old);
+        warnings.push("engine.intervalSecs spostato in pollIntervalSeconds".to_owned());
+    }
+}
+
 /// Legge la config; file assente = default. JSON non valido = errore (il file non si tocca).
 pub fn load(path: &Path) -> Result<Loaded, ConfigError> {
     let mut file = match open_no_follow(path) {
@@ -234,6 +258,7 @@ pub fn load(path: &Path) -> Result<Loaded, ConfigError> {
             "language" => Language::deserialize(v).is_ok(),
             _ => Theme::deserialize(v).is_ok(),
         };
+        migrate_engine_interval(obj, &mut warnings);
         for key in ["language", "theme"] {
             if let Some(v) = obj.get(key).filter(|v| !known(key, v)) {
                 warnings.push(format!("{key} {v} sconosciuto: si usa il default"));
@@ -336,6 +361,35 @@ mod tests {
             .map(|e| e.unwrap().file_name())
             .collect();
         assert_eq!(left.len(), 1, "niente file temporanei rimasti");
+    }
+
+    #[test]
+    fn engine_section_and_interval_migration() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(CONFIG_FILE);
+        std::fs::write(
+            &path,
+            r#"{"engine":{"enabled":true,"primary":6,"intervalSecs":120,"ignoredConflicts":["task:cswap-guard"]}}"#,
+        )
+        .unwrap();
+        let l = load(&path).unwrap();
+        assert!(l.config.engine.enabled);
+        assert_eq!(l.config.engine.primary, Some(6));
+        assert_eq!(l.config.engine.ignored_conflicts, vec!["task:cswap-guard"]);
+        assert_eq!(l.config.poll_interval_seconds, 120);
+        assert_eq!(l.warnings.len(), 1);
+        assert!(!l.config.extra.contains_key("engine"));
+        // Con pollIntervalSeconds presente vince quello; la chiave doppia sparisce.
+        std::fs::write(
+            &path,
+            r#"{"pollIntervalSeconds":300,"engine":{"intervalSecs":120}}"#,
+        )
+        .unwrap();
+        let l = load(&path).unwrap();
+        assert_eq!(l.config.poll_interval_seconds, 300);
+        save(&path, &l.config).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("intervalSecs") && text.contains("\"engine\""));
     }
 
     #[test]

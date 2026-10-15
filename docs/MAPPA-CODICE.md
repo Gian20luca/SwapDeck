@@ -40,11 +40,11 @@ Test: `tests/fixtures_parse.rs` (tutte le fixture), `tests/cswap_client.rs` (ogn
 
 | Modulo | Contenuto |
 |---|---|
-| `engine.rs` | `EngineRules` (config, sezione `engine`), `EngineMemory`, `Decision`, funzione pura `decide(Observation, regole, memoria, ora)`. Scenari in `engine/tests.rs` |
-| `lock.rs` | `engine.lock` nella cartella dati: `try_acquire` (`create_new`, subentro con `engine.lock.takeover`), `LockGuard::heartbeat`, rilascio al `Drop`; scaduto dopo 3 intervalli o con PID morto/riusato |
-| `history.rs` | `History` (`history/AAAA-MM-GG.jsonl`, UTC): `read_range`, `prune` (30 giorni); `HistoryWriter` (solo con `LockGuard`): `append`, `record_samples` |
-| `conflicts.rs` | `SystemConflicts` (processi via sysinfo, attività via `Get-ScheduledTask`/`crontab -l`/`launchctl list`, cache 10 min); id stabili per `ignoredConflicts` |
-| `headless.rs` | trait `CswapPort` e `Clock`, `run(RunOptions, Runtime)`, `cli_main` per `swapdeck --headless [--once] [--dry-run]` (uscite 0/1/2/3). Test con finto cswap in `headless/tests.rs` |
+| `engine.rs` | `EngineRules` (`AppConfig.engine`; l'intervallo è solo `pollIntervalSeconds`, `engine.intervalSecs` migrato in lettura), `EngineMemory` (con `primaryLeftWindows`: l'isteresi del ritorno vale solo per la finestra che ha fatto lasciare il principale), `Decision`, funzione pura `decide(Observation, regole, memoria, ora)`: conflitti prima della validazione delle regole. Scenari in `engine/tests.rs` |
+| `lock.rs` | `engine.lock` nella cartella dati: `try_acquire` (`create_new`, subentro con `engine.lock.takeover`), `LockGuard::heartbeat`, rilascio al `Drop`. Stesso host: scaduto solo con PID morto o riusato (ora di avvio diversa); host diversi o avvio ignoto: 3 intervalli senza battito |
+| `history.rs` | `History` (`history/AAAA-MM-GG.jsonl`, UTC): `read_range`, `prune` (30 giorni, al massimo `MAX_PRUNE_PER_CALL` file per giro contro i salti dell'orologio); `HistoryWriter` (solo con `LockGuard`): `append` (rotazione fallita annotata in `take_prune_error`, non propagata), `record_samples` |
+| `conflicts.rs` | `SystemConflicts`: processi via sysinfo (riga illeggibile di `cswap` = `process:unreadable`, avviso), attività su nome e comando via `Get-ScheduledTask` (Windows), `crontab -l` e `systemctl --user list-timers` (Linux), `launchctl list` (macOS); esito dei comandi verificato, lettura fallita = `tasks:unverified` che sospende (ignorabile); cache 10 min, risultato verificato tenuto al massimo 30 min. Id stabili per `ignoredConflicts` (`cron:<hash>`, mai il testo della riga) |
+| `headless.rs` | trait `CswapPort` (implementato da `CswapClient`) e `Clock`, `run(RunOptions, Runtime)` (conflitti letti prima di `list`), `cli_main` per `swapdeck --headless [--once] [--dry-run]` (cartelle da `AppPaths::from_env_or_system`, `SWAPDECK_HOME` per le prove; uscite 0/1/2/3). Test con finto cswap in `headless/tests.rs` |
 | `timeutil.rs` | secondi Unix, parsing RFC 3339 di cswap, giorni UTC |
 
 ## TypeScript

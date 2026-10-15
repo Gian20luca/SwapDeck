@@ -9,6 +9,9 @@ use std::path::{Path, PathBuf};
 
 /// Nome della cartella dell'applicazione.
 pub const APP_DIR: &str = "swapdeck";
+/// Radice alternativa (assoluta) per config e dati: prove con il finto cswap e
+/// installazioni portabili. Usa `config/` e `data/` sotto la radice.
+pub const HOME_OVERRIDE_ENV: &str = "SWAPDECK_HOME";
 
 /// Percorsi di SwapDeck.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -25,6 +28,16 @@ impl AppPaths {
             config_dir: base.config_dir().join(APP_DIR),
             data_dir: base.data_dir().join(APP_DIR),
         })
+    }
+
+    /// `SWAPDECK_HOME` se impostata e assoluta, altrimenti i percorsi standard.
+    pub fn from_env_or_system() -> Option<Self> {
+        Self::from_override(std::env::var_os(HOME_OVERRIDE_ENV)).or_else(Self::from_system)
+    }
+
+    fn from_override(value: Option<std::ffi::OsString>) -> Option<Self> {
+        let root = PathBuf::from(value?);
+        root.is_absolute().then(|| Self::from_root(&root))
     }
 
     /// Percorsi sotto una radice qualsiasi (test, installazioni portabili).
@@ -75,6 +88,15 @@ mod tests {
             assert!(p.data_dir.ends_with(APP_DIR));
             assert!(p.config_file().ends_with("config.json"));
         }
+    }
+
+    #[test]
+    fn override_must_be_absolute() {
+        let abs = std::env::temp_dir().join("sd");
+        let p = AppPaths::from_override(Some(abs.clone().into_os_string())).unwrap();
+        assert_eq!(p, AppPaths::from_root(&abs));
+        assert_eq!(AppPaths::from_override(Some("relativa".into())), None);
+        assert_eq!(AppPaths::from_override(None), None);
     }
 
     #[test]

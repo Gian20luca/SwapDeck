@@ -16,6 +16,7 @@ use ts_rs::TS;
 use crate::cswap::{Account, ListResponse, UsageStatus};
 use crate::engine::{Decision, SwitchCause};
 use crate::lock::LockGuard;
+use crate::paths::create_private_dir;
 use crate::timeutil::{day_start, utc_date};
 
 pub const HISTORY_DIR: &str = "history";
@@ -235,17 +236,6 @@ fn read_day(path: &Path) -> io::Result<Option<String>> {
         other => other?.read_to_end(&mut buf)?,
     };
     Ok(Some(String::from_utf8_lossy(&buf).into_owned()))
-}
-
-pub(crate) fn create_private_dir(dir: &Path) -> io::Result<()> {
-    let mut b = fs::DirBuilder::new();
-    b.recursive(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::DirBuilderExt;
-        b.mode(0o700);
-    }
-    b.create(dir)
 }
 
 fn open_append(path: &Path) -> io::Result<File> {

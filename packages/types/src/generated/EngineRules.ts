@@ -46,10 +46,6 @@ returnHysteresis: number,
  */
 minSwitchGapSecs: number, 
 /**
- * Intervallo di controllo, in secondi.
- */
-intervalSecs: number, 
-/**
  * Età massima di un consumo per fidarsene, in secondi.
  */
 maxUsageAgeSecs: number, 

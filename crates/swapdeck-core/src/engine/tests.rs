@@ -299,7 +299,7 @@ fn disabled_dry_run_invalid_and_conflicts() {
     ));
     let invalid = EngineRules {
         reserves: vec![6],
-        interval_secs: 5,
+        excluded: vec![6],
         ..user_rules()
     };
     assert_eq!(invalid.validate().len(), 2);
