@@ -1,0 +1,9 @@
+node_modules/
+dist/
+out/
+target/
+*.vsix
+.vscode-test/
+HANDOFF.md
+*.log
+.DS_Store
