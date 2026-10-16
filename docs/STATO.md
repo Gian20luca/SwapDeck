@@ -30,4 +30,4 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 - Si possono avviare l'app e installare l'estensione sul PC per le prove, ma **mai switch reali** né altre scritture sul cswap reale (regola nel CLAUDE.md).
 - A fine lavoro: release in bozza su GitHub con installer e .vsix.
 - **Disco C: del PC quasi pieno** (99%, 4 GB liberi nella notte; liberati 3,4 GB eliminando la target condivisa e ridotto il debuginfo dev). Le build Tauri richiedono vari GB: conviene liberare spazio.
-- `swapdeck --headless` nella build di rilascio Windows non ha console (app GUI). Provvisorio per lo step 8: un piccolo binario console separato `swapdeck-cli` per la modalità senza interfaccia, invece di `AttachConsole` (vietato da `unsafe_code`).
+- Modalità senza interfaccia ed estensione VS Code: binario console `swapdeck-cli` (decisione provvisoria della notte, vedi PIANO §2).

@@ -53,7 +53,7 @@ WidgetCswap/
 
 - **Una sola fonte di logica: il Rust.** Il motore, il lock e lo storico vivono in `swapdeck-core`. L'app Tauri li usa con l'interfaccia; `swapdeck --headless` è lo stesso binario senza finestre.
 - **Interfaccia condivisa.** `packages/ui` parla con un'interfaccia `Backend` che ha due implementazioni: `invoke` di Tauri e `postMessage` del webview VS Code.
-- **Estensione VS Code.** Lancia `cswap` direttamente per leggere i dati e per le azioni manuali. Il cambio automatico non lo rifà: se è installato `swapdeck`, avvia `swapdeck --headless`, che rispetta il lock; altrimenti propone di installarlo. Così la logica delle regole non esiste in due copie.
+- **Estensione VS Code** (decisione rivista nella notte del 16/10, reversibile): usa un binario console `swapdeck-cli`, costruito da `swapdeck-core` e incluso nel .vsix per piattaforma, per stato, azioni, storico e motore (`swapdeck-cli headless`, che rispetta il lock). Niente client cswap in TypeScript. Lo stesso `swapdeck-cli` è la modalità senza interfaccia su Windows, dove l'app GUI non ha console.
 - **Dati per utente** (nessun percorso di sistema):
   - Windows: `%APPDATA%\swapdeck`
   - Linux: `~/.config/swapdeck` e `~/.local/share/swapdeck`
