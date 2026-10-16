@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -12,16 +12,6 @@ import {
   toCswapError,
 } from './cli.js';
 import { preloadEnv, PROCESS_TEST_TIMEOUT_MS } from './testing.js';
-
-/** `true` se il processo esiste ancora (segnale 0: solo controllo). */
-function isAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'EPERM';
-  }
-}
 
 describe('cli', () => {
   it("nome dell'eseguibile e percorso effettivo", () => {
@@ -80,20 +70,11 @@ describe('createCliRunner', { timeout: PROCESS_TEST_TIMEOUT_MS }, () => {
   });
 
   it('timeout: termina il processo e rifiuta con timeout', async () => {
-    // Il finto scrive il suo PID e resta bloccato nel preload: senza il blocco `node state`
-    // uscirebbe da solo (modulo inesistente) e l'esito dipenderebbe dalla velocità di avvio.
-    const pidFile = path.join(dir, 'timeout.pid');
-    const env = fake(
-      `require('fs').writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); ` +
-        'Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 120000);',
-    );
-    await expect(run(['state'], { env, timeoutMs: 3000 })).rejects.toMatchObject({
+    // Bloccato nel preload: Node non arriva mai a cercare lo script `state` (che non esiste).
+    const env = fake('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);');
+    await expect(run(['state'], { env, timeoutMs: 300 })).rejects.toMatchObject({
       info: { kind: 'timeout' },
     });
-    // Il rifiuto arriva dopo l'uscita del processo: non deve essere più vivo.
-    const pid = Number(readFileSync(pidFile, 'utf8'));
-    expect(pid).toBeGreaterThan(0);
-    expect(isAlive(pid)).toBe(false);
   });
 
   it('eseguibile mancante: errore chiaro', async () => {

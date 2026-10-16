@@ -24,6 +24,7 @@ mod state;
 mod terminal;
 mod text;
 mod tray;
+mod updater;
 mod windows;
 
 use std::sync::Arc;

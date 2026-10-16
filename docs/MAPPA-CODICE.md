@@ -6,11 +6,15 @@ Struttura iniziale (step 0). Ogni step aggiorna la sezione che tocca.
 
 | File | Ruolo |
 |---|---|
-| `package.json` | script `build`, `test`, `lint`, `format`, `test:rust`, `lint:rust`, `gen:types` |
+| `package.json` | script `build`, `test`, `lint`, `format`, `test:rust`, `lint:rust`, `gen:types`, `dist:local` |
 | `pnpm-workspace.yaml` | pacchetti, catalogo delle versioni, override di Vite, script di installazione ammessi |
 | `tsconfig.base.json` | opzioni TypeScript strict condivise |
 | `.prettierrc.json`, `.prettierignore` | formattazione (esclusi `docs/` e `fixtures/`) |
 | `Cargo.toml` | workspace Rust, edizione 2024, lint condivisi (`unsafe_code` vietato) |
+| `.github/workflows/ci.yml` | push e PR: lint, build, test, clippy, `cargo test` su Windows, Ubuntu 22.04 e macOS; E2E di `packages/ui` su Ubuntu; dispatch con un solo OS (`os`). Action fissate a SHA completo (versione in commento) |
+| `.github/workflows/release.yml` | tag `v*`: app Tauri (NSIS per utente, AppImage e .deb, .dmg arm64 e x64) con `swapdeck-cli` come binario esterno, `.vsix` per piattaforma, `latest.json`, release in bozza; dispatch con `dry_run` (solo artefatti) e `platforms`. Compila senza segreti; la chiave dell'updater serve solo allo step «Firma per l'updater» (`tauri signer sign`; il `.app.tar.gz` di macOS si crea a mano). Release vera solo da tag, con versioni di `Cargo.toml` e `apps/vscode/package.json` uguali al tag; asset ricaricati solo su una bozza. Procedura in `docs/RILASCIO.md` |
+| `scripts/latest-json.mjs` | `latest.json` dell'updater dai pacchetti firmati (`.sig`); Linux con la chiave `linux-x86_64-appimage` (il .deb non si aggiorna) |
+| `scripts/dist-local.mjs` | `pnpm dist:local` (solo Windows, gnullvm): `dist-locale/` con installer NSIS, portatile zippato (DLL di llvm-mingw e WebView2Loader), `.vsix` win32-x64, `LEGGIMI.txt`; `--clean` libera la target di rilascio |
 
 ## Rust
 
@@ -104,7 +108,9 @@ Build di sviluppo: `pnpm --filter @swapdeck/desktop build`, poi `cargo build -p 
 | `src-tauri/src/tray.rs`, `ring.rs` | icona ad anello disegnata a runtime, tooltip, menu con il cambio rapido |
 | `src-tauri/src/notify.rs`, `text.rs` | soglie e cambi di account (una volta per finestra di reset), testi it/en |
 | `src-tauri/src/windows.rs` | principale nascosta alla chiusura, mini-widget con posizione ricordata |
-| `src-tauri/src/settings.rs`, `terminal.rs`, `app.rs` | impostazioni da `config.json` (`SWAPDECK_HOME` come `--headless`; regole `engine` in sola lettura; `autostart` e `miniWidget` in `extra`), terminale di `cswap run`, avvio, plugin e uscita ordinata |
+| `src-tauri/src/settings.rs`, `terminal.rs`, `app.rs` | impostazioni da `config.json` (`SWAPDECK_HOME` come `--headless`; regole `engine` in sola lettura; `autostart` e `miniWidget` in `extra`, `updates.enabled` in sola lettura), terminale di `cswap run`, avvio, plugin e uscita ordinata |
+| `src-tauri/src/updater.rs` | aggiornamenti con `tauri-plugin-updater` solo con `updates.enabled` (spento di default): controllo dopo 30 s e ogni 24 h, attesa crescente sugli errori, download con verifica della firma, installazione all'uscita senza riaprire l'app; senza voce per l'installazione (.deb) si ferma |
+| `src-tauri/tauri.conf.json`, `tauri.release.conf.json` | bundle (NSIS `currentUser`, bootstrapper WebView2), chiave pubblica ed endpoint dell'updater; la seconda, solo in CI, attiva il bundle e `swapdeck-cli` esterno (artefatti dell'updater firmati a parte) |
 | `src-tauri/src/autostart.rs` | avvio al login con `auto-launch` e percorso tra virgolette; forzato solo al primo avvio (chiave `autostart` assente), poi vale il sistema |
 | `src-tauri/src/main.rs` | `--headless` (motore senza interfaccia, `swapdeck_core::headless::cli_main`) o app; `compile_error!` in rilascio senza `custom-protocol` |
 

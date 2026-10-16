@@ -12,7 +12,7 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 | 5 Gestione completa in UI | in corso | | |
 | 6 Installazione cswap | in corso | | |
 | 7 Estensione VS Code | chiuso | 5860707 | 7 rilievi corretti; .vsix installato nel VS Code reale, motore spento |
-| 8 Pacchetti e CI | in corso | | GitHub Actions |
+| 8 Pacchetti e CI | chiuso | 2351569 | CI verde 3 OS; prove di rilascio verdi; firma separata dalla build; docs/RILASCIO.md |
 | 9 Verifica finale e documenti | | | |
 
 ## Domande aperte per l'utente
