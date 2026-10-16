@@ -1,7 +1,29 @@
 # App desktop
 
-`src-tauri` contiene per ora un segnaposto che compila il binario `swapdeck` e usa `swapdeck-core`.
-L'app Tauri 2 (area di notifica, finestre, `--headless`) arriva con lo step 4 del piano.
+Binario `swapdeck` (Tauri 2): area di notifica con icona ad anello, finestra principale con la dashboard
+di `@swapdeck/ui`, mini-widget, notifiche. Con `--headless [--once] [--dry-run]` gira il motore senza
+interfaccia (su Windows la modalità console passerà a `swapdeck-cli`, step 7).
+
+## Motore nell'app
+
+- A ogni lettura il ciclo esegue un giro del motore (`swapdeck_core::headless::Engine`): con il lock
+  scrive lo storico, batte il lock, decide e cambia; senza lock (un'altra istanza o `--headless`) osserva.
+- Il motore resta spento finché `engine.enabled` (o `engine.dryRun`) non è attivo in `config.json`.
+- Sospeso per un conflitto (per esempio l'attività `cswap-guard`): icona nella variante «sospeso»,
+  riga nel tooltip e avviso sopra la dashboard. Le regole si rileggono all'avvio.
+- `cswap auto` avviato dalla UI si ferma all'uscita (attesa breve) e, su Windows, sta in un Job Object
+  con `KILL_ON_JOB_CLOSE`: un'uscita forzata dell'app lo chiude comunque.
+
+## Prove locali senza toccare il cswap reale
+
+- `SWAPDECK_CSWAP` verso una copia del finto (`cargo build -p swapdeck-core --bin fake-cswap`, copiato
+  come `cswap.exe` in una cartella di prova; lo stato va in `state.json` accanto).
+- `SWAPDECK_HOME` verso una cartella di prova (config, lock e storico): mai il motore acceso sul
+  profilo reale.
+- Build: `pnpm --filter @swapdeck/desktop build`, poi `cargo build -p swapdeck-desktop --features custom-protocol`.
+  In rilascio senza `custom-protocol` la build si ferma (`compile_error!`): `tauri build` la attiva da solo.
+- Avvio automatico: nelle build di debug il sistema non viene toccato; in rilascio è forzato solo al
+  primo avvio, poi l'app legge lo stato del sistema e allinea la config.
 
 ## Build locale su Windows senza Build Tools MSVC
 

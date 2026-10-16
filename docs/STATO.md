@@ -6,13 +6,13 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 |---|---|---|---|
 | 0 Fondamenta e contratto cswap | chiuso | bcbc8f3 | Rust gnullvm + llvm-mingw per utente; Tauri compila in locale (installer in CI con MSVC) |
 | 1 swapdeck-core: client cswap | chiuso | 2e24a84 | 10 rilievi corretti, copertura 91,6% |
-| 2 Motore, lock, storico, headless | verifica (10 rilievi) | | |
+| 2 Motore, lock, storico, headless | chiuso | 83bb25a | 10 rilievi corretti, copertura 86,7%, dry-run reale sospeso per cswap-guard |
 | 3 packages/ui | chiuso | 99ac73c | 118 test unitari, 10 E2E, copertura 97,6% |
-| 4 App Tauri | revisione | | motore da agganciare dopo lo step 2 |
-| 5 Gestione completa in UI | | | |
+| 4 App Tauri | chiuso | 1adc30c | 5 rilievi corretti, motore agganciato, prove con finto cswap |
+| 5 Gestione completa in UI | in corso | | |
 | 6 Installazione cswap | in corso | | |
-| 7 Estensione VS Code | | | |
-| 8 Pacchetti e CI | | | GitHub Actions |
+| 7 Estensione VS Code | chiuso | 5860707 | 7 rilievi corretti; .vsix installato nel VS Code reale, motore spento |
+| 8 Pacchetti e CI | in corso | | GitHub Actions |
 | 9 Verifica finale e documenti | | | |
 
 ## Domande aperte per l'utente
@@ -30,4 +30,4 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 - Si possono avviare l'app e installare l'estensione sul PC per le prove, ma **mai switch reali** né altre scritture sul cswap reale (regola nel CLAUDE.md).
 - A fine lavoro: release in bozza su GitHub con installer e .vsix.
 - **Disco C: del PC quasi pieno** (99%, 4 GB liberi nella notte; liberati 3,4 GB eliminando la target condivisa e ridotto il debuginfo dev). Le build Tauri richiedono vari GB: conviene liberare spazio.
-- `swapdeck --headless` nella build di rilascio Windows non ha console (app GUI). Provvisorio per lo step 8: un piccolo binario console separato `swapdeck-cli` per la modalità senza interfaccia, invece di `AttachConsole` (vietato da `unsafe_code`).
+- Modalità senza interfaccia ed estensione VS Code: binario console `swapdeck-cli` (decisione provvisoria della notte, vedi PIANO §2).

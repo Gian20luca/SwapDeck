@@ -1,19 +1,43 @@
-//! Segnaposto dell'app desktop: Tauri 2 arriva con lo step 4.
+//! Binario `swapdeck`: app nell'area di notifica (Tauri 2); con `--headless` il motore senza
+//! interfaccia (step 2).
+// In rilascio niente console su Windows (vedi HANDOFF: output di --headless).
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-fn banner() -> String {
-    format!("swapdeck {}", swapdeck_core::version())
-}
+// Un binario di rilascio non deve mai caricare la pagina dal server di sviluppo (`devUrl`):
+// `dev` lo definisce tauri-build quando manca `tauri/custom-protocol`.
+#[cfg(all(dev, not(debug_assertions)))]
+compile_error!(
+    "build di rilascio senza custom-protocol: usare `--features custom-protocol` o `tauri build`"
+);
+
+mod api;
+mod app;
+mod auto_watch;
+mod autostart;
+mod commands;
+mod engine_loop;
+mod notify;
+mod poller;
+mod ring;
+mod settings;
+mod state;
+mod terminal;
+mod text;
+mod tray;
+mod windows;
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 fn main() {
-    println!("{}", banner());
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn banner_contains_version() {
-        assert_eq!(banner(), format!("swapdeck {}", swapdeck_core::version()));
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.first().map(String::as_str) == Some("--headless") {
+        let stop = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&stop);
+        if let Err(e) = ctrlc::set_handler(move || flag.store(true, Ordering::SeqCst)) {
+            eprintln!("gestore di Ctrl+C non installato: {e}");
+        }
+        std::process::exit(swapdeck_core::headless::cli_main(&args[1..], &stop));
     }
+    app::run(Arc::new(api::ClientApi::new()));
 }

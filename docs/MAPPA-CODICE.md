@@ -17,7 +17,8 @@ Struttura iniziale (step 0). Ogni step aggiorna la sezione che tocca.
 | Crate | Percorso | Contenuto |
 |---|---|---|
 | `swapdeck-core` | `crates/swapdeck-core` | client di cswap, config, cartelle dati (step 1) |
-| `swapdeck-desktop` (bin `swapdeck`) | `apps/desktop/src-tauri` | segnaposto; Tauri 2 dallo step 4 |
+| `swapdeck-desktop` (bin `swapdeck`) | `apps/desktop/src-tauri` | app Tauri 2 (vedi `apps/desktop` sotto) |
+| `swapdeck-cli` (bin `swapdeck-cli`) | `apps/cli` | comandi JSON sopra il core per l'estensione VS Code e headless senza GUI (step 7) |
 
 ### `swapdeck-core` (step 1)
 
@@ -37,6 +38,28 @@ Struttura iniziale (step 0). Ogni step aggiorna la sezione che tocca.
 
 Test: `tests/fixtures_parse.rs` (tutte le fixture), `tests/cswap_client.rs` (ogni comando e classe d'errore con il finto cswap `tests/support/fake_cswap.rs`, bin `fake-cswap`), `tests/setup.rs` (diagnosi, installazione e aggiornamento con finto cswap e finto uv; `real_install_in_isolated_profile` con `--ignored`: installazione reale in un profilo temporaneo, su Windows da PowerShell).
 
+### Motore, lock, storico (step 2, `crates/swapdeck-core/src`)
+
+| Modulo | Contenuto |
+|---|---|
+| `engine.rs` | `EngineRules` (`AppConfig.engine`; l'intervallo è solo `pollIntervalSeconds`, `engine.intervalSecs` migrato in lettura), `EngineMemory` (con `primaryLeftWindows`: l'isteresi del ritorno vale solo per la finestra che ha fatto lasciare il principale), `Decision`, funzione pura `decide(Observation, regole, memoria, ora)`: conflitti prima della validazione delle regole. Scenari in `engine/tests.rs` |
+| `lock.rs` | `engine.lock` nella cartella dati: `try_acquire` (`create_new`, subentro con `engine.lock.takeover`), `LockGuard::heartbeat`, rilascio al `Drop`. Stesso host: scaduto solo con PID morto o riusato (ora di avvio diversa); host diversi o avvio ignoto: 3 intervalli senza battito |
+| `history.rs` | `History` (`history/AAAA-MM-GG.jsonl`, UTC): `read_range`, `prune` (30 giorni, al massimo `MAX_PRUNE_PER_CALL` file per giro contro i salti dell'orologio); `HistoryWriter` (solo con `LockGuard`): `append` (rotazione fallita annotata in `take_prune_error`, non propagata), `record_samples` |
+| `conflicts.rs` | `SystemConflicts`: processi via sysinfo (riga illeggibile di `cswap` = `process:unreadable`, avviso), attività su nome e comando via `Get-ScheduledTask` (Windows), `crontab -l` e `systemctl --user list-timers` (Linux), `launchctl list` (macOS); esito dei comandi verificato, lettura fallita = `tasks:unverified` che sospende (ignorabile); cache 10 min, risultato verificato tenuto al massimo 30 min. Id stabili per `ignoredConflicts` (`cron:<hash>`, mai il testo della riga) |
+| `headless.rs` | trait `CswapPort` (implementato da `CswapClient`) e `Clock`, `run(RunOptions, Runtime)` (conflitti letti prima di `list`), `cli_main` per `swapdeck --headless [--once] [--dry-run]` (cartelle da `AppPaths::from_env_or_system`, `SWAPDECK_HOME` per le prove; uscite 0/1/2/3). Test con finto cswap in `headless/tests.rs` |
+| `timeutil.rs` | secondi Unix, parsing RFC 3339 di cswap, giorni UTC |
+
+### `apps/cli` (step 7)
+
+Successo: JSON su stdout, uscita 0. Errore: `{"error": CswapError}` su stdout, uscita 1 (fallito) o 2 (uso o JSON non validi). `headless` usa i codici del core (0/1/2/3, 3 = lock occupato).
+
+| File | Contenuto |
+|---|---|
+| `src/lib.rs` | `main_with`/`dispatch`: `version`, `state` (lista + errore + stato del motore, sempre uscita 0), `status`, `cswap-config [KEY]`, `confirm - [--active N|none]`, `action -` (azioni **solo da stdin**: gli argomenti sono visibili agli altri processi), `history`, `config get`, `config set <json|->` (merge patch RFC 7386), `engine status`, `headless [--once] [--dry-run] [--stop-on-stdin-eof]`. Errori di parsing con sola riga e colonna; nel messaggio d'uso solo il primo argomento |
+| `src/output.rs` | `CliState`, `EngineStatus` (config + lock), `CliVersion` (`PROTOCOL`), `ConfigView`, `CliErrorEnvelope` |
+| `src/ts_export.rs` (test) | tipi in `apps/vscode/src/generated/` (`pnpm gen:types`), con import dei tipi del core da `@swapdeck/types` |
+| `tests/cli.rs` | integrazione col finto cswap (bin di test `swapdeck-fake-cswap`) e `SWAPDECK_HOME` temporanea |
+
 ## TypeScript
 
 Ogni pacchetto ha `src/index.ts`, test `src/*.test.ts` (vitest), `tsconfig.json` (typecheck, test inclusi)
@@ -45,8 +68,9 @@ e `tsconfig.build.json` (emissione in `dist/`, test esclusi).
 | Pacchetto | Percorso | Contenuto |
 |---|---|---|
 | `@swapdeck/types` | `packages/types` | `SCHEMA_VERSION`; tipi ts-rs dallo step 1 |
+| `@swapdeck/desktop` | `apps/desktop` | pagina dell'app Tauri con `TauriBackend` (vedi sotto) |
 | `@swapdeck/ui` | `packages/ui` | React 19 + Vite 6: dashboard, mini-widget, grafici uPlot, i18n, tema (vedi sotto) |
-| `swapdeck-vscode` | `apps/vscode` | `swapdeckExecutable`; estensione dallo step 7 |
+| `swapdeck-vscode` | `apps/vscode` | estensione VS Code (step 7, vedi sotto) |
 
 ### `packages/ui` (step 3)
 
@@ -54,10 +78,51 @@ Esporta i sorgenti (`src/index.ts`), non una build: i consumatori (Tauri, webvie
 
 | Percorso (`src/`) | Ruolo |
 |---|---|
-| `backend/types.ts` | interfaccia `Backend` (async, `onStateChanged`), `HistoryPoint`, `BackendError`; `actions.ts` costruisce le `CswapAction`; `context.tsx`, `useAccounts.ts` |
+| `backend/types.ts` | interfaccia `Backend` (async, `onStateChanged`, `hostConfirms` facoltativo: l'host chiede da sé le conferme), `HistoryPoint`, `BackendError`; `actions.ts` costruisce le `CswapAction`; `context.tsx`, `useAccounts.ts` |
 | `dev/` | `FakeBackend` (fixture di `fixtures/cswap/` con istanti riallineati a «ora», cambi simulati; `fakeSetup.ts` simula diagnosi, installazione, controllo versione e aggiornamento con l'opzione `setup`), `history.ts` (storico sintetico di 7 giorni), `main.tsx` (anteprima con demo dei dialoghi di conferma e degli stati di cswap) |
 | `components/` | `Dashboard`, `AccountCard`, `UsageBar`, `PaceIndicator`, `QuickSwitch`, `HistoryPanel`, `UsageChart` (uPlot), `MiniWidget`, `ConfirmDialog` (anche a doppia conferma con parola), `PreferenceControls`, `SetupWizard` (primo avvio: installazione di cswap, guida al primo account), `SetupRun` (passi e log), `CswapUpdateNotice` (avviso di nuova versione, chiusura ricordata per versione, aggiornamento con conferma) |
 | `i18n/` | dizionari `it.ts` (fonte delle chiavi) ed `en.ts`, `I18nProvider`, `useI18n` |
 | `theme/`, `styles/index.css` | `ThemeProvider` (chiaro/scuro/auto via `data-theme`), variabili CSS, test di contrasto AA |
 | `lib/` | soglie e formattazione (`format.ts`), helper degli account (`account.ts`), `useNow`, `setup.ts` (reducer dell'avanzamento, testi degli errori), `useSetupRun` |
 | `e2e/`, `playwright.config.ts` (fuori da `src/`) | Playwright su Chromium contro l'anteprima (porta 5199): `pnpm --filter @swapdeck/ui e2e`; screenshot in `e2e/screenshots/` (ignorati da git). Copertura: `pnpm --filter @swapdeck/ui test:coverage` (v8, soglia 80% righe e funzioni, esclusi `src/dev/**`) |
+
+### `apps/desktop` (step 4)
+
+Binario `swapdeck` (Tauri 2). Pagina Vite in `src/` (porta 5175), crate in `src-tauri/`.
+Build di sviluppo: `pnpm --filter @swapdeck/desktop build`, poi `cargo build -p swapdeck-desktop --features custom-protocol` (pagina incorporata) oppure `pnpm --filter @swapdeck/desktop tauri dev`.
+
+| Percorso | Ruolo |
+|---|---|
+| `src/TauriBackend.ts` | `Backend` con `invoke` ed evento `state-changed` (`Snapshot`: lista, errore, `engine`, `engineSuspended`, `autoRunning`); comandi dell'app (`getSnapshot`, `getAppSettings`, `setAutostart`, `showMain`) |
+| `src/EngineStatus.tsx` | righe di stato sopra la dashboard: motore sospeso (motivo e conflitti), sola osservazione, `cswap auto` in esecuzione |
+| `src/main.tsx` | dashboard nella finestra `main`, `MiniWidget` trascinabile nella finestra `mini` (scelta dall'etichetta della finestra); `AutostartToggle.tsx` |
+| `src-tauri/src/api.rs` | interfaccia sottile `CswapApi`; `ClientApi` sopra `CswapClient` (ricerca pigra, una chiamata alla volta, `cswap auto` in un Job Object con `KILL_ON_JOB_CLOSE`, `auto_poll`, `shutdown` all'uscita); finto per i test |
+| `src-tauri/src/auto_watch.rs` | controllo di `cswap auto` ogni 2 s: eventi, cambi, fine o errore (stato nella UI e notifica) |
+| `src-tauri/src/engine_loop.rs` | motore nel ciclo di lettura (`headless::Engine`): con il lock storico, battito, decisione e cambio; senza solo osservazione; `EngineView` per la UI; conflitti letti solo a motore acceso |
+| `src-tauri/src/poller.rs` | ciclo di lettura: un thread, lettura (con il motore) a ogni intervallo e a richiesta, richieste unite; `run_paced` anticipa la lettura dopo |
+| `src-tauri/src/state.rs` | `Shared` (api, `Snapshot`, impostazioni, notifiche), evento `state-changed` |
+| `src-tauri/src/commands.rs` | comandi `invoke` (elenco in `build.rs`, permessi in `capabilities/`); `get_history` dai campioni dello storico (un punto per account per intervallo, atteso sulle 5 ore dal reset) |
+| `src-tauri/src/tray.rs`, `ring.rs` | icona ad anello disegnata a runtime, tooltip, menu con il cambio rapido |
+| `src-tauri/src/notify.rs`, `text.rs` | soglie e cambi di account (una volta per finestra di reset), testi it/en |
+| `src-tauri/src/windows.rs` | principale nascosta alla chiusura, mini-widget con posizione ricordata |
+| `src-tauri/src/settings.rs`, `terminal.rs`, `app.rs` | impostazioni da `config.json` (`SWAPDECK_HOME` come `--headless`; regole `engine` in sola lettura; `autostart` e `miniWidget` in `extra`), terminale di `cswap run`, avvio, plugin e uscita ordinata |
+| `src-tauri/src/autostart.rs` | avvio al login con `auto-launch` e percorso tra virgolette; forzato solo al primo avvio (chiave `autostart` assente), poi vale il sistema |
+| `src-tauri/src/main.rs` | `--headless` (motore senza interfaccia, `swapdeck_core::headless::cli_main`) o app; `compile_error!` in rilascio senza `custom-protocol` |
+
+### `apps/vscode` (step 7)
+
+Host in Node (bundle esbuild `out/extension.js`), webview React con `@swapdeck/ui` (`out/webview`). Nessuna logica di cswap in TypeScript: tutto passa da `swapdeck-cli` (incluso nel .vsix in `bin/`). `extensionKind: ["ui"]`: gira sempre sulla macchina locale.
+
+| File (`src/`) | Ruolo |
+|---|---|
+| `extension.ts` | `activate`: barra di stato, polling (`Refresher`), cambio rapido, comandi, conferme con dialoghi modali (`askConfirmation`; parola digitata per `purge`), notifiche, motore (`syncEngine`; con lock occupato attende e ritenta quando lo `state` lo dà libero). Restituisce `SwapDeckApi` per i test |
+| `cli.ts` | `createCliRunner` (spawn senza shell, stdin, timeout, limite dell'output), `resolveCliPath` (solo percorsi assoluti), `CliError` |
+| `bridge.ts` | richieste del webview → CLI: metodi ammessi, `ACTION_KINDS` chiuso (controllo di completezza a compilazione), `run` solo con `SAFE_CLAUDE_ARGS`, conferma imposta dall'host prima di `action`, `describeAction` |
+| `refresher.ts` | lettura condivisa con contatore di generazione: una lettura partita prima di un'azione non sovrascrive lo stato |
+| `engine.ts` | `EngineProcess` (`headless --stop-on-stdin-eof`, stop con stdin chiuso poi kill), `LineSplitter` (righe per stream, UTF-8), `shouldRetryEngine`, `LOCK_BUSY_EXIT` |
+| `panel.ts`, `protocol.ts` | webview con CSP a nonce e `localResourceRoots` = `out/webview`; messaggi host ↔ webview |
+| `webview/` | `VsCodeBackend` (`Backend` via `postMessage`, `hostConfirms = true`), `main.tsx` |
+| `statusBar.ts`, `notifier.ts` | logica pura di barra (testo, tooltip, livello) e notifiche (soglie e cambio dell'account attivo) |
+| `generated/` | tipi della CLI (ts-rs) |
+
+Altro: `l10n/` e `package.nls*.json` (inglese sorgente, bundle italiano; `l10n.test.ts` ne controlla la completezza); `test:coverage` (vitest v8, soglia 70% righe, `vitest.config.mts`); `test/suite.ts` + `scripts/run-ext-tests.mjs` (`test:ext`: VS Code isolato in `.vscode-test/`, finto cswap, `SWAPDECK_HOME` temporanea); `scripts/package.mjs` (.vsix per target).

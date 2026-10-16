@@ -1,0 +1,12 @@
+{
+  "description": "Monitor and switch cswap accounts: status bar, quick switch, dashboard and optional engine.",
+  "command.openPanel": "Open panel",
+  "command.refresh": "Refresh",
+  "command.switchAccount": "Switch account",
+  "command.startEngine": "Start engine",
+  "command.stopEngine": "Stop engine",
+  "config.refreshIntervalSeconds": "How often to read `cswap list`, in seconds.",
+  "config.cliPath": "Absolute path of `swapdeck-cli`. Empty: the one bundled with the extension.",
+  "config.engine.enabled": "Run the SwapDeck engine (`swapdeck-cli headless`) while VS Code is open. It respects the single-instance lock and the rules in the SwapDeck config.",
+  "config.notifications.thresholds": "Usage thresholds (%) of the active account that raise a notification. The lowest also colors the status bar as a warning, the highest as critical."
+}

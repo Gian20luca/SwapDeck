@@ -1,14 +1,16 @@
-//! Logica di SwapDeck: client di cswap, config e cartelle dati. Motore, lock, storico e
-//! rilevamento dei conflitti arrivano con lo step 2.
+//! Logica di SwapDeck: client di cswap, config, cartelle dati, motore delle regole, lock,
+//! storico, rilevamento dei conflitti e runner senza interfaccia.
 
 pub mod config;
+pub mod conflicts;
 pub mod cswap;
+pub mod engine;
+pub mod headless;
+pub mod history;
+pub mod lock;
 pub mod paths;
 pub mod setup;
-// Step 2: pub mod engine;
-// Step 2: pub mod lock;
-// Step 2: pub mod history;
-// Step 2: pub mod conflicts;
+pub mod timeutil;
 
 #[cfg(test)]
 mod ts_export;

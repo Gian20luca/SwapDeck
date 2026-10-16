@@ -10,11 +10,15 @@ use std::path::{Path, PathBuf};
 use ts_rs::{Config, TS};
 
 use crate::config::AppConfig;
+use crate::conflicts::Conflict;
 use crate::cswap::{
     ActionOutcome, AutoEvent, CommandSpec, ConfigGetResponse, ConfigListResponse, Confirmation,
     CswapAction, CswapError, CswapVersion, ErrorEnvelope, ListResponse, StatusResponse,
     SwitchResponse,
 };
+use crate::engine::{Decision, EngineMemory, EngineRules};
+use crate::history::HistoryRecord;
+use crate::lock::LockInfo;
 use crate::setup::{SetupDiagnosis, SetupOutcome, SetupProgress, UpdateInfo};
 
 const HEADER: &str =
@@ -46,6 +50,12 @@ fn render(dir: &Path) -> BTreeMap<String, String> {
     SetupProgress::export_all(&cfg).unwrap();
     SetupOutcome::export_all(&cfg).unwrap();
     UpdateInfo::export_all(&cfg).unwrap();
+    EngineRules::export_all(&cfg).unwrap();
+    EngineMemory::export_all(&cfg).unwrap();
+    Decision::export_all(&cfg).unwrap();
+    Conflict::export_all(&cfg).unwrap();
+    HistoryRecord::export_all(&cfg).unwrap();
+    LockInfo::export_all(&cfg).unwrap();
 
     let mut files = BTreeMap::new();
     collect(dir, dir, &mut files);

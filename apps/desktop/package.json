@@ -1,0 +1,32 @@
+{
+  "name": "@swapdeck/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "App desktop di SwapDeck (Tauri 2): pagina Vite con la dashboard di @swapdeck/ui",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@swapdeck/types": "workspace:*",
+    "@swapdeck/ui": "workspace:*",
+    "@tauri-apps/api": "2.12.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.1",
+    "@types/node": "catalog:",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^26.0.0",
+    "typescript": "catalog:",
+    "vite": "^6.4.0",
+    "vitest": "catalog:"
+  }
+}
