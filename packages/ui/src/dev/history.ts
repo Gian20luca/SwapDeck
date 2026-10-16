@@ -1,8 +1,9 @@
 import type { Account, ListResponse, Usage } from '@swapdeck/types';
-import type { HistoryPoint } from '../backend/types.js';
+import type { HistoryEvents, HistoryPoint } from '../backend/types.js';
 
 const FIVE_HOURS = 5 * 3600;
 const SEVEN_DAYS = 7 * 86400;
+const THIRTY_DAYS = 30 * 86400;
 const STEP = 30 * 60;
 
 /** Generatore pseudo-casuale deterministico (mulberry32): stesso storico a ogni avvio. */
@@ -70,7 +71,7 @@ function usageOf(account: Account): { usage: Usage; until: number } | null {
 }
 
 /**
- * Storico sintetico di 7 giorni a passi di 30 minuti per ogni account, coerente con la lista:
+ * Storico sintetico (di default 7 giorni, al massimo 30) a passi di 30 minuti per ogni account, coerente con la lista:
  * l'ultimo punto coincide col consumo attuale e le finestre si azzerano ai reset.
  * Gli account senza consumi noti non hanno punti; quelli con dato vecchio si fermano all'ultima misura.
  */
@@ -102,7 +103,7 @@ export function generateHistory(
     const fiveCache = new Map<number, number>();
     const sevenCache = new Map<number, number>();
     const end = Math.min(until, now);
-    const first = Math.ceil(Math.max(since, end - SEVEN_DAYS) / STEP) * STEP;
+    const first = Math.ceil(Math.max(since, end - THIRTY_DAYS) / STEP) * STEP;
     const timestamps: number[] = [];
     for (let t = first; t < end; t += STEP) timestamps.push(t);
     timestamps.push(Math.floor(end));
@@ -124,4 +125,73 @@ export function generateHistory(
 
 function round1(v: number): number {
   return Math.round(v * 10) / 10;
+}
+
+const CAUSES = [
+  'primaryAtLimit',
+  'reserveAtLimit',
+  'primaryReset',
+  'reservesAtLimit',
+  'activeNeedsRelogin',
+] as const;
+
+/**
+ * Cambi di account e decisioni del motore sintetici (fino a 30 giorni), con i numeri degli account della lista.
+ * Deterministici: stesso elenco a ogni avvio.
+ */
+export function generateEvents(
+  list: ListResponse,
+  nowMs: number,
+  sinceSeconds?: number,
+): HistoryEvents {
+  const now = Math.floor(nowMs / 1000);
+  const since = sinceSeconds ?? now - SEVEN_DAYS;
+  const numbers = list.accounts.map((a) => a.number);
+  if (numbers.length < 2) return { switches: [], decisions: [] };
+  const at = (i: number) => numbers[i % numbers.length]!;
+  const switches: HistoryEvents['switches'] = [];
+  const decisions: HistoryEvents['decisions'] = [];
+  for (let i = 0; i < 16; i += 1) {
+    const ts = now - 1800 - i * 41_000;
+    if (ts < since) break;
+    const cause = CAUSES[i % CAUSES.length]!;
+    const to = at(i + 1);
+    switches.push({
+      ts,
+      from: at(i),
+      to,
+      cause,
+      switched: i % 7 !== 3,
+      message: i % 7 !== 3 ? `Switched to Account-${to}` : 'Nessun account utilizzabile',
+    });
+    decisions.push({
+      ts: ts - 20,
+      decision: { kind: 'switch', from: at(i), to, cause },
+      dryRun: i % 5 === 4,
+    });
+    decisions.push({
+      ts: ts - 600 * (i + 1),
+      decision: { kind: 'noAction', reason: 'belowThreshold' },
+      dryRun: false,
+    });
+    if (i % 4 === 2) {
+      decisions.push({
+        ts: ts - 60,
+        decision: { kind: 'returnToPrimary', from: at(i), to: at(i + 2), cause: 'primaryReset' },
+        dryRun: false,
+      });
+    }
+    if (i % 6 === 5) {
+      decisions.push({
+        ts: ts - 90,
+        decision: { kind: 'suspended', reason: 'conflict', detail: ['task:cswap-guard'] },
+        dryRun: false,
+      });
+    }
+  }
+  const byTs = <T extends { ts: number }>(a: T, b: T) => a.ts - b.ts;
+  return {
+    switches: switches.filter((r) => r.ts >= since).sort(byTs),
+    decisions: decisions.filter((r) => r.ts >= since).sort(byTs),
+  };
 }

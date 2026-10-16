@@ -1,4 +1,4 @@
-import type { ListResponse } from '@swapdeck/types';
+import type { EngineRules, ListResponse } from '@swapdeck/types';
 import { BackendError } from '@swapdeck/ui';
 import { describe, expect, it, vi } from 'vitest';
 import list from '../../../fixtures/cswap/list.json';
@@ -152,5 +152,57 @@ describe('TauriBackend', () => {
       ['set_autostart', { enabled: false }],
       ['show_main', undefined],
     ]);
+  });
+});
+
+describe('TauriBackend: gestione completa', () => {
+  it('mappa i metodi di gestione sui comandi del Rust', async () => {
+    const { backend, calls } = setup({});
+    const rules = { enabled: true } as unknown as EngineRules;
+    await backend.listMappings();
+    await backend.getEngineState();
+    await backend.setEngineRules(rules);
+    await backend.getPreferences();
+    await backend.setPreferences({ pollIntervalSeconds: 30 });
+    await backend.getHistoryEvents({ sinceSeconds: 5 });
+    await backend.getHistoryEvents();
+    expect(calls.map((c) => [c.cmd, c.args])).toEqual([
+      ['list_mappings', undefined],
+      ['get_engine_state', undefined],
+      ['set_engine_rules', { rules }],
+      ['get_preferences', undefined],
+      ['set_preferences', { prefs: { pollIntervalSeconds: 30 } }],
+      ['get_history_events', { query: { sinceSeconds: 5 } }],
+      ['get_history_events', { query: {} }],
+    ]);
+  });
+
+  it('i selettori usano tauri-plugin-dialog e restituiscono null se annullati', async () => {
+    const open = vi.fn(async (_o: unknown) => 'C:/scelto');
+    const save = vi.fn(async (_o: unknown) => null);
+    const invoke = vi.fn() as unknown as InvokeFn;
+    const listen = vi.fn() as unknown as ListenFn;
+    const backend = new TauriBackend(invoke, listen, { open, save });
+    expect(await backend.pickFolder({ title: 'Cartella' })).toBe('C:/scelto');
+    expect(open).toHaveBeenLastCalledWith({ title: 'Cartella', directory: true, multiple: false });
+    expect(
+      await backend.pickOpenFile({
+        defaultPath: 'a.json',
+        filters: [{ name: 'JSON', extensions: ['json'] }],
+      }),
+    ).toBe('C:/scelto');
+    expect(open).toHaveBeenLastCalledWith({
+      defaultPath: 'a.json',
+      filters: [{ name: 'JSON', extensions: ['json'] }],
+      multiple: false,
+    });
+    expect(await backend.pickSaveFile({ title: 'Salva' })).toBeNull();
+    expect(save).toHaveBeenCalledWith({ title: 'Salva' });
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('senza il plugin i selettori rifiutano con BackendError', async () => {
+    const { backend } = setup({});
+    await expect(backend.pickFolder()).rejects.toBeInstanceOf(BackendError);
   });
 });

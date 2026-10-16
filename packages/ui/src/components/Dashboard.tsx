@@ -9,11 +9,15 @@ import { formatAge } from '../lib/format.js';
 import { useNow } from '../lib/useNow.js';
 import { AccountCard } from './AccountCard.js';
 import { HistoryPanel } from './HistoryPanel.js';
+import { AccountActions } from './manage/AccountActions.js';
+import { AddAccount } from './manage/AddAccount.js';
 import { QuickSwitch, type QuickStrategy } from './QuickSwitch.js';
 
 export interface DashboardProps {
   /** Contenuto extra nella barra degli strumenti (per esempio le preferenze). */
   toolbarExtra?: ReactNode;
+  /** Mostra «Aggiungi account» e le azioni di gestione su ogni scheda. */
+  manage?: boolean;
 }
 
 interface Notice {
@@ -30,7 +34,7 @@ function warningsOf(data: ListResponse): string[] {
 }
 
 /** Dashboard degli account: schede con barre e ritmo, cambio rapido, aggiornamento e storico. */
-export function Dashboard({ toolbarExtra }: DashboardProps) {
+export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
   const { t } = useI18n();
   const backend = useBackend();
   const { state, refresh } = useAccounts();
@@ -112,6 +116,8 @@ export function Dashboard({ toolbarExtra }: DashboardProps) {
         )}
       </div>
 
+      {manage && <AddAccount />}
+
       {state.status === 'loading' && (
         <div className="sd-state" role="status">
           {t('dashboard.loading')}
@@ -166,6 +172,9 @@ export function Dashboard({ toolbarExtra }: DashboardProps) {
                   setHistoryFor((cur) => (cur === a.number ? null : a.number))
                 }
                 history={<HistoryPanel account={account.number} />}
+                {...(manage
+                  ? { extra: <AccountActions account={account} accounts={accounts} /> }
+                  : {})}
               />
             ))}
           </ul>

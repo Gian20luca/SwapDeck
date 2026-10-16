@@ -4,6 +4,7 @@ import type {
   Confirmation,
   CswapAction,
   CswapError,
+  EngineRules,
   ListResponse,
   StatusResponse,
   SuspendReason,
@@ -12,9 +13,14 @@ import type {
 import {
   BackendError,
   type ActionOutcome,
+  type AppPreferences,
   type Backend,
+  type DirectoryMapping,
+  type EngineState,
+  type HistoryEvents,
   type HistoryPoint,
   type HistoryQuery,
+  type PickOptions,
   type Unsubscribe,
 } from '@swapdeck/ui';
 
@@ -64,6 +70,22 @@ export type ListenFn = <T>(
   handler: (event: { payload: T }) => void,
 ) => Promise<() => void>;
 
+/** Parte di `@tauri-apps/plugin-dialog` che usa l'app (iniettabile per i test). */
+export interface DialogApi {
+  open(options: {
+    directory?: boolean;
+    multiple?: false;
+    title?: string;
+    defaultPath?: string;
+    filters?: { name: string; extensions: string[] }[];
+  }): Promise<string | null>;
+  save(options: {
+    title?: string;
+    defaultPath?: string;
+    filters?: { name: string; extensions: string[] }[];
+  }): Promise<string | null>;
+}
+
 function isCswapError(value: unknown): value is CswapError {
   return (
     typeof value === 'object' &&
@@ -86,6 +108,7 @@ export class TauriBackend implements Backend {
   constructor(
     private readonly invoke: InvokeFn,
     private readonly listen: ListenFn,
+    private readonly dialog?: DialogApi,
   ) {}
 
   private async call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
@@ -171,4 +194,62 @@ export class TauriBackend implements Backend {
   showMain(): Promise<void> {
     return this.call('show_main');
   }
+
+  /*
+   * Gestione completa (step 5). I comandi `list_mappings`, `get_engine_state`, `set_engine_rules`,
+   * `get_preferences`, `set_preferences` e `get_history_events` sono da implementare in
+   * `src-tauri/src/commands.rs` (vedi HANDOFF.md dello step 5); finché mancano la UI mostra l'errore.
+   */
+
+  listMappings(): Promise<DirectoryMapping[]> {
+    return this.call('list_mappings');
+  }
+
+  getEngineState(): Promise<EngineState> {
+    return this.call('get_engine_state');
+  }
+
+  setEngineRules(rules: EngineRules): Promise<EngineState> {
+    return this.call('set_engine_rules', { rules });
+  }
+
+  getPreferences(): Promise<AppPreferences> {
+    return this.call('get_preferences');
+  }
+
+  setPreferences(prefs: Partial<AppPreferences>): Promise<AppPreferences> {
+    return this.call('set_preferences', { prefs });
+  }
+
+  getHistoryEvents(query?: HistoryQuery): Promise<HistoryEvents> {
+    return this.call('get_history_events', { query: query ?? {} });
+  }
+
+  private dialogApi(): DialogApi {
+    if (!this.dialog) throw toBackendError('finestre di dialogo non disponibili');
+    return this.dialog;
+  }
+
+  /** File da aprire con il selettore nativo (`tauri-plugin-dialog`); `null` se annullato. */
+  async pickOpenFile(options: PickOptions = {}): Promise<string | null> {
+    return this.dialogApi().open({ ...dialogOptions(options), multiple: false });
+  }
+
+  /** Percorso in cui salvare un file, con il selettore nativo; `null` se annullato. */
+  async pickSaveFile(options: PickOptions = {}): Promise<string | null> {
+    return this.dialogApi().save(dialogOptions(options));
+  }
+
+  /** Cartella scelta con il selettore nativo; `null` se annullato. */
+  async pickFolder(options: PickOptions = {}): Promise<string | null> {
+    return this.dialogApi().open({ ...dialogOptions(options), directory: true, multiple: false });
+  }
+}
+
+function dialogOptions(options: PickOptions) {
+  return {
+    ...(options.title ? { title: options.title } : {}),
+    ...(options.defaultPath ? { defaultPath: options.defaultPath } : {}),
+    ...(options.filters ? { filters: options.filters } : {}),
+  };
 }

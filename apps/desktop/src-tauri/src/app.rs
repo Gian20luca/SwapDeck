@@ -165,6 +165,7 @@ pub fn run(api: Arc<dyn CswapApi>) {
             windows::show_main(app);
         }))
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
         .manage(Arc::clone(&shared))
         .manage(DataDir(data_dir.clone()))
         .invoke_handler(tauri::generate_handler![

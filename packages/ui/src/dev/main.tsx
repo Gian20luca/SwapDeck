@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client';
 import type { CswapAction } from '@swapdeck/types';
 import { BackendProvider } from '../backend/context.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
-import { Dashboard } from '../components/Dashboard.js';
 import { MiniWidget } from '../components/MiniWidget.js';
+import { SwapDeckApp } from '../components/SwapDeckApp.js';
 import { LanguageSelect, ThemeSelect } from '../components/PreferenceControls.js';
 import { I18nProvider, useI18n } from '../i18n/index.js';
 import '../styles/index.css';
@@ -65,7 +65,29 @@ function Preview() {
   const [scenario, setScenario] = useState<ScenarioName>('default');
   const viewId = useId();
   const scenarioId = useId();
-  const backend = useMemo(() => new FakeBackend({ scenario, latencyMs: 250 }), [scenario]);
+  const backend = useMemo(
+    () =>
+      new FakeBackend({
+        scenario,
+        latencyMs: 250,
+        unclaimed: ['legacy-1f3a', 'legacy-9c2b'],
+        mappings: [
+          { path: String.raw`C:\Progetti\cliente-a`, account: 1 },
+          { path: String.raw`C:\Progetti\cliente-b`, account: 3 },
+        ],
+        conflicts: [
+          {
+            id: 'task:cswap-guard',
+            kind: 'scheduledTask',
+            label: 'Attività pianificata cswap-guard',
+            certain: true,
+          },
+          { id: 'process:tui', kind: 'process', label: 'cswap tui in esecuzione', certain: false },
+        ],
+        rules: { enabled: true, primary: 6, reserves: [1, 3] },
+      }),
+    [scenario],
+  );
 
   // Simula gli aggiornamenti periodici del motore.
   useEffect(() => {
@@ -116,7 +138,7 @@ function Preview() {
         </div>
       </div>
       {view === 'full' ? (
-        <Dashboard toolbarExtra={preferences} />
+        <SwapDeckApp toolbarExtra={preferences} />
       ) : (
         <div style={{ width: 280, margin: '12px auto', border: '1px solid var(--sd-border)' }}>
           <MiniWidget />

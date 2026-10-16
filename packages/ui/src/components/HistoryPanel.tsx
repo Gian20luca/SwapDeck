@@ -9,6 +9,8 @@ export interface HistoryPanelProps {
   account: number;
   /** Ore mostrate nel grafico delle 5 ore (default 24); quello dei 7 giorni mostra tutto lo storico. */
   fiveHourSpanHours?: number;
+  /** Intervallo da leggere in ore (24, 168, 720); senza, il default dell'host (7 giorni). Vale per entrambi i grafici. */
+  rangeHours?: number;
 }
 
 type State =
@@ -40,7 +42,7 @@ function series(
 }
 
 /** Storico di un account: due grafici (5 ore e 7 giorni) con consumo e curva del ritmo atteso. */
-export function HistoryPanel({ account, fiveHourSpanHours = 24 }: HistoryPanelProps) {
+export function HistoryPanel({ account, fiveHourSpanHours = 24, rangeHours }: HistoryPanelProps) {
   const { t } = useI18n();
   const backend = useBackend();
   const [state, setState] = useState<State>({ status: 'loading' });
@@ -49,7 +51,11 @@ export function HistoryPanel({ account, fiveHourSpanHours = 24 }: HistoryPanelPr
     let alive = true;
     setState({ status: 'loading' });
     backend
-      .getHistory({ account })
+      .getHistory(
+        rangeHours === undefined
+          ? { account }
+          : { account, sinceSeconds: Math.floor(Date.now() / 1000) - rangeHours * 3600 },
+      )
       .then((points) => alive && setState({ status: 'ready', points }))
       .catch(
         (error: unknown) => alive && setState({ status: 'error', message: errorMessage(error) }),
@@ -57,19 +63,21 @@ export function HistoryPanel({ account, fiveHourSpanHours = 24 }: HistoryPanelPr
     return () => {
       alive = false;
     };
-  }, [backend, account]);
+  }, [backend, account, rangeHours]);
 
   const points = state.status === 'ready' ? state.points : null;
   const charts = useMemo(() => {
     if (!points) return null;
     const labels = { usage: t('chart.usage'), pace: t('chart.pace') };
     const last = points.at(-1)?.ts ?? 0;
-    const recent = points.filter((p) => p.ts >= last - fiveHourSpanHours * 3600);
+    const span =
+      rangeHours === undefined ? fiveHourSpanHours : Math.min(fiveHourSpanHours, rangeHours);
+    const recent = points.filter((p) => p.ts >= last - span * 3600);
     return {
       five: series(recent, (p) => [p.fiveHourPct, p.fiveHourExpectedPct], labels),
       seven: series(points, (p) => [p.sevenDayPct, p.sevenDayExpectedPct], labels),
     };
-  }, [points, t, fiveHourSpanHours]);
+  }, [points, t, fiveHourSpanHours, rangeHours]);
 
   if (state.status === 'loading') {
     return (

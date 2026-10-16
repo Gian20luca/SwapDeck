@@ -5,7 +5,9 @@ import { THEME_MODES, useTheme, type ThemeMode } from '../theme/index.js';
 const LOCALE_OPTIONS: readonly LocalePreference[] = ['auto', ...LOCALES];
 
 /** Selettore della lingua (automatica, italiano, inglese). */
-export function LanguageSelect() {
+export function LanguageSelect({
+  onChange,
+}: { onChange?: (value: LocalePreference) => void } = {}) {
   const { t, preference, setPreference } = useI18n();
   const id = useId();
   return (
@@ -15,7 +17,11 @@ export function LanguageSelect() {
         id={id}
         className="sd-input sd-input--inline"
         value={preference}
-        onChange={(event) => setPreference(event.target.value as LocalePreference)}
+        onChange={(event) => {
+          const value = event.target.value as LocalePreference;
+          setPreference(value);
+          onChange?.(value);
+        }}
       >
         {LOCALE_OPTIONS.map((value) => (
           <option key={value} value={value}>
@@ -28,7 +34,7 @@ export function LanguageSelect() {
 }
 
 /** Selettore del tema (automatico, chiaro, scuro). */
-export function ThemeSelect() {
+export function ThemeSelect({ onChange }: { onChange?: (value: ThemeMode) => void } = {}) {
   const { t } = useI18n();
   const { mode, setMode } = useTheme();
   const id = useId();
@@ -39,7 +45,11 @@ export function ThemeSelect() {
         id={id}
         className="sd-input sd-input--inline"
         value={mode}
-        onChange={(event) => setMode(event.target.value as ThemeMode)}
+        onChange={(event) => {
+          const value = event.target.value as ThemeMode;
+          setMode(value);
+          onChange?.(value);
+        }}
       >
         {THEME_MODES.map((value) => (
           <option key={value} value={value}>
