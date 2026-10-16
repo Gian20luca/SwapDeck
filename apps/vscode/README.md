@@ -39,6 +39,6 @@ Le regole del motore stanno nella config di SwapDeck (`swapdeck-cli config get|s
 ## Sviluppo
 
 - `pnpm --filter swapdeck-vscode build`: bundle con esbuild in `out/`.
-- `pnpm --filter swapdeck-vscode test`: vitest.
+- `pnpm --filter swapdeck-vscode test`: vitest; `test:coverage` con soglia del 70% sulle righe (esclusi `extension.ts`, `panel.ts` e `webview/main.tsx`, provati da `test:ext`).
 - `pnpm --filter swapdeck-vscode test:ext`: VS Code isolato (cartelle utente ed estensioni temporanee), finto cswap e cartella dati temporanea. Scarica VS Code in `.vscode-test/`.
 - `pnpm --filter swapdeck-vscode package`: `.vsix` per `win32-x64` in `dist/`. Altri target: `node scripts/package.mjs --target <target> [--rust-target <triple> | --cli <binario>]`.

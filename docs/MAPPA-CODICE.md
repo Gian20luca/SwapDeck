@@ -124,4 +124,4 @@ Host in Node (bundle esbuild `out/extension.js`), webview React con `@swapdeck/u
 | `statusBar.ts`, `notifier.ts` | logica pura di barra (testo, tooltip, livello) e notifiche (soglie e cambio dell'account attivo) |
 | `generated/` | tipi della CLI (ts-rs) |
 
-Altro: `l10n/` e `package.nls*.json` (inglese sorgente, bundle italiano; `l10n.test.ts` ne controlla la completezza); `test/suite.ts` + `scripts/run-ext-tests.mjs` (`test:ext`: VS Code isolato in `.vscode-test/`, finto cswap, `SWAPDECK_HOME` temporanea); `scripts/package.mjs` (.vsix per target).
+Altro: `l10n/` e `package.nls*.json` (inglese sorgente, bundle italiano; `l10n.test.ts` ne controlla la completezza); `test:coverage` (vitest v8, soglia 70% righe, `vitest.config.mts`); `test/suite.ts` + `scripts/run-ext-tests.mjs` (`test:ext`: VS Code isolato in `.vscode-test/`, finto cswap, `SWAPDECK_HOME` temporanea); `scripts/package.mjs` (.vsix per target).
