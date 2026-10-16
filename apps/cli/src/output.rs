@@ -30,6 +30,10 @@ pub struct EngineStatus {
     /// Un'istanza tiene il lock ed è viva.
     pub running: bool,
     pub lock: Option<LockInfo>,
+    /// Nome della mappa attiva (tooltip della barra di stato di VS Code).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub active_map: Option<String>,
     /// Config o lock non leggibili (il resto vale come default).
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

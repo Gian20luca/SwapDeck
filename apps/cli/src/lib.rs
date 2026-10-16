@@ -258,6 +258,7 @@ fn engine_default() -> EngineStatus {
         poll_interval_seconds: config.poll_interval_seconds,
         running: false,
         lock: None,
+        active_map: None,
         problem: None,
     }
 }
@@ -271,6 +272,11 @@ fn engine_status(paths: &AppPaths) -> EngineStatus {
             status.enabled = loaded.config.engine.enabled;
             status.dry_run = loaded.config.engine.dry_run;
             status.poll_interval_seconds = loaded.config.poll_interval_seconds;
+            status.active_map = loaded
+                .config
+                .engine_profiles
+                .active()
+                .map(|p| p.name.clone());
         }
         Err(e) => problems.push(e.to_string()),
     }

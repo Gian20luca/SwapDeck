@@ -93,7 +93,7 @@ export function MapSelector({ profiles, busy, dirty, onCommand }: MapSelectorPro
           };
 
   return (
-    <section className="sd-section sd-maps" aria-label={t('maps.title')}>
+    <section className="sd-section sd-maps">
       <div className="sd-form__field">
         <label htmlFor={selectId}>{t('maps.title')}</label>
         <Tooltip text={t('maps.select.tip')} block>

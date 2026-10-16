@@ -3,9 +3,11 @@ import type {
   ActionOutcome,
   Confirmation,
   CswapAction,
+  EngineProfiles,
   ListResponse,
   Notification,
   NotifyPoll,
+  ProfileCommand,
   SwitchStrategy,
 } from '@swapdeck/types';
 import { displayUsage } from '@swapdeck/ui/account';
@@ -384,6 +386,45 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     if (picked?.target !== undefined) await runSwitch(picked.target);
   }
 
+  /** «SwapDeck: Cambia mappa»: quick pick delle mappe con quella attiva spuntata, poi `select`. */
+  async function pickMap(): Promise<void> {
+    let profiles: EngineProfiles;
+    try {
+      profiles = await cli<EngineProfiles>(['engine', 'profiles']);
+    } catch (error) {
+      const info = toCswapError(error);
+      void vscode.window.showErrorMessage(t('SwapDeck: map change failed: {0}', info.message));
+      if (!(error instanceof CliError)) throw error;
+      return;
+    }
+    type Item = vscode.QuickPickItem & { id: string };
+    const items: Item[] = profiles.profiles.map((p) => ({
+      id: p.id,
+      label: `${p.id === profiles.activeId ? '$(check) ' : ''}${p.name}`,
+      ...(p.id === profiles.activeId ? { description: t('active') } : {}),
+    }));
+    const picked = await vscode.window.showQuickPick(items, {
+      placeHolder: t('Choose the SwapDeck map'),
+    });
+    if (!picked || picked.id === profiles.activeId) return;
+    const command: ProfileCommand = { op: 'select', id: picked.id };
+    try {
+      await cli(['engine', 'profiles', '-'], { stdin: JSON.stringify(command) });
+      void vscode.window.showInformationMessage(
+        t(
+          'SwapDeck: active map is now {0}',
+          profiles.profiles.find((p) => p.id === picked.id)?.name ?? picked.id,
+        ),
+      );
+      await refresh();
+    } catch (error) {
+      const info = toCswapError(error);
+      output.error(`mappa: ${info.kind}: ${info.message}`);
+      void vscode.window.showErrorMessage(t('SwapDeck: map change failed: {0}', info.message));
+      if (!(error instanceof CliError)) throw error;
+    }
+  }
+
   const syncEngine = () => {
     const s = settings();
     if (s.engineEnabled && !engine.running) {
@@ -414,6 +455,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     vscode.commands.registerCommand('swapdeck.openPanel', () => panel.show()),
     vscode.commands.registerCommand('swapdeck.refresh', () => refresh()),
     vscode.commands.registerCommand('swapdeck.switchAccount', () => pickAccount()),
+    vscode.commands.registerCommand('swapdeck.switchMap', () => pickMap()),
     vscode.commands.registerCommand('swapdeck.startEngine', () => setEngine(true)),
     vscode.commands.registerCommand('swapdeck.stopEngine', () => setEngine(false)),
     vscode.workspace.onDidChangeConfiguration((e) => {

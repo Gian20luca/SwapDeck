@@ -72,6 +72,8 @@ export function RulesPage() {
   }, [backend]);
   const { state, reload, set } = useLoad<RulesData>(load, [load]);
   const { state: accountsState } = useAccounts();
+  /** Esito da mostrare nell'editor della nuova mappa (che riparte da capo). */
+  const [carried, setCarried] = useState<Notice | null>(null);
 
   // Un cambio di stato (giro del motore, mappa scelta dal menu dell'icona) rilegge regole e candidato.
   useEffect(() => backend.onStateChanged(() => void reload()), [backend, reload]);
@@ -92,7 +94,11 @@ export function RulesPage() {
           data={data}
           accounts={accounts}
           accountsKnown={accountsState.status === 'ready'}
-          onSaved={set}
+          onSaved={(next, notice) => {
+            if (notice) setCarried(notice);
+            set(next);
+          }}
+          initialNotice={carried}
         />
       )}
     </LoadGate>
@@ -104,7 +110,9 @@ interface EditorProps {
   accounts: Account[];
   /** La lista degli account è stata letta (senza, niente avviso sulle utenze mancanti). */
   accountsKnown: boolean;
-  onSaved: (data: RulesData) => void;
+  /** L'esito facoltativo passa all'editor della nuova mappa. */
+  onSaved: (data: RulesData, notice?: Notice) => void;
+  initialNotice: Notice | null;
 }
 
 function initialDraft(rules: EngineRules, accounts: readonly Account[]): RulesDraft {
@@ -112,7 +120,7 @@ function initialDraft(rules: EngineRules, accounts: readonly Account[]): RulesDr
   return draft.order.length === 0 && accounts.length > 0 ? materialize(draft, accounts) : draft;
 }
 
-function RulesEditor({ data, accounts, accountsKnown, onSaved }: EditorProps) {
+function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: EditorProps) {
   const { t } = useI18n();
   const backend = useBackend();
   const runner = useActionRunner();
@@ -120,9 +128,11 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved }: EditorProps) {
   const [base, setBase] = useState<RulesDraft>(() => initialDraft(rulesNow, accounts));
   const [draft, setDraft] = useState<RulesDraft>(base);
   const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState<Notice | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(initialNotice);
 
-  const dirty = JSON.stringify(draft) !== JSON.stringify(base);
+  // Confronto sulla lista resa esplicita: uno spostamento annullato non lascia modifiche.
+  const dirty =
+    JSON.stringify(materialize(draft, accounts)) !== JSON.stringify(materialize(base, accounts));
   // Regole cambiate fuori (altra finestra, CLI): senza modifiche in corso la bozza si riallinea.
   const seen = useRef(JSON.stringify(rulesNow));
   useEffect(() => {
@@ -206,9 +216,10 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved }: EditorProps) {
                 : command.op === 'delete'
                   ? t('maps.deleted')
                   : t('maps.restored');
-      if (profiles.activeId === data.profiles?.activeId) adopt(engine, profiles);
-      else onSaved({ engine, profiles }); // nuova mappa attiva: l'editor riparte (key)
-      setNotice({ tone: 'info', text });
+      if (profiles.activeId === data.profiles?.activeId) {
+        adopt(engine, profiles);
+        setNotice({ tone: 'info', text });
+      } else onSaved({ engine, profiles }, { tone: 'info', text }); // l'editor riparte (key)
       return true;
     } catch (error) {
       setNotice({
@@ -315,7 +326,9 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved }: EditorProps) {
                     </span>
                   </div>
                   <Tooltip
-                    text={t(isIgnored ? 'rules.conflict.unignore.tip' : 'rules.conflict.ignore.tip')}
+                    text={t(
+                      isIgnored ? 'rules.conflict.unignore.tip' : 'rules.conflict.ignore.tip',
+                    )}
                   >
                     <button
                       type="button"

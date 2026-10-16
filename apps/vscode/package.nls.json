@@ -3,6 +3,7 @@
   "command.openPanel": "Open panel",
   "command.refresh": "Refresh",
   "command.switchAccount": "Switch account",
+  "command.switchMap": "Change map",
   "command.startEngine": "Start engine",
   "command.stopEngine": "Stop engine",
   "config.refreshIntervalSeconds": "How often to read `cswap list`, in seconds.",

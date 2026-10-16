@@ -28,5 +28,9 @@
   "Updated at {0}": "Aggiornato alle {0}",
   "SwapDeck: confirm \"{0}\"?": "SwapDeck: confermi \"{0}\"?",
   "SwapDeck: install uv (if missing) and claude-swap for the current user?": "SwapDeck: installare uv (se manca) e claude-swap per l’utente corrente?",
-  "SwapDeck: upgrade claude-swap with \"uv tool upgrade claude-swap\"?": "SwapDeck: aggiornare claude-swap con «uv tool upgrade claude-swap»?"
+  "SwapDeck: upgrade claude-swap with \"uv tool upgrade claude-swap\"?": "SwapDeck: aggiornare claude-swap con «uv tool upgrade claude-swap»?",
+  "SwapDeck: map change failed: {0}": "SwapDeck: cambio di mappa non riuscito: {0}",
+  "Choose the SwapDeck map": "Scegli la mappa di SwapDeck",
+  "SwapDeck: active map is now {0}": "SwapDeck: ora la mappa attiva è {0}",
+  "Map: {0}": "Mappa: {0}"
 }

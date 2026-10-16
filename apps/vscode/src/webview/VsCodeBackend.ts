@@ -7,8 +7,10 @@ import type {
   CswapAction,
   CswapError,
   DirectoryMapping,
+  EngineProfiles,
   EngineRules,
   EngineState,
+  ProfileCommand,
   HistoryEvents,
   ListResponse,
   SetupDiagnosis,
@@ -149,6 +151,14 @@ export class VsCodeBackend implements Backend, SetupBackend {
   /** Salvate nella config: il motore avviato dall'estensione le rilegge al giro dopo. */
   setEngineRules(rules: EngineRules): Promise<EngineState> {
     return this.request({ method: 'setEngineRules', params: { rules } });
+  }
+
+  getEngineProfiles(): Promise<EngineProfiles> {
+    return this.request({ method: 'getEngineProfiles', params: {} });
+  }
+
+  applyEngineProfile(command: ProfileCommand): Promise<EngineState> {
+    return this.request({ method: 'applyEngineProfile', params: { command } });
   }
 
   getPreferences(): Promise<AppPreferences> {

@@ -14,6 +14,10 @@ enabled: boolean, dryRun: boolean, pollIntervalSeconds: number,
  */
 running: boolean, lock: LockInfo | null, 
 /**
+ * Nome della mappa attiva (tooltip della barra di stato di VS Code).
+ */
+activeMap?: string, 
+/**
  * Config o lock non leggibili (il resto vale come default).
  */
 problem?: string, };

@@ -45,6 +45,11 @@
         "category": "SwapDeck"
       },
       {
+        "command": "swapdeck.switchMap",
+        "title": "%command.switchMap%",
+        "category": "SwapDeck"
+      },
+      {
         "command": "swapdeck.startEngine",
         "title": "%command.startEngine%",
         "category": "SwapDeck"

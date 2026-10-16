@@ -1,0 +1,161 @@
+/* Tooltip, flusso a lista, mappe e dettaglio dell'utenza (F14, F16, F17, F19). Colori dalle variabili di index.css. */
+
+.sd-tip {
+  display: inline-flex;
+  max-width: 100%;
+}
+.sd-tip--block {
+  display: flex;
+  width: 100%;
+}
+.sd-tip--block > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sd-tip__bubble {
+  position: fixed;
+  z-index: 50;
+  max-width: min(280px, calc(100vw - 16px));
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--sd-border);
+  background: var(--sd-text);
+  color: var(--sd-bg);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+  white-space: normal;
+  text-align: left;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.sd-tip__bubble[hidden] {
+  display: none;
+}
+
+.sd-notice[data-tone='warn'] {
+  border-color: var(--sd-warn);
+  color: var(--sd-warn);
+}
+
+.sd-maps {
+  display: grid;
+  gap: 6px;
+}
+.sd-maps__actions,
+.sd-maps__name {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sd-maps__name .sd-input {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.sd-flow {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.sd-flow__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--sd-border);
+  border-radius: 8px;
+  background: var(--sd-surface);
+}
+.sd-flow__item[data-included='false'] {
+  opacity: 0.7;
+}
+.sd-flow__item[data-grabbed='true'] {
+  border-color: var(--sd-accent);
+  box-shadow: 0 0 0 2px var(--sd-accent);
+}
+.sd-flow__handle {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--sd-muted);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  padding: 6px 3px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.sd-flow__handle:disabled {
+  cursor: default;
+}
+.sd-flow__handle[aria-pressed='true'] {
+  color: var(--sd-accent);
+  cursor: grabbing;
+}
+.sd-flow__main {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sd-flow__name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sd-flow__usage {
+  font-size: 12px;
+  color: var(--sd-muted);
+  font-variant-numeric: tabular-nums;
+}
+.sd-flow__next {
+  margin: 6px 0;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.sd-switch {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--sd-accent);
+  flex: 0 0 auto;
+}
+.sd-weights {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0 8px;
+}
+
+.sd-detail__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sd-detail__head h2 {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sd-detail__facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 13px;
+}
+.sd-detail__facts dt {
+  color: var(--sd-muted);
+}
+.sd-detail__facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

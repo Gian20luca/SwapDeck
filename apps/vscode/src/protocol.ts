@@ -8,6 +8,7 @@ import type {
   CswapError,
   EngineRules,
   ListResponse,
+  ProfileCommand,
   SetupProgress,
 } from '@swapdeck/types';
 
@@ -23,6 +24,8 @@ export const REQUEST_METHODS = [
   'listMappings',
   'getEngineState',
   'setEngineRules',
+  'getEngineProfiles',
+  'applyEngineProfile',
   'getPreferences',
   'setPreferences',
   'getHistoryEvents',
@@ -58,8 +61,12 @@ export type RequestParams =
   | { method: 'getHistory'; params: HistoryParams }
   | { method: 'confirmationFor'; params: { action: CswapAction } }
   | { method: 'runAction'; params: { action: CswapAction } }
-  | { method: 'listMappings' | 'getEngineState' | 'getPreferences'; params: Record<string, never> }
+  | {
+      method: 'listMappings' | 'getEngineState' | 'getEngineProfiles' | 'getPreferences';
+      params: Record<string, never>;
+    }
   | { method: 'setEngineRules'; params: { rules: EngineRules } }
+  | { method: 'applyEngineProfile'; params: { command: ProfileCommand } }
   | { method: 'setPreferences'; params: { prefs: Partial<AppPreferences> } }
   | { method: 'getHistoryEvents'; params: HistoryParams }
   | { method: 'pickOpenFile' | 'pickSaveFile' | 'pickFolder'; params: PickParams }

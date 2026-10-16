@@ -3,7 +3,8 @@ export const itFlow = {
   'common.browse.tip': 'Apre il selettore del sistema per scegliere il percorso.',
   'maps.title': 'Mappa attiva',
   'maps.select': 'Mappa',
-  'maps.select.tip': 'Sceglie la mappa usata dal motore: le sue regole valgono dal giro successivo.',
+  'maps.select.tip':
+    'Sceglie la mappa usata dal motore: le sue regole valgono dal giro successivo.',
   'maps.preset': 'preset',
   'maps.new': 'Nuova',
   'maps.new.tip': 'Crea una mappa nuova con la lista attuale e le regole di default.',
@@ -15,7 +16,8 @@ export const itFlow = {
   'maps.delete.tip': 'Elimina la mappa attiva, dopo una conferma. L’ultima mappa resta.',
   'maps.delete.last': 'L’ultima mappa non si può eliminare.',
   'maps.restore': 'Ripristina preset',
-  'maps.restore.tip': 'Riporta la mappa alle regole del suo preset (lista compresa), dopo una conferma.',
+  'maps.restore.tip':
+    'Riporta la mappa alle regole del suo preset (lista compresa), dopo una conferma.',
   'maps.name': 'Nome della mappa',
   'maps.name.tip': 'Fino a 60 caratteri, diverso dalle altre mappe.',
   'maps.name.confirm': 'Conferma',
@@ -75,9 +77,11 @@ export const itFlow = {
   'flow.criterion.hint.lowest5h': 'Sceglie l’utenza con le 5 ore più libere.',
   'flow.criterion.hint.balanced-score':
     'Media pesata di margine 5h e 7d, vicinanza del reset e ritmo.',
-  'flow.criterion.hint.even-spread': 'Tiene allo stesso livello i consumi settimanali delle utenze.',
+  'flow.criterion.hint.even-spread':
+    'Tiene allo stesso livello i consumi settimanali delle utenze.',
   'flow.criterion.hint.model-headroom': 'Sceglie l’utenza con più margine sul modello indicato.',
-  'flow.criterion.tip': 'Come il motore sceglie la riserva quando l’utenza attiva arriva alla soglia.',
+  'flow.criterion.tip':
+    'Come il motore sceglie la riserva quando l’utenza attiva arriva alla soglia.',
   'flow.weights': 'Pesi del punteggio',
   'flow.weights.hint': 'Da 0 a 100; un peso a 0 toglie la componente.',
   'flow.weight.fiveHour': 'Margine sulle 5 ore',
@@ -93,10 +97,13 @@ export const itFlow = {
   'rules.err.firstExcluded': 'La prima utenza della lista deve essere inclusa.',
   'rules.enabled.tip': 'Acceso: il motore cambia utenza da solo secondo la lista e le soglie.',
   'rules.dryRun.tip': 'Il motore decide e lo scrive nello storico, ma non cambia mai utenza.',
-  'rules.fiveHour.tip': 'Quando l’utenza attiva supera questa % sulle 5 ore, il motore passa alla successiva.',
-  'rules.sevenDay.tip': 'Quando l’utenza attiva supera questa % sui 7 giorni, il motore passa alla successiva.',
+  'rules.fiveHour.tip':
+    'Quando l’utenza attiva supera questa % sulle 5 ore, il motore passa alla successiva.',
+  'rules.sevenDay.tip':
+    'Quando l’utenza attiva supera questa % sui 7 giorni, il motore passa alla successiva.',
   'rules.return.tip': 'Dopo il reset il motore torna alla prima utenza libera della lista.',
-  'rules.hysteresis.tip': 'Margine sotto la soglia richiesto per tornare a un’utenza lasciata: evita rimbalzi.',
+  'rules.hysteresis.tip':
+    'Margine sotto la soglia richiesto per tornare a un’utenza lasciata: evita rimbalzi.',
   'rules.gap.tip': 'Secondi minimi tra due cambi automatici.',
   'rules.revert.tip': 'Scarta le modifiche non salvate e torna alle regole salvate.',
   'rules.save.tip': 'Salva le regole della mappa: il motore le usa dal giro successivo.',

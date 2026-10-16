@@ -15,7 +15,12 @@ export const CRITERIA: readonly ReserveCriterion[] = [
 ];
 
 /** Pesi di default del punteggio bilanciato (specchio di `ScoreWeights::default` del Rust). */
-export const DEFAULT_WEIGHTS: ScoreWeights = { fiveHour: 0.4, sevenDay: 0.3, reset: 0.15, pace: 0.15 };
+export const DEFAULT_WEIGHTS: ScoreWeights = {
+  fiveHour: 0.4,
+  sevenDay: 0.3,
+  reset: 0.15,
+  pace: 0.15,
+};
 
 /** Lista della mappa: `order` se c'è (fonte di verità), altrimenti la forma precedente. */
 export function configuredOrder(rules: EngineRules): number[] {

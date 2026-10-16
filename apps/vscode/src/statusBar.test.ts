@@ -16,6 +16,13 @@ describe('statusModel', () => {
     expect(m.tooltip).toContain('Updated at 12:00');
   });
 
+  it('nome della mappa attiva nel tooltip', () => {
+    const state = cliState(fixtureList());
+    expect(statusModel(state, th, 'off', fmt, time).tooltip).not.toContain('Map:');
+    state.engine.activeMap = 'Eco';
+    expect(statusModel(state, th, 'off', fmt, time).tooltip).toContain('Map: Eco');
+  });
+
   it('il livello è il peggiore tra 5h e 7d', () => {
     const warn = statusModel(
       cliState(withActiveUsage(fixtureList(), 10, 85)),

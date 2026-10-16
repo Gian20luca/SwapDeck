@@ -199,6 +199,24 @@ describe('createRequestHandler', () => {
   });
 });
 
+describe('mappe', () => {
+  it('elenco e operazioni via CLI, comando da stdin e validato', async () => {
+    const { handle, calls } = setup();
+    await handle('getEngineProfiles', {});
+    await handle('applyEngineProfile', { command: { op: 'select', id: 'eco' } });
+    expect(calls).toEqual([
+      { args: ['engine', 'profiles'] },
+      { args: ['engine', 'profiles', '-'], options: { stdin: '{"op":"select","id":"eco"}' } },
+    ]);
+    for (const command of [undefined, 'x', [1]]) {
+      await expect(handle('applyEngineProfile', { command })).rejects.toMatchObject({
+        info: { kind: 'invalidUsage' },
+      });
+    }
+    expect(calls).toHaveLength(2);
+  });
+});
+
 describe('selettori di file e cartelle', () => {
   function withPick(result: string | null = 'C:/scelto') {
     const pick = vi.fn(async (_kind: string, _options: unknown) => result);

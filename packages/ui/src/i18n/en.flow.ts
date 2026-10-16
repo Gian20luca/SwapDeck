@@ -17,7 +17,8 @@ export const enFlow: Record<keyof typeof itFlow, string> = {
   'maps.delete.tip': 'Deletes the active map, after confirmation. The last map stays.',
   'maps.delete.last': 'The last map cannot be deleted.',
   'maps.restore': 'Restore preset',
-  'maps.restore.tip': 'Brings the map back to its preset rules (list included), after confirmation.',
+  'maps.restore.tip':
+    'Brings the map back to its preset rules (list included), after confirmation.',
   'maps.name': 'Map name',
   'maps.name.tip': 'Up to 60 characters, different from the other maps.',
   'maps.name.confirm': 'Confirm',
@@ -59,11 +60,13 @@ export const enFlow: Record<keyof typeof itFlow, string> = {
     'On: the engine may use this account. Off: it never picks it and, if it is active, leaves it alone.',
   'flow.useNow': 'Use now',
   'flow.useNow.label': 'Use {name} now',
-  'flow.useNow.tip': 'Switches to this account right away, without waiting for the engine thresholds.',
+  'flow.useNow.tip':
+    'Switches to this account right away, without waiting for the engine thresholds.',
   'flow.useNow.done': '{name} is now active.',
   'flow.active': 'active',
   'flow.missing': 'not in cswap',
-  'flow.missingWarn': 'The map lists accounts that do not exist in cswap: {list}. The engine skips them.',
+  'flow.missingWarn':
+    'The map lists accounts that do not exist in cswap: {list}. The engine skips them.',
   'flow.removeMissing': 'Remove from list',
   'flow.removeMissing.tip': 'Removes from the list the accounts that no longer exist in cswap.',
   'flow.next': 'Right now it would go to: {name}',
@@ -73,13 +76,15 @@ export const enFlow: Record<keyof typeof itFlow, string> = {
   'flow.criterion.hint.best': 'Picks the account with the most room across 5 hours and week.',
   'flow.criterion.hint.fixed-order': 'Follows the list order: the first free one.',
   'flow.criterion.hint.reset-soonest': 'Picks the account whose weekly reset comes first.',
-  'flow.criterion.hint.pace-safe': 'Picks the account that, at the current pace, stays under the limit.',
+  'flow.criterion.hint.pace-safe':
+    'Picks the account that, at the current pace, stays under the limit.',
   'flow.criterion.hint.lowest5h': 'Picks the account with the freest 5 hours.',
   'flow.criterion.hint.balanced-score':
     'Weighted average of 5h and 7d room, reset closeness and pace.',
   'flow.criterion.hint.even-spread': 'Keeps the weekly usage of the accounts at the same level.',
   'flow.criterion.hint.model-headroom': 'Picks the account with the most room on the given model.',
-  'flow.criterion.tip': 'How the engine picks the reserve when the active account reaches the threshold.',
+  'flow.criterion.tip':
+    'How the engine picks the reserve when the active account reaches the threshold.',
   'flow.weights': 'Score weights',
   'flow.weights.hint': 'From 0 to 100; a weight of 0 removes the component.',
   'flow.weight.fiveHour': '5-hour room',
@@ -93,12 +98,17 @@ export const enFlow: Record<keyof typeof itFlow, string> = {
   'rules.err.weights': 'Weights from 0 to 100, at least one above 0.',
   'rules.err.model': 'Enter the model.',
   'rules.err.firstExcluded': 'The first account in the list must be included.',
-  'rules.enabled.tip': 'On: the engine switches account by itself following the list and thresholds.',
-  'rules.dryRun.tip': 'The engine decides and writes it to the history, but never switches account.',
-  'rules.fiveHour.tip': 'When the active account goes over this 5-hour %, the engine moves to the next one.',
-  'rules.sevenDay.tip': 'When the active account goes over this 7-day %, the engine moves to the next one.',
+  'rules.enabled.tip':
+    'On: the engine switches account by itself following the list and thresholds.',
+  'rules.dryRun.tip':
+    'The engine decides and writes it to the history, but never switches account.',
+  'rules.fiveHour.tip':
+    'When the active account goes over this 5-hour %, the engine moves to the next one.',
+  'rules.sevenDay.tip':
+    'When the active account goes over this 7-day %, the engine moves to the next one.',
   'rules.return.tip': 'After the reset the engine returns to the first free account of the list.',
-  'rules.hysteresis.tip': 'Room below the threshold needed to return to a left account: avoids bouncing.',
+  'rules.hysteresis.tip':
+    'Room below the threshold needed to return to a left account: avoids bouncing.',
   'rules.gap.tip': 'Minimum seconds between two automatic switches.',
   'rules.revert.tip': 'Discards unsaved changes and goes back to the saved rules.',
   'rules.save.tip': 'Saves the map rules: the engine uses them from the next round.',

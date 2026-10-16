@@ -94,6 +94,8 @@ export function statusModel(
       : t('7d: {0}', pctText(seven?.pct)),
   );
   if (shown?.lastKnown) lines.push(t('Last known data (current usage unavailable)'));
-  lines.push(engineLine, updated);
+  lines.push(engineLine);
+  if (state.engine.activeMap) lines.push(t('Map: {0}', state.engine.activeMap));
+  lines.push(updated);
   return { text, tooltip: lines.join('\n'), level };
 }

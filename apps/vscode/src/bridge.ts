@@ -267,6 +267,12 @@ export function createRequestHandler(deps: BridgeDeps) {
         const rules = plainObject(params['rules'], 'regole');
         return deps.cli(['engine', 'rules', 'set', '-'], { stdin: JSON.stringify(rules) });
       }
+      case 'getEngineProfiles':
+        return deps.cli(['engine', 'profiles']);
+      case 'applyEngineProfile': {
+        const command = plainObject(params['command'], 'mappa');
+        return deps.cli(['engine', 'profiles', '-'], { stdin: JSON.stringify(command) });
+      }
       case 'getPreferences':
         return deps.cli(['preferences', 'get']);
       case 'setPreferences': {

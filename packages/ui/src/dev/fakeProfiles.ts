@@ -25,8 +25,10 @@ function presetRules(kind: PresetKind, base: EngineRules): EngineRules {
     reserveCriterion: 'lowest-weekly',
     returnHysteresis: 10,
   };
-  if (kind === 'cswapGuard') Object.assign(r, { order: [6, 1, 3], excluded: [], returnHysteresis: 45 });
-  if (kind === 'eco') Object.assign(r, { reserveCriterion: 'reset-soonest', fiveHourThreshold: 90 });
+  if (kind === 'cswapGuard')
+    Object.assign(r, { order: [6, 1, 3], excluded: [], returnHysteresis: 45 });
+  if (kind === 'eco')
+    Object.assign(r, { reserveCriterion: 'reset-soonest', fiveHourThreshold: 90 });
   if (kind === 'sport') Object.assign(r, { reserveCriterion: 'lowest5h', fiveHourThreshold: 98 });
   if (kind === 'safe') r.reserveCriterion = 'pace-safe';
   return r;
@@ -41,7 +43,12 @@ export function seedProfiles(rules: EngineRules): EngineProfiles {
     activeId: 'personal',
     profiles: [
       { id: 'personal', name: 'Personale', rules: structuredClone(rules) },
-      ...PRESETS.map((p) => ({ id: p.id, name: p.name, preset: p.kind, rules: presetRules(p.kind, rules) })),
+      ...PRESETS.map((p) => ({
+        id: p.id,
+        name: p.name,
+        preset: p.kind,
+        rules: presetRules(p.kind, rules),
+      })),
     ],
   };
 }
@@ -71,7 +78,11 @@ export function applyProfile(
   };
   switch (cmd.op) {
     case 'create':
-      next.profiles.push({ id: newId(), name: freeName(cmd.name), rules: structuredClone(activeRules) });
+      next.profiles.push({
+        id: newId(),
+        name: freeName(cmd.name),
+        rules: structuredClone(activeRules),
+      });
       break;
     case 'rename': {
       const i = index(cmd.id);
@@ -106,7 +117,10 @@ export function applyProfile(
 }
 
 /** Candidato finto: la prima utenza inclusa, diversa dall'attiva e senza limiti. */
-export function fakeCandidate(rules: EngineRules, accounts: readonly Account[]): Candidate | undefined {
+export function fakeCandidate(
+  rules: EngineRules,
+  accounts: readonly Account[],
+): Candidate | undefined {
   const order = configuredOrder(rules).filter((n) => !rules.excluded.includes(n));
   const free = order
     .map((n) => accounts.find((a) => a.number === n))
