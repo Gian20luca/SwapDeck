@@ -35,3 +35,15 @@ interfaccia (su Windows la modalità console passerà a `swapdeck-cli`, step 7).
 Verificato il 2026-10-15: un'app Tauri 2 minima compila (circa 10 minuti la prima volta).
 L'eseguibile dipende da `libunwind.dll` di llvm-mingw e da `WebView2Loader.dll`, quindi serve solo
 allo sviluppo; gli installer escono dalla CI con MSVC.
+
+## Pacchetti e aggiornamenti
+
+- Installer dalla CI (`.github/workflows/release.yml`, MSVC su Windows); build locale di prova con
+  `pnpm dist:local` in `dist-locale/` (installer NSIS e portatile con `libunwind.dll` e `WebView2Loader.dll`).
+- Updater (`tauri-plugin-updater`, `src-tauri/src/updater.rs`): spento di default finché il repo è
+  privato; si accende con `"updates": { "enabled": true }` in `config.json`. Endpoint `latest.json`
+  sulle GitHub Releases, chiave pubblica in `tauri.conf.json`, firma in CI con i segreti
+  `TAURI_SIGNING_PRIVATE_KEY` e `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (copia della chiave in
+  `%USERPROFILE%\.swapdeck-keys\`, fuori dal repo).
+- Prove con `SWAPDECK_HOME`: la config sta in `<home>\config\config.json`; con `"autostart": false`
+  l'app non registra l'avvio automatico (la voce `SwapDeck` di Windows è unica per utente).
