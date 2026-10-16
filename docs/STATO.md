@@ -13,7 +13,7 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 | 6 Installazione cswap | chiuso | a83645a | 9 rilievi corretti, rollback automatico, procedura di primo avvio in app e VS Code |
 | 7 Estensione VS Code | chiuso | 5860707 | 7 rilievi corretti; .vsix installato nel VS Code reale, motore spento |
 | 8 Pacchetti e CI | chiuso | 2351569 | CI verde 3 OS; prove di rilascio verdi; firma separata dalla build; docs/RILASCIO.md |
-| 9 Verifica finale e documenti | in corso | 8cbcc66 | README e guida da cswap-guard fatti |
+| 9 Verifica finale e documenti | chiuso | aabb4ec (tag v0.1.0) | release in bozza con tutti gli asset; dist-locale aggiornata; vsix nel VS Code |
 
 ## Domande aperte per l'utente
 (raccolte durante l'esecuzione, con scelta provvisoria)
@@ -33,3 +33,11 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 - Modalità senza interfaccia ed estensione VS Code: binario console `swapdeck-cli` (decisione provvisoria della notte, vedi PIANO §2).
 - Incidenti della notte, senza effetti: (1) TUI di cswap aperta 60 s senza input nello step 0b; (2) avvio automatico SwapDeck registrato e subito rimosso in una prova dello step 8; (3) `cswap auto\` lanciato per errore di quoting nello step 6 e rifiutato da cswap. Nessuno switch reale: l'unico cambio della notte (03:53, 6 → 3) è di cswap-guard.
 - Notifiche Windows: sul PC di sviluppo Windows tiene in cache l'AUMID `com.swapdeck.desktop` senza nome (primo toast prima della registrazione). Da provare: disconnessione e nuovo accesso. Su macchine nuove compare «SwapDeck» (verificato con un AUMID nuovo).
+
+## 16/10 pomeriggio
+- Aggiunte e integrate in v0.1.0: F4 esteso (mini-widget nascondi, comprimi, aggiorna, ora, Fable, trattini delle soglie, date di reset, posizioni separate), F14 flusso a lista, F15 criteri, F16 mappe, F17 tooltip, F18 notifiche (anche da headless, nome SwapDeck), F19 dettaglio utenza. SwapDeck reso generico (niente cswap-guard).
+- Release v0.1.0 in bozza: https://github.com/Gian20luca/SwapDeck/releases/tag/untagged-d28007b80c5acbe01553
+- In corso per v0.2.0: F20 Chi consuma (branch wip/f20).
+- **GitHub Actions fermo per limite di spesa o pagamento non riuscito** dell'account: CI di 82f4ec1 (solo README) da rilanciare.
+- Scheda Regole e VS Code: a motore spento compare un riquadro rosso «Motore sospeso. Il motore è spento.» (da decidere lo stile).
+- Da provare su macchine reali: installer NSIS su Windows pulito, AppImage/.deb, .dmg, vsix Linux/macOS, updater dopo repo pubblico.
