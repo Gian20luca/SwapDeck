@@ -255,7 +255,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let data = dir.path().to_path_buf();
         let api: Arc<dyn CswapApi> = Arc::new(MockApi::new());
-        let live = Arc::new(Mutex::new((EngineRules::default(), Duration::from_secs(60))));
+        let live = Arc::new(Mutex::new((
+            EngineRules::default(),
+            Duration::from_secs(60),
+        )));
         let views = Arc::new(Mutex::new(Vec::new()));
         let seen = Arc::new(Mutex::new(Vec::new()));
         let (live2, views2, seen2) = (Arc::clone(&live), Arc::clone(&views), Arc::clone(&seen));

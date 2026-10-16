@@ -125,6 +125,14 @@ export function checkedPick(params: Record<string, unknown>): PickParams {
   return out;
 }
 
+/** Oggetto JSON semplice (la validazione completa la fa il Rust). */
+function plainObject(value: unknown, name: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw invalid(`${name} non valide`);
+  }
+  return value as Record<string, unknown>;
+}
+
 function optionalInt(value: unknown, name: string): number | undefined {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
@@ -191,6 +199,28 @@ export function createRequestHandler(deps: BridgeDeps) {
         args.push('--to', String(nowSec));
         if (account !== undefined) args.push('--account', String(account));
         return toHistoryPoints(await deps.cli<HistoryRecord[]>(args));
+      }
+      case 'listMappings':
+        return deps.cli(['mappings']);
+      case 'getEngineState':
+        return deps.cli(['engine', 'state']);
+      case 'setEngineRules': {
+        const rules = plainObject(params['rules'], 'regole');
+        return deps.cli(['engine', 'rules', 'set', '-'], { stdin: JSON.stringify(rules) });
+      }
+      case 'getPreferences':
+        return deps.cli(['preferences', 'get']);
+      case 'setPreferences': {
+        const prefs = plainObject(params['prefs'], 'preferenze');
+        return deps.cli(['preferences', 'set', '-'], { stdin: JSON.stringify(prefs) });
+      }
+      case 'getHistoryEvents': {
+        const args = ['history', 'events'];
+        const since = optionalInt(params['sinceSeconds'], 'sinceSeconds');
+        const account = optionalInt(params['account'], 'account');
+        if (since !== undefined) args.push('--since', String(since));
+        if (account !== undefined) args.push('--account', String(account));
+        return deps.cli(args);
       }
       case 'pickOpenFile':
       case 'pickSaveFile':

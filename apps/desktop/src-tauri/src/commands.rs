@@ -229,8 +229,12 @@ pub fn set_autostart(
 
 /// Argomento JSON della UI: un valore non valido è `invalidUsage` come gli altri errori.
 fn parse_arg<T: DeserializeOwned>(what: &str, value: serde_json::Value) -> Res<T> {
-    serde_json::from_value(value)
-        .map_err(|e| CswapError::new(CswapErrorKind::InvalidUsage, format!("{what} non valide: {e}")))
+    serde_json::from_value(value).map_err(|e| {
+        CswapError::new(
+            CswapErrorKind::InvalidUsage,
+            format!("{what} non valide: {e}"),
+        )
+    })
 }
 
 /// Attesa massima della lettura chiesta dopo il salvataggio delle regole: con il motore acceso
@@ -444,11 +448,11 @@ mod tests {
 
     #[test]
     fn arguments_are_validated_and_rules_reach_the_settings() {
-        let err = parse_arg::<PreferencesPatch>("preferenze", serde_json::json!({"x": 1}))
-            .unwrap_err();
+        let err =
+            parse_arg::<PreferencesPatch>("preferenze", serde_json::json!({"x": 1})).unwrap_err();
         assert_eq!(err.kind, CswapErrorKind::InvalidUsage);
-        let err = parse_arg::<HistoryQuery>("filtro", serde_json::json!({"account": "a"}))
-            .unwrap_err();
+        let err =
+            parse_arg::<HistoryQuery>("filtro", serde_json::json!({"account": "a"})).unwrap_err();
         assert_eq!(err.kind, CswapErrorKind::InvalidUsage);
         let s = shared();
         let rules = EngineRules {
@@ -456,7 +460,8 @@ mod tests {
             reserves: vec![1, 3],
             ..EngineRules::default()
         };
-        s.update_config(|c| c.set_engine_rules(rules.clone())).unwrap();
+        s.update_config(|c| c.set_engine_rules(rules.clone()))
+            .unwrap();
         let state = engine_state(&s);
         assert_eq!(state.rules, rules, "regole in memoria per il giro dopo");
         assert!(state.view.is_none() && state.conflicts.is_empty());
@@ -464,9 +469,15 @@ mod tests {
             enabled: true,
             ..EngineRules::default()
         };
-        let err = s.update_config(|c| c.set_engine_rules(invalid)).unwrap_err();
+        let err = s
+            .update_config(|c| c.set_engine_rules(invalid))
+            .unwrap_err();
         assert_eq!(err.kind, CswapErrorKind::InvalidUsage);
-        assert_eq!(engine_state(&s).rules, rules, "regole invariate dopo l'errore");
+        assert_eq!(
+            engine_state(&s).rules,
+            rules,
+            "regole invariate dopo l'errore"
+        );
         let prefs = PreferencesPatch {
             notification_thresholds: Some(vec![50.0, 90.0]),
             ..PreferencesPatch::default()

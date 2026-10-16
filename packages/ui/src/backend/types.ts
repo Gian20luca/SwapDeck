@@ -2,18 +2,17 @@ import type {
   ConfigGetResponse,
   ConfigListResponse,
   Confirmation,
-  Conflict,
   CswapAction,
+  AppPreferences,
   CswapError,
-  DecisionRecord,
+  DirectoryMapping,
   EngineRules,
-  Language,
+  EngineState,
+  EngineView,
+  HistoryEvents,
   ListResponse,
   StatusResponse,
-  SuspendReason,
-  SwitchRecord,
   SwitchResponse,
-  Theme,
 } from '@swapdeck/types';
 
 export type Unsubscribe = () => void;
@@ -59,39 +58,13 @@ export class BackendError extends Error {
   }
 }
 
-/** Cartella mappata a un account (`cswap map`). */
-export interface DirectoryMapping {
-  path: string;
-  account: number;
-  email?: string;
-}
-
-/** Stato del motore all'ultimo giro (specchio di `EngineView` del Rust). */
-export interface EngineViewInfo {
-  /** Il lock del motore è di questa istanza. */
-  holder: boolean;
-  enabled: boolean;
-  dryRun: boolean;
-  suspended: SuspendReason | null;
-  /** Id dei conflitti o problemi delle regole che hanno sospeso il motore. */
-  detail: string[];
-}
-
-/** Regole salvate, stato del motore e conflitti noti (`EngineRules` è nel Rust). */
-export interface EngineState {
-  rules: EngineRules;
-  view: EngineViewInfo | null;
-  conflicts: Conflict[];
-}
-
-/** Impostazioni di SwapDeck salvate nella config (`AppConfig`, senza le regole del motore). */
-export interface AppPreferences {
-  pollIntervalSeconds: number;
-  /** Soglie delle notifiche in percentuale, crescenti. */
-  notificationThresholds: number[];
-  language: Language;
-  theme: Theme;
-}
+/**
+ * Formati del Rust (`swapdeck-core`, generati in `@swapdeck/types`): cartelle mappate, stato del
+ * motore, preferenze e eventi dello storico.
+ */
+export type { AppPreferences, DirectoryMapping, EngineState, HistoryEvents };
+/** Stato del motore all'ultimo giro (`EngineView` del Rust). */
+export type EngineViewInfo = EngineView;
 
 /** Impostazioni dell'host desktop (avvio al login, versione). */
 export interface HostSettings {
@@ -99,12 +72,6 @@ export interface HostSettings {
   /** `false` nelle build di sviluppo: il sistema non viene modificato. */
   autostartManaged: boolean;
   version: string;
-}
-
-/** Cambi di account e decisioni del motore, dal più vecchio al più recente. */
-export interface HistoryEvents {
-  switches: SwitchRecord[];
-  decisions: DecisionRecord[];
 }
 
 export interface FileFilter {

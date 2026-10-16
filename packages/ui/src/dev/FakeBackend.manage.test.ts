@@ -59,7 +59,7 @@ describe('FakeBackend: gestione completa', () => {
   });
 
   it('config unset torna al default; purge svuota tutto', async () => {
-    const backend = new FakeBackend({ mappings: [{ path: 'x', account: 1 }] });
+    const backend = new FakeBackend({ mappings: [{ path: 'x', account: 1, email: '' }] });
     await backend.runAction({ kind: 'configSet', key: 'autoswitch.threshold', value: '80' });
     await backend.runAction({ kind: 'configUnset', key: 'autoswitch.threshold' });
     expect(await backend.getConfigValue('autoswitch.threshold')).toMatchObject({

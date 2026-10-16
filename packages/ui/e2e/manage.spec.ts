@@ -14,16 +14,42 @@ async function tab(page: Page, name: string) {
   await expect(page.getByRole('tab', { name })).toHaveAttribute('aria-selected', 'true');
 }
 
+/**
+ * Niente scroll orizzontale: né della pagina né di un contenitore interno, e nessun elemento
+ * visibile che esca dal bordo destro (contenuti tagliati da un `overflow: hidden`).
+ */
 async function noHorizontalScroll(page: Page) {
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(0);
+  const problems = await page.evaluate(() => {
+    const root = document.documentElement;
+    const limit = root.clientWidth + 0.5;
+    const found: string[] = [];
+    if (root.scrollWidth > root.clientWidth) found.push(`pagina: ${root.scrollWidth}px`);
+    const name = (el: Element) =>
+      `${el.tagName.toLowerCase()}.${[...el.classList].join('.')} "${(el.textContent ?? '').trim().slice(0, 30)}"`;
+    for (const el of document.body.querySelectorAll('*')) {
+      const rect = el.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) continue;
+      const style = getComputedStyle(el);
+      if (style.visibility === 'hidden') continue;
+      if (rect.right > limit) found.push(`${name(el)} esce di ${Math.round(rect.right - limit)}px`);
+      if (/(auto|scroll)/.test(style.overflowX) && el.scrollWidth > el.clientWidth + 1) {
+        found.push(`${name(el)} scorre di ${el.scrollWidth - el.clientWidth}px`);
+      }
+    }
+    return found.slice(0, 10);
+  });
+  expect(problems).toEqual([]);
 }
 
 test('navigazione a schede a 420×640 senza scroll orizzontale', async ({ page }) => {
   await open(page);
   await noHorizontalScroll(page);
+  // Pannello delle azioni aperto: è la parte più larga della scheda Account.
+  await page.getByRole('button', { name: 'Gestisci l’account alias1' }).click();
+  await expect(page.getByRole('group', { name: 'Gestione di alias1' })).toBeVisible();
+  await noHorizontalScroll(page);
+  // Senza fullPage: allungando la pagina sparisce la barra e il ritaglio non sarebbe fedele.
+  await page.screenshot({ path: `${SHOTS}/account-420x640.png` });
 
   await tab(page, 'Cartelle');
   await expect(page.getByRole('heading', { name: 'Cartelle mappate' })).toBeVisible();

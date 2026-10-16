@@ -89,6 +89,7 @@ export const itManage = {
   'folders.unmap.title': 'Togliere la mappatura?',
   'folders.unmap.message': 'La cartella {path} non sarà più associata a un account.',
   'folders.unmapped': 'Mappatura di {path} tolta.',
+  'folders.removed': '{email} (account rimosso)',
 
   'rules.title': 'Regole del motore',
   'rules.hint':
@@ -167,8 +168,8 @@ export const itManage = {
   'settings.app': 'App',
   'settings.saved': 'Impostazioni salvate.',
   'settings.interval': 'Intervallo di controllo (secondi)',
-  'settings.interval.hint': 'Ogni quanto SwapDeck rilegge i consumi (da 15 a 3600).',
-  'settings.interval.invalid': 'L’intervallo è un numero intero da 15 a 3600.',
+  'settings.interval.hint': 'Ogni quanto SwapDeck rilegge i consumi (da 60 a 3600).',
+  'settings.interval.invalid': 'L’intervallo è un numero intero da 60 a 3600.',
   'settings.thresholds': 'Soglie delle notifiche (%)',
   'settings.thresholds.hint': 'Da 1 a 4 valori crescenti separati da virgola, per esempio 80, 95.',
   'settings.thresholds.invalid': 'Valori crescenti da 1 a 100, al massimo quattro.',

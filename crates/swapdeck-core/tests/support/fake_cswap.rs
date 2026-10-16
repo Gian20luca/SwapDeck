@@ -127,7 +127,11 @@ impl Fake {
     }
 
     fn save_maps(&self, maps: &serde_json::Map<String, Value>) {
-        fs::write(self.maps_path(), serde_json::to_string_pretty(maps).unwrap()).unwrap();
+        fs::write(
+            self.maps_path(),
+            serde_json::to_string_pretty(maps).unwrap(),
+        )
+        .unwrap();
     }
 
     /// `map` (elenco nel formato di cswap 0.27) e `map <n> [path]`.

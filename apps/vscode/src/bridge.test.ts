@@ -167,6 +167,36 @@ describe('createRequestHandler', () => {
       ['cswap-config', 'auto.threshold'],
     ]);
   });
+
+  it('gestione: comandi della CLI, scritture da stdin e parametri validati', async () => {
+    const { handle, calls } = setup();
+    const invalid = { info: { kind: 'invalidUsage' } };
+    await handle('listMappings', {});
+    await handle('getEngineState', {});
+    await handle('setEngineRules', { rules: { enabled: false, primary: 6 } });
+    await handle('getPreferences', {});
+    await handle('setPreferences', { prefs: { theme: 'dark' } });
+    await handle('getHistoryEvents', {});
+    await handle('getHistoryEvents', { sinceSeconds: 100, account: 3 });
+    expect(calls).toEqual([
+      { args: ['mappings'] },
+      { args: ['engine', 'state'] },
+      {
+        args: ['engine', 'rules', 'set', '-'],
+        options: { stdin: '{"enabled":false,"primary":6}' },
+      },
+      { args: ['preferences', 'get'] },
+      { args: ['preferences', 'set', '-'], options: { stdin: '{"theme":"dark"}' } },
+      { args: ['history', 'events'] },
+      { args: ['history', 'events', '--since', '100', '--account', '3'] },
+    ]);
+    for (const rules of [undefined, null, 'x', [1]]) {
+      await expect(handle('setEngineRules', { rules })).rejects.toMatchObject(invalid);
+    }
+    await expect(handle('setPreferences', { prefs: 1 })).rejects.toMatchObject(invalid);
+    await expect(handle('getHistoryEvents', { sinceSeconds: 1.5 })).rejects.toMatchObject(invalid);
+    expect(calls).toHaveLength(7);
+  });
 });
 
 describe('selettori di file e cartelle', () => {

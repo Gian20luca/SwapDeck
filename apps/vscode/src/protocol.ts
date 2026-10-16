@@ -2,7 +2,13 @@
  * Messaggi tra il webview (VsCodeBackend) e l'extension host. Il webview non esegue nulla: chiede,
  * e l'host valida il metodo e lancia `swapdeck-cli`.
  */
-import type { CswapAction, CswapError, ListResponse } from '@swapdeck/types';
+import type {
+  AppPreferences,
+  CswapAction,
+  CswapError,
+  EngineRules,
+  ListResponse,
+} from '@swapdeck/types';
 
 /** Metodi del `Backend` inoltrati all'host. */
 export const REQUEST_METHODS = [
@@ -13,6 +19,12 @@ export const REQUEST_METHODS = [
   'getHistory',
   'confirmationFor',
   'runAction',
+  'listMappings',
+  'getEngineState',
+  'setEngineRules',
+  'getPreferences',
+  'setPreferences',
+  'getHistoryEvents',
   'pickOpenFile',
   'pickSaveFile',
   'pickFolder',
@@ -40,6 +52,10 @@ export type RequestParams =
   | { method: 'getHistory'; params: HistoryParams }
   | { method: 'confirmationFor'; params: { action: CswapAction } }
   | { method: 'runAction'; params: { action: CswapAction } }
+  | { method: 'listMappings' | 'getEngineState' | 'getPreferences'; params: Record<string, never> }
+  | { method: 'setEngineRules'; params: { rules: EngineRules } }
+  | { method: 'setPreferences'; params: { prefs: Partial<AppPreferences> } }
+  | { method: 'getHistoryEvents'; params: HistoryParams }
   | { method: 'pickOpenFile' | 'pickSaveFile' | 'pickFolder'; params: PickParams };
 
 /** Webview → host. */

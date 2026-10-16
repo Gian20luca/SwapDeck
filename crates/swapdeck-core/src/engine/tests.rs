@@ -387,7 +387,10 @@ fn no_oscillation_near_threshold() {
 #[test]
 fn validate_for_save_requires_primary_only_when_running() {
     let off = EngineRules::default();
-    assert!(off.validate_for_save().is_empty(), "spento senza principale");
+    assert!(
+        off.validate_for_save().is_empty(),
+        "spento senza principale"
+    );
     let on = EngineRules {
         enabled: true,
         ..EngineRules::default()
@@ -404,7 +407,11 @@ fn validate_for_save_requires_primary_only_when_running() {
         return_hysteresis: f64::NAN,
         ..EngineRules::default()
     };
-    assert_eq!(bad_values.validate_for_save().len(), 2, "valori controllati anche spento");
+    assert_eq!(
+        bad_values.validate_for_save().len(),
+        2,
+        "valori controllati anche spento"
+    );
     let incoherent = EngineRules {
         primary: Some(6),
         reserves: vec![6, 1, 1, 0],

@@ -122,8 +122,8 @@ mod tests {
 
     #[test]
     fn unknown_mapping_line_is_an_error_without_its_text() {
-        let err = parse_map_listing("Directory mappings:\n  /x/secret-user@example.com\n")
-            .unwrap_err();
+        let err =
+            parse_map_listing("Directory mappings:\n  /x/secret-user@example.com\n").unwrap_err();
         assert!(err.contains("riga 2"), "{err}");
         assert!(!err.contains("example.com"));
         assert!(parse_map_listing("  /x → 0: a@b [p]\n").is_err(), "slot 0");

@@ -6,8 +6,8 @@ import { bareBackend, renderWith } from '../../dev/testUtils.js';
 import { FoldersPage } from './FoldersPage.js';
 
 const MAPPINGS = [
-  { path: 'C:\\Progetti\\cliente-a', account: 1 },
-  { path: 'C:\\Progetti\\cliente-b', account: 3 },
+  { path: 'C:\\Progetti\\cliente-a', account: 1, email: 'user1@example.com' },
+  { path: 'C:\\Progetti\\cliente-b', account: 3, email: 'user3@example.com' },
 ];
 
 function setup(options: FakeBackendOptions = {}) {
@@ -25,6 +25,13 @@ describe('FoldersPage', () => {
     expect(items).toHaveLength(2);
     expect(items[0]).toHaveTextContent('C:\\Progetti\\cliente-a');
     expect(items[0]).toHaveTextContent('alias1');
+  });
+
+  it('account rimosso: mostra l’email e permette di togliere la mappatura', async () => {
+    setup({ mappings: [{ path: '~/vecchio', account: null, email: 'old@example.com' }] });
+    const list = await screen.findByRole('list', { name: 'Mappature' });
+    expect(list).toHaveTextContent('old@example.com (account rimosso)');
+    expect(screen.getByRole('button', { name: 'Togli la mappatura di ~/vecchio' })).toBeEnabled();
   });
 
   it('stato vuoto senza mappature', async () => {

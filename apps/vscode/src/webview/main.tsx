@@ -1,4 +1,4 @@
-import { BackendProvider, Dashboard, I18nProvider, ThemeProvider } from '@swapdeck/ui';
+import { BackendProvider, I18nProvider, SwapDeckApp, ThemeProvider } from '@swapdeck/ui';
 import '@swapdeck/ui/styles.css';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -16,7 +16,10 @@ const backend = new VsCodeBackend(
   },
 );
 
-/** Lingua e tema seguono VS Code: a ogni cambio la UI si rimonta con i nuovi valori. */
+/**
+ * App completa a schede. Lingua e tema seguono VS Code: a ogni cambio la UI si rimonta con i nuovi
+ * valori. Le conferme le chiede l'host (`hostConfirms`).
+ */
 function App() {
   const [view, setView] = useState<ViewSettings | null>(null);
   useEffect(() => {
@@ -29,7 +32,7 @@ function App() {
     <ThemeProvider key={`${view.locale}-${view.theme}`} initial={view.theme}>
       <I18nProvider initial={view.locale}>
         <BackendProvider backend={backend}>
-          <Dashboard />
+          <SwapDeckApp />
         </BackendProvider>
       </I18nProvider>
     </ThemeProvider>

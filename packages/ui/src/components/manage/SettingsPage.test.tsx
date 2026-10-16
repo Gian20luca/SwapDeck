@@ -55,11 +55,11 @@ describe('SettingsPage: impostazioni dell’app', () => {
     const { setPrefs, user } = await setup();
     const interval = screen.getByLabelText('Intervallo di controllo (secondi)');
     await user.clear(interval);
-    await user.type(interval, '5');
+    await user.type(interval, '30');
     const thresholds = screen.getByLabelText('Soglie delle notifiche (%)');
     await user.clear(thresholds);
     await user.type(thresholds, '95, 80');
-    expect(screen.getByText('L’intervallo è un numero intero da 15 a 3600.')).toBeInTheDocument();
+    expect(screen.getByText('L’intervallo è un numero intero da 60 a 3600.')).toBeInTheDocument();
     expect(
       screen.getByText('Valori crescenti da 1 a 100, al massimo quattro.'),
     ).toBeInTheDocument();

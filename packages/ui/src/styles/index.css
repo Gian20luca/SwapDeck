@@ -542,14 +542,14 @@ body {
 .sd-tabs {
   display: flex;
   gap: 2px;
-  padding: 0 8px;
-  overflow-x: auto;
+  padding: 0 6px;
+  /* Strette (420 px con la barra di scorrimento): le schede vanno a capo, mai scroll orizzontale. */
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--sd-border);
   background: var(--sd-surface);
   position: sticky;
   top: 0;
   z-index: 5;
-  scrollbar-width: thin;
 }
 .sd-tab {
   appearance: none;
@@ -559,7 +559,7 @@ body {
   background: transparent;
   color: var(--sd-muted);
   font: inherit;
-  padding: 9px 10px 6px;
+  padding: 9px 6px 6px;
   cursor: pointer;
   white-space: nowrap;
 }

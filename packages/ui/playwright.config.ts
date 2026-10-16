@@ -16,7 +16,17 @@ export default defineConfig({
     locale: 'it-IT',
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel: 'chromium' } }],
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        channel: 'chromium',
+        // Barre di scorrimento vere, come in WebView2 e VS Code: tolgono larghezza al contenuto.
+        launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] },
+      },
+    },
+  ],
   webServer: {
     command: `pnpm exec vite --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: `http://127.0.0.1:${PORT}`,

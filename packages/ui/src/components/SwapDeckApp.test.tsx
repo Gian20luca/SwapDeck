@@ -13,7 +13,7 @@ vi.mock('uplot', () => ({
 }));
 
 function setup(initialTab?: 'accounts' | 'tools') {
-  const backend = new FakeBackend({ mappings: [{ path: 'C:\\x', account: 1 }] });
+  const backend = new FakeBackend({ mappings: [{ path: 'C:\\x', account: 1, email: '' }] });
   renderWith(
     <SwapDeckApp {...(initialTab ? { initialTab } : {})} header={<p>intestazione</p>} />,
     backend,

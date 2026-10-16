@@ -91,6 +91,7 @@ export const enManage: Record<keyof typeof itManage, string> = {
   'folders.unmap.title': 'Remove the mapping?',
   'folders.unmap.message': 'The folder {path} will no longer be tied to an account.',
   'folders.unmapped': 'Mapping of {path} removed.',
+  'folders.removed': '{email} (account removed)',
 
   'rules.title': 'Engine rules',
   'rules.hint':
@@ -168,8 +169,8 @@ export const enManage: Record<keyof typeof itManage, string> = {
   'settings.app': 'App',
   'settings.saved': 'Settings saved.',
   'settings.interval': 'Check interval (seconds)',
-  'settings.interval.hint': 'How often SwapDeck rereads usage (15 to 3600).',
-  'settings.interval.invalid': 'The interval is a whole number from 15 to 3600.',
+  'settings.interval.hint': 'How often SwapDeck rereads usage (60 to 3600).',
+  'settings.interval.invalid': 'The interval is a whole number from 60 to 3600.',
   'settings.thresholds': 'Notification thresholds (%)',
   'settings.thresholds.hint': '1 to 4 increasing values separated by commas, for example 80, 95.',
   'settings.thresholds.invalid': 'Increasing values from 1 to 100, at most four.',

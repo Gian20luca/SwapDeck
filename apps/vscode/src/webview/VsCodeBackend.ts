@@ -1,10 +1,15 @@
 import type {
   ActionOutcome as RustOutcome,
+  AppPreferences,
   ConfigGetResponse,
   ConfigListResponse,
   Confirmation,
   CswapAction,
   CswapError,
+  DirectoryMapping,
+  EngineRules,
+  EngineState,
+  HistoryEvents,
   ListResponse,
   StatusResponse,
 } from '@swapdeck/types';
@@ -18,6 +23,7 @@ import {
   type Unsubscribe,
 } from '@swapdeck/ui';
 import type {
+  HistoryParams,
   HostMessage,
   PickParams,
   RequestParams,
@@ -115,10 +121,32 @@ export class VsCodeBackend implements Backend {
   }
 
   getHistory(query?: HistoryQuery): Promise<HistoryPoint[]> {
-    const params: { account?: number; sinceSeconds?: number } = {};
-    if (query?.account !== undefined) params.account = query.account;
-    if (query?.sinceSeconds !== undefined) params.sinceSeconds = query.sinceSeconds;
-    return this.request({ method: 'getHistory', params });
+    return this.request({ method: 'getHistory', params: historyParams(query) });
+  }
+
+  listMappings(): Promise<DirectoryMapping[]> {
+    return this.request({ method: 'listMappings', params: {} });
+  }
+
+  getEngineState(): Promise<EngineState> {
+    return this.request({ method: 'getEngineState', params: {} });
+  }
+
+  /** Salvate nella config: il motore avviato dall'estensione le rilegge al giro dopo. */
+  setEngineRules(rules: EngineRules): Promise<EngineState> {
+    return this.request({ method: 'setEngineRules', params: { rules } });
+  }
+
+  getPreferences(): Promise<AppPreferences> {
+    return this.request({ method: 'getPreferences', params: {} });
+  }
+
+  setPreferences(prefs: Partial<AppPreferences>): Promise<AppPreferences> {
+    return this.request({ method: 'setPreferences', params: { prefs } });
+  }
+
+  getHistoryEvents(query?: HistoryQuery): Promise<HistoryEvents> {
+    return this.request({ method: 'getHistoryEvents', params: historyParams(query) });
   }
 
   confirmationFor(action: CswapAction): Promise<Confirmation> {
@@ -156,6 +184,13 @@ export class VsCodeBackend implements Backend {
     this.viewListeners.add(listener);
     return () => this.viewListeners.delete(listener);
   }
+}
+
+function historyParams(query?: HistoryQuery): HistoryParams {
+  const params: HistoryParams = {};
+  if (query?.account !== undefined) params.account = query.account;
+  if (query?.sinceSeconds !== undefined) params.sinceSeconds = query.sinceSeconds;
+  return params;
 }
 
 function pickParams(options: PickOptions): PickParams {

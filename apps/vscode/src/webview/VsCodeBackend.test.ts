@@ -37,6 +37,26 @@ describe('VsCodeBackend', () => {
     await expect(b).resolves.toEqual({ v: 1 });
   });
 
+  it('metodi di gestione inoltrati con i loro parametri', () => {
+    const { backend, sent } = setup();
+    void backend.listMappings();
+    void backend.getEngineState();
+    void backend.setEngineRules({ enabled: false } as never);
+    void backend.getPreferences();
+    void backend.setPreferences({ theme: 'dark' });
+    void backend.getHistoryEvents({ account: 2 });
+    void backend.getHistoryEvents();
+    expect(sent.map((m) => (m.type === 'request' ? [m.method, m.params] : m.type))).toEqual([
+      ['listMappings', {}],
+      ['getEngineState', {}],
+      ['setEngineRules', { rules: { enabled: false } }],
+      ['getPreferences', {}],
+      ['setPreferences', { prefs: { theme: 'dark' } }],
+      ['getHistoryEvents', { account: 2 }],
+      ['getHistoryEvents', {}],
+    ]);
+  });
+
   it("dichiara che le conferme le chiede l'host", () => {
     expect(setup().backend.hostConfirms).toBe(true);
   });

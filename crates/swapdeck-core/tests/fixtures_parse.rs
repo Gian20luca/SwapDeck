@@ -172,7 +172,11 @@ fn auto_events_and_version() {
 
 #[test]
 fn map_fixtures() {
-    assert!(parse_map_listing(&read("map-empty.txt")).unwrap().is_empty());
+    assert!(
+        parse_map_listing(&read("map-empty.txt"))
+            .unwrap()
+            .is_empty()
+    );
     let m = parse_map_listing(&read("map.txt")).unwrap();
     let got: Vec<_> = m.iter().map(|m| (m.path.as_str(), m.account)).collect();
     assert_eq!(

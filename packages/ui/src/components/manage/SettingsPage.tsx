@@ -118,7 +118,7 @@ function PollForm({
   const intervalError =
     interval.trim() === '' ||
     !Number.isInteger(intervalNumber) ||
-    intervalNumber < 15 ||
+    intervalNumber < 60 ||
     intervalNumber > 3600
       ? t('settings.interval.invalid')
       : null;
@@ -144,7 +144,7 @@ function PollForm({
       <TextField
         label={t('settings.interval')}
         type="number"
-        min={15}
+        min={60}
         max={3600}
         hint={t('settings.interval.hint')}
         value={interval}

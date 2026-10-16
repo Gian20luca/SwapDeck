@@ -304,3 +304,45 @@ fn wait_for(cond: impl Fn() -> bool, max: Duration) {
         std::thread::sleep(Duration::from_millis(100));
     }
 }
+
+#[test]
+fn management_commands_validate_and_save() {
+    let env = Env::new();
+    let (code, v) = env.run(&["mappings"]);
+    assert_eq!((code, v), (0, json!([])));
+    let (code, v) = env.run(&["preferences", "get"]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["pollIntervalSeconds"], 60);
+    let (code, v) = env.run(&["preferences", "set", r#"{"pollIntervalSeconds":120}"#]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["pollIntervalSeconds"], 120);
+    for bad in [r#"{"pollIntervalSeconds":5}"#, r#"{"other":1}"#, "x"] {
+        let (code, v) = env.run(&["preferences", "set", bad]);
+        assert_eq!(code, 2, "{bad}: {v}");
+    }
+    let rules = r#"{"enabled":false,"dryRun":false,"primary":6,"reserves":[1,3]}"#;
+    let (code, v) = env.run_stdin(&["engine", "rules", "set", "-"], rules);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["rules"]["primary"], 6);
+    assert_eq!(v["conflicts"], json!([]), "spento: conflitti non letti");
+    let (code, v) = env.run(&["engine", "rules", "set", r#"{"enabled":true}"#]);
+    assert_eq!(code, 2, "acceso senza principale: {v}");
+    let (code, v) = env.run(&["engine", "state"]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(
+        v["rules"]["reserves"],
+        json!([1, 3]),
+        "regole valide conservate"
+    );
+    assert_eq!(v["view"], Value::Null, "motore non in esecuzione");
+    let (_, v) = env.run(&["config", "get"]);
+    assert_eq!(
+        v["config"]["pollIntervalSeconds"], 120,
+        "preferenze conservate"
+    );
+    let (code, v) = env.run(&["history", "events", "--since", "0"]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v, json!({"switches": [], "decisions": []}));
+    let (code, _) = env.run(&["history", "events", "--since"]);
+    assert_eq!(code, 2);
+}

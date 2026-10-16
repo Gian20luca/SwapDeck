@@ -215,9 +215,7 @@ impl History {
         for record in self.read_range(from, now)? {
             match record {
                 HistoryRecord::Switch(s)
-                    if query
-                        .account
-                        .is_none_or(|a| s.to == a || s.from == Some(a)) =>
+                    if query.account.is_none_or(|a| s.to == a || s.from == Some(a)) =>
                 {
                     events.switches.push(s);
                 }
@@ -622,7 +620,11 @@ mod events_tests {
         for (i, line) in lines.iter().enumerate() {
             let ts = [now - 10, now - 100, now - 40 * 86_400, now - 50][i];
             let file = history.dir().join(file_name(utc_date(ts).unwrap()));
-            let mut f = OpenOptions::new().create(true).append(true).open(file).unwrap();
+            let mut f = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(file)
+                .unwrap();
             writeln!(f, "{line}").unwrap();
         }
         let all = history
@@ -635,7 +637,11 @@ mod events_tests {
             )
             .unwrap();
         let ts: Vec<i64> = all.switches.iter().map(|s| s.ts).collect();
-        assert_eq!(ts, [now - 100, now - 10], "ordine e limite di conservazione");
+        assert_eq!(
+            ts,
+            [now - 100, now - 10],
+            "ordine e limite di conservazione"
+        );
         assert_eq!(all.decisions.len(), 1);
         let only1 = history
             .events(

@@ -23,7 +23,10 @@ pub trait CswapApi: Send + Sync {
     fn config_get(&self, key: &str) -> Res<ConfigGetResponse>;
     /// Cartelle mappate (`cswap map`, testo interpretato dal core).
     fn mappings(&self) -> Res<Vec<DirectoryMapping>> {
-        Err(CswapError::new(CswapErrorKind::Failed, "cartelle mappate non disponibili"))
+        Err(CswapError::new(
+            CswapErrorKind::Failed,
+            "cartelle mappate non disponibili",
+        ))
     }
     /// Esegue un'azione di F0 (la conferma si chiede prima, con `CswapAction::confirmation`).
     fn execute(&self, action: &CswapAction) -> Res<Outcome>;

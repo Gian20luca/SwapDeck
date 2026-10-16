@@ -150,7 +150,12 @@ fn list_and_status() {
 fn text_and_config_reads() {
     let f = Fake::std();
     assert!(f.client.aliases().unwrap().starts_with("Aliases:"));
-    assert!(f.client.maps().unwrap().starts_with("No directory mappings yet."));
+    assert!(
+        f.client
+            .maps()
+            .unwrap()
+            .starts_with("No directory mappings yet.")
+    );
     assert!(f.client.mappings().unwrap().is_empty());
     assert_eq!(
         f.client.unclaimed().unwrap(),

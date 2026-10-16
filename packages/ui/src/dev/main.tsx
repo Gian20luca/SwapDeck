@@ -72,8 +72,8 @@ function Preview() {
         latencyMs: 250,
         unclaimed: ['legacy-1f3a', 'legacy-9c2b'],
         mappings: [
-          { path: String.raw`C:\Progetti\cliente-a`, account: 1 },
-          { path: String.raw`C:\Progetti\cliente-b`, account: 3 },
+          { path: String.raw`C:\Progetti\cliente-a`, account: 1, email: 'user1@example.com' },
+          { path: String.raw`C:\Progetti\cliente-b`, account: 3, email: 'user3@example.com' },
         ],
         conflicts: [
           {

@@ -397,8 +397,20 @@ pub fn save(path: &Path, config: &AppConfig) -> Result<(), ConfigError> {
         .tempfile_in(dir)?;
     tmp.write_all(&json)?;
     tmp.as_file().sync_all()?;
-    tmp.persist(path).map_err(|e| ConfigError::Io(e.error))?;
-    Ok(())
+    // Su Windows la rinomina fallisce per un attimo se un altro processo (antivirus, indicizzatore)
+    // tiene aperto il file senza condivisione: pochi tentativi ravvicinati.
+    let mut attempt = 0u32;
+    loop {
+        match tmp.persist(path) {
+            Ok(_) => return Ok(()),
+            Err(e) if attempt < 4 && e.error.kind() == io::ErrorKind::PermissionDenied => {
+                tmp = e.file;
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_millis(25 << attempt));
+            }
+            Err(e) => return Err(ConfigError::Io(e.error)),
+        }
+    }
 }
 
 /// Apre in lettura senza seguire un link simbolico finale (Unix).
@@ -579,14 +591,20 @@ mod preferences_tests {
         ] {
             let patch: PreferencesPatch = serde_json::from_str(bad).unwrap();
             assert!(c.apply_preferences(&patch).is_err(), "{bad}");
-            assert_eq!(c.poll_interval_seconds, 120, "config invariata dopo l'errore");
+            assert_eq!(
+                c.poll_interval_seconds, 120,
+                "config invariata dopo l'errore"
+            );
         }
         for bad in [
             r#"{"language":"fr"}"#,
             r#"{"theme":"auto"}"#,
             r#"{"engine":{}}"#,
         ] {
-            assert!(serde_json::from_str::<PreferencesPatch>(bad).is_err(), "{bad}");
+            assert!(
+                serde_json::from_str::<PreferencesPatch>(bad).is_err(),
+                "{bad}"
+            );
         }
     }
 

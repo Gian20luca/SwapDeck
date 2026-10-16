@@ -76,7 +76,11 @@ export function FoldersPage() {
                       <span className="sd-card__name sd-path" title={m.path}>
                         {m.path}
                       </span>
-                      <span className="sd-card__email">{nameOf(m.account)}</span>
+                      <span className="sd-card__email">
+                        {m.account === null
+                          ? t('folders.removed', { email: m.email })
+                          : nameOf(m.account)}
+                      </span>
                     </div>
                     <button
                       type="button"
