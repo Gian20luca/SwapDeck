@@ -14,6 +14,11 @@ fn main() {
             "set_autostart",
             "show_main",
             "get_snapshot",
+            "diagnose_setup",
+            "install_cswap",
+            "upgrade_cswap",
+            "check_cswap_update",
+            "dismiss_cswap_update",
         ]),
     ))
     .expect("build di Tauri non riuscita");

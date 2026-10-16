@@ -29,6 +29,14 @@ pub trait CswapApi: Send + Sync {
     }
     /// All'uscita dell'app: ferma `cswap auto` con un'attesa breve.
     fn shutdown(&self) {}
+    /// Manutenzione di cswap (aggiornamento): ferma `cswap auto` e tiene il turno delle
+    /// chiamate per tutta la durata di `f`, così ciclo di lettura e motore restano fermi e
+    /// nessun `cswap.exe` dell'app è in esecuzione; dopo, cswap si cerca di nuovo.
+    fn exclusive(&self, f: &mut dyn FnMut()) {
+        f();
+    }
+    /// cswap installato o spostato: la prossima chiamata lo cerca di nuovo.
+    fn relocate(&self) {}
 }
 
 /// Attesa della pausa tra due giri di `cswap auto` quando l'app si chiude.
@@ -221,6 +229,19 @@ impl CswapApi for ClientApi {
             old.process.stop_within(SHUTDOWN_AUTO_WAIT);
         }
     }
+
+    fn exclusive(&self, f: &mut dyn FnMut()) {
+        self.shutdown();
+        {
+            let _turn = lock(&self.gate);
+            f();
+        }
+        self.relocate();
+    }
+
+    fn relocate(&self) {
+        *lock(&self.client) = None;
+    }
 }
 
 #[cfg(test)]
@@ -290,6 +311,13 @@ pub mod mock {
                 .pop_front()
                 .unwrap_or(AutoPoll::NotRunning)
         }
+        fn exclusive(&self, f: &mut dyn FnMut()) {
+            self.actions.lock().unwrap().push("exclusive".into());
+            f();
+        }
+        fn relocate(&self) {
+            self.actions.lock().unwrap().push("relocate".into());
+        }
     }
 }
 
@@ -297,6 +325,16 @@ pub mod mock {
 mod tests {
     use super::*;
     use swapdeck_core::cswap::CswapErrorKind;
+
+    #[test]
+    fn exclusive_holds_the_turn_and_forgets_the_client() {
+        let api = ClientApi::new();
+        let mut held = false;
+        api.exclusive(&mut || held = api.gate.try_lock().is_err());
+        assert!(held, "durante la manutenzione nessuna chiamata a cswap");
+        assert!(api.gate.try_lock().is_ok());
+        assert!(lock(&api.client).is_none());
+    }
 
     /// Finto cswap del core (bin `fake-cswap`), se è già stato compilato nella target.
     fn fake_cswap() -> Option<std::path::PathBuf> {

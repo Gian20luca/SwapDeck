@@ -16,7 +16,7 @@ use crate::autostart::{self, MINIMIZED_ARG, Startup};
 use crate::poller::Poller;
 use crate::settings::SettingsStore;
 use crate::state::{STATE_EVENT, Shared, Snapshot, lock, now_ms};
-use crate::{commands, engine_loop, text, tray, windows};
+use crate::{commands, engine_loop, setup_cmd, text, tray, windows};
 
 /// Cartella dati (storico e lock del motore); `None` se la home non è determinabile.
 pub struct DataDir(pub Option<PathBuf>);
@@ -179,6 +179,11 @@ pub fn run(api: Arc<dyn CswapApi>) {
             commands::set_autostart,
             commands::show_main,
             commands::get_snapshot,
+            setup_cmd::diagnose_setup,
+            setup_cmd::install_cswap,
+            setup_cmd::upgrade_cswap,
+            setup_cmd::check_cswap_update,
+            setup_cmd::dismiss_cswap_update,
         ])
         .on_window_event(windows::on_window_event)
         .setup(move |app| {

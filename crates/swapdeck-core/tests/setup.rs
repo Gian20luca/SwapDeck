@@ -330,6 +330,25 @@ fn upgrade_refuses_while_engine_runs_elsewhere() {
 }
 
 #[test]
+fn install_and_upgrade_refused_with_cswap_override() {
+    let env = Env::new(true, true, Some("list.json"), json!({}));
+    let search = SearchEnv {
+        override_path: Some(env.dir.path().join("non-esiste").into_os_string()),
+        path: Some(env.dir.path().join("bin").into_os_string()),
+        ..SearchEnv::default()
+    };
+    let setup = env.setup().with_search(search);
+    assert_eq!(setup.diagnose().status, SetupStatus::CswapMissing);
+    let mut events = Vec::new();
+    let e = setup.install(&mut collect(&mut events)).unwrap_err();
+    assert_eq!(e.kind, CswapErrorKind::InvalidUsage);
+    assert!(e.message.contains("SWAPDECK_CSWAP"), "{e}");
+    let e = setup.upgrade(&mut collect(&mut events)).unwrap_err();
+    assert_eq!(e.kind, CswapErrorKind::InvalidUsage);
+    assert!(events.is_empty(), "nessun processo avviato: {events:?}");
+}
+
+#[test]
 fn check_update_keeps_pre_release_mark() {
     let env = Env::new(
         true,

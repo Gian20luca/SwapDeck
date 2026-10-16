@@ -195,6 +195,35 @@ fn config_get_and_set() {
 }
 
 #[test]
+fn setup_commands() {
+    let env = Env::new();
+    let (code, d) = env.run(&["setup", "diagnose"]);
+    assert_eq!((code, d["status"].as_str()), (0, Some("ready")), "{d}");
+    assert_eq!(d["accountCount"], 5);
+    // Con SWAPDECK_CSWAP (sempre nei test) installare o aggiornare toccherebbe lo uv reale.
+    for verb in ["install", "upgrade"] {
+        let (code, e) = env.run(&["setup", verb]);
+        assert_eq!(
+            (code, e["error"]["kind"].as_str()),
+            (2, Some("invalidUsage"))
+        );
+    }
+    let (code, ok) = env.run(&["setup", "dismiss-update", "0.28.0"]);
+    assert_eq!((code, ok["ok"].as_bool()), (0, Some(true)));
+    let (code, _) = env.run(&["setup", "dismiss-update", "../x"]);
+    assert_eq!(code, 2);
+    let (code, _) = env.run(&["setup", "boh"]);
+    assert_eq!(code, 2);
+    let missing = env.dir.path().join("missing").join("cswap.exe");
+    let out = env
+        .command(&["setup", "diagnose"])
+        .env("SWAPDECK_CSWAP", &missing)
+        .output()
+        .unwrap();
+    assert_eq!(parse(out).1["status"], "cswapMissing");
+}
+
+#[test]
 fn missing_cswap() {
     let env = Env::new();
     let missing = env.dir.path().join("missing").join("cswap.exe");

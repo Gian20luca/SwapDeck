@@ -268,6 +268,7 @@ impl Setup {
     /// Installa uv (se manca, con lo script ufficiale, per utente) e claude-swap
     /// (`uv tool install claude-swap`), poi verifica `--version` e `list --json`.
     pub fn install(&self, progress: Progress<'_>) -> Res<SetupOutcome> {
+        self.ensure_no_override()?;
         let previous = self.installed_version();
         let (uv, uv_installed) = match self.find_uv() {
             Some(uv) => {
@@ -299,6 +300,7 @@ impl Setup {
     /// solo alla versione precedente (`uv tool install claude-swap==<prima> --force`, passo
     /// `rollbackCswap`) e restituisce comunque l'errore `unsupportedSchema`, che lo dice.
     pub fn upgrade(&self, progress: Progress<'_>) -> Res<SetupOutcome> {
+        self.ensure_no_override()?;
         self.ensure_engine_stopped()?;
         let uv = self.find_uv().ok_or_else(|| {
             CswapError::new(
@@ -352,6 +354,21 @@ impl Setup {
         let cswap = locate_cswap(&self.search).ok()?;
         let out = self.probe(&cswap, &["--version"]).ok()?;
         CswapVersion::token(&out.stdout).map(str::to_owned)
+    }
+
+    /// Con `SWAPDECK_CSWAP` impostata (finto cswap di prova) installare o aggiornare
+    /// toccherebbe il claude-swap reale del profilo, non quello indicato: si rifiuta.
+    fn ensure_no_override(&self) -> Res<()> {
+        match &self.search.override_path {
+            Some(v) if !v.is_empty() => Err(CswapError::new(
+                CswapErrorKind::InvalidUsage,
+                format!(
+                    "{} è impostata: installazione e aggiornamento di cswap sono disattivati",
+                    locate::CSWAP_OVERRIDE_ENV
+                ),
+            )),
+            _ => Ok(()),
+        }
     }
 
     /// `busy` se il lock del motore è vivo e di un altro processo.

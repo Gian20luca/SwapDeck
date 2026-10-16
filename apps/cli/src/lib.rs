@@ -24,6 +24,7 @@ use swapdeck_core::cswap::{
 use swapdeck_core::history::{History, HistoryRecord};
 use swapdeck_core::lock;
 use swapdeck_core::paths::AppPaths;
+use swapdeck_core::setup::{Setup, SetupProgress};
 use swapdeck_core::timeutil::now_unix;
 
 use output::{CliErrorEnvelope, CliState, CliVersion, ConfigView, EngineStatus, PROTOCOL};
@@ -46,6 +47,9 @@ pub const USAGE: &str = "uso: swapdeck-cli <comando>
   config get
   config set <json|->
   engine status
+  setup diagnose|install|upgrade      (install e upgrade: eventi JSON per riga, poi l'esito)
+  setup check-update [--force]
+  setup dismiss-update <VERSIONE>
   headless [--once] [--dry-run] [--stop-on-stdin-eof]";
 
 /// Dimensione massima del JSON letto da argomento o stdin.
@@ -116,12 +120,34 @@ fn dispatch(args: &[String]) -> Res<Value> {
         ["config", "get"] => to_value(config_get()?),
         ["config", "set", input] => to_value(config_set(&read_input(input)?)?),
         ["engine", "status"] => to_value(engine_status(&paths()?)),
+        ["setup", rest @ ..] => setup_command(rest),
         [] | ["help" | "--help" | "-h"] => Err(usage_error(USAGE)),
         // Solo il primo argomento (accorciato): gli altri possono contenere dati dell'utente.
         [first, ..] => Err(usage_error(format!(
             "comando non valido: {}\n{USAGE}",
             first.chars().take(40).collect::<String>()
         ))),
+    }
+}
+
+/// `setup …`: diagnosi, installazione e aggiornamento di cswap. Installazione e aggiornamento
+/// scrivono un evento `SetupProgress` JSON per riga, poi l'esito (o la busta d'errore).
+fn setup_command(rest: &[&str]) -> Res<Value> {
+    let setup = || paths().map(|p| Setup::new(p.data_dir));
+    let mut progress = |event: SetupProgress| {
+        let _ = write_json(&mut io::stdout().lock(), &event);
+    };
+    match rest {
+        ["diagnose"] => to_value(setup()?.diagnose()),
+        ["install"] => to_value(setup()?.install(&mut progress)?),
+        ["upgrade"] => to_value(setup()?.upgrade(&mut progress)?),
+        ["check-update"] => to_value(setup()?.check_update(false)?),
+        ["check-update", "--force"] => to_value(setup()?.check_update(true)?),
+        ["dismiss-update", version] => {
+            setup()?.dismiss_update(version)?;
+            Ok(serde_json::json!({ "ok": true }))
+        }
+        _ => Err(usage_error(format!("opzioni di setup non valide\n{USAGE}"))),
     }
 }
 

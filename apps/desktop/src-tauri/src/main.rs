@@ -20,6 +20,7 @@ mod notify;
 mod poller;
 mod ring;
 mod settings;
+mod setup_cmd;
 mod state;
 mod terminal;
 mod text;

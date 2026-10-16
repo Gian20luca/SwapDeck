@@ -15,6 +15,11 @@
     "allow-run-action",
     "allow-get-app-settings",
     "allow-set-autostart",
-    "allow-get-snapshot"
+    "allow-get-snapshot",
+    "allow-diagnose-setup",
+    "allow-install-cswap",
+    "allow-upgrade-cswap",
+    "allow-check-cswap-update",
+    "allow-dismiss-cswap-update"
   ]
 }
