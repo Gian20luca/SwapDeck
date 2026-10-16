@@ -33,23 +33,28 @@ for (const [npm, range] of Object.entries(declared)) {
   const crate = crateFor(npm);
   if (!crate) continue;
   // `^` lascia salire il minor al primo `pnpm update` e rompe di nuovo l'allineamento.
-  if (range.startsWith('^')) errors.push(`${npm}: intervallo "${range}", usa la versione esatta o "~"`);
+  if (range.startsWith('^'))
+    errors.push(`${npm}: intervallo "${range}", usa la versione esatta o "~"`);
   const versions = crates.get(crate);
   if (!versions) {
     errors.push(`${npm}: manca il crate ${crate} in Cargo.lock`);
     continue;
   }
-  if (versions.length > 1) errors.push(`${crate}: più versioni in Cargo.lock (${versions.join(', ')})`);
+  if (versions.length > 1)
+    errors.push(`${crate}: più versioni in Cargo.lock (${versions.join(', ')})`);
   let installed;
   try {
-    installed = JSON.parse(readFileSync(join(desktop, 'node_modules', npm, 'package.json'), 'utf8')).version;
+    installed = JSON.parse(
+      readFileSync(join(desktop, 'node_modules', npm, 'package.json'), 'utf8'),
+    ).version;
   } catch {
     errors.push(`${npm}: non installato (lancia prima pnpm install)`);
     continue;
   }
   const ok = versions.every((v) => majorMinor(v) === majorMinor(installed));
   console.log(`${ok ? 'ok ' : 'NO '} ${npm} ${installed} <-> ${crate} ${versions.join(', ')}`);
-  if (!ok) errors.push(`${npm} ${installed} e ${crate} ${versions.join(', ')} hanno major.minor diversi`);
+  if (!ok)
+    errors.push(`${npm} ${installed} e ${crate} ${versions.join(', ')} hanno major.minor diversi`);
 }
 
 if (errors.length) {

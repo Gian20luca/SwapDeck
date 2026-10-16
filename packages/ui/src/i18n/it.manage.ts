@@ -152,7 +152,8 @@ export const itManage = {
   'rules.gap': 'Pausa minima tra due cambi (secondi)',
   'rules.gap.hint': 'Evita cambi a raffica.',
   'rules.preset': 'Preset come cswap-guard',
-  'rules.preset.hint': 'Principale 6, riserve 1 e 3, settimanale più bassa, soglie 95% (5h) e 98% (7d), ritorno sotto il 50%.',
+  'rules.preset.hint':
+    'Principale 6, riserve 1 e 3, settimanale più bassa, soglie 95% (5h) e 98% (7d), ritorno sotto il 50%.',
   'rules.preset.applied': 'Preset applicato: controlla i campi e premi «Salva».',
   'rules.revert': 'Annulla modifiche',
   'rules.saved': 'Regole salvate.',
