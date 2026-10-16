@@ -81,6 +81,12 @@ export const it = {
   'engineMark.criterion.lowest-weekly': 'riserva con la settimanale più bassa',
   'engineMark.criterion.best': 'più margine',
   'engineMark.criterion.fixed-order': 'ordine fisso',
+  'engineMark.criterion.reset-soonest': 'riserva con il reset settimanale più vicino',
+  'engineMark.criterion.pace-safe': 'riserva con il ritmo più sicuro',
+  'engineMark.criterion.lowest5h': 'riserva con le 5 ore più libere',
+  'engineMark.criterion.balanced-score': 'riserva con il punteggio più bilanciato',
+  'engineMark.criterion.even-spread': 'riserva che livella le settimanali',
+  'engineMark.criterion.model-headroom': 'riserva con più margine sul modello',
   'usage.unknown': 'n.d.',
   'usage.spend': 'Spesa',
 

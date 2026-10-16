@@ -81,6 +81,12 @@ export const en: Record<MessageKey, string> = {
   'engineMark.criterion.lowest-weekly': 'reserve with the lowest weekly usage',
   'engineMark.criterion.best': 'most headroom',
   'engineMark.criterion.fixed-order': 'fixed order',
+  'engineMark.criterion.reset-soonest': 'reserve with the soonest weekly reset',
+  'engineMark.criterion.pace-safe': 'reserve with the safest pace',
+  'engineMark.criterion.lowest5h': 'reserve with the lowest 5-hour usage',
+  'engineMark.criterion.balanced-score': 'reserve with the best balanced score',
+  'engineMark.criterion.even-spread': 'reserve that evens out the weekly usage',
+  'engineMark.criterion.model-headroom': 'reserve with the most model headroom',
   'usage.unknown': 'n/a',
   'usage.spend': 'Spend',
 
