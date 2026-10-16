@@ -96,6 +96,9 @@ importers:
       '@types/vscode':
         specifier: ~1.95.0
         version: 1.95.0
+      '@vitest/coverage-v8':
+        specifier: ^4.1.12
+        version: 4.1.12(vitest@4.1.12)
       '@vscode/test-electron':
         specifier: ^3.1.0
         version: 3.1.0

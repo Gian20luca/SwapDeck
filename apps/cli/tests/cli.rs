@@ -273,13 +273,15 @@ fn headless_stops_when_stdin_closes() {
     assert_eq!(e["running"], true, "{e}");
     stdin.flush().unwrap();
     drop(stdin);
+    // Lo stop si vede alla fine del giro in corso: il primo legge le attività pianificate
+    // (lento su Windows, ancora di più con la macchina carica).
     let start = Instant::now();
     let status = loop {
         if let Some(s) = child.try_wait().unwrap() {
             break s;
         }
         assert!(
-            start.elapsed() < Duration::from_secs(20),
+            start.elapsed() < Duration::from_secs(60),
             "headless non si è fermato"
         );
         std::thread::sleep(Duration::from_millis(100));

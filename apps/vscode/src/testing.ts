@@ -1,5 +1,6 @@
 /** Supporto ai test: fixture di cswap e traduzione che sostituisce solo i segnaposto. */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { ListResponse } from '@swapdeck/types';
 import type { CliState } from './generated/index.js';
 
@@ -33,4 +34,22 @@ export function withActive(list: ListResponse, number: number): ListResponse {
   for (const a of copy.accounts) a.active = a.number === number;
   copy.activeAccountNumber = number;
   return copy;
+}
+
+/** Processi figli nei test: lenti con la copertura attiva o la macchina carica. */
+export const PROCESS_TEST_TIMEOUT_MS = 30_000;
+
+/**
+ * Ambiente per `node <argomenti>` con uno script precaricato che fa da processo finto
+ * (`swapdeck-cli` o motore). Il figlio non raccoglie copertura.
+ */
+export function preloadEnv(dir: string, code: string): NodeJS.ProcessEnv {
+  const file = join(dir, `pre-${Math.random().toString(36).slice(2)}.cjs`);
+  writeFileSync(file, code);
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    NODE_OPTIONS: `--require "${file.replaceAll('\\', '/')}"`,
+  };
+  delete env['NODE_V8_COVERAGE'];
+  return env;
 }

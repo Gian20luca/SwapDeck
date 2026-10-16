@@ -100,6 +100,7 @@
     "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:ext": "node scripts/build.mjs && node scripts/run-ext-tests.mjs",
     "package": "node scripts/package.mjs --target win32-x64",
     "gen:types": "node scripts/gen-types.mjs"
@@ -111,6 +112,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/vscode": "~1.95.0",
+    "@vitest/coverage-v8": "^4.1.12",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "~3.9.2",
     "esbuild": "^0.25.12",

@@ -1,8 +1,9 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { EngineProcess, LineSplitter, LOCK_BUSY_EXIT, shouldRetryEngine } from './engine.js';
+import { preloadEnv, PROCESS_TEST_TIMEOUT_MS } from './testing.js';
 
 describe('LineSplitter', () => {
   it('ricompone righe e caratteri UTF-8 spezzati tra i blocchi', () => {
@@ -42,15 +43,11 @@ describe('shouldRetryEngine', () => {
   });
 });
 
-describe('EngineProcess', () => {
+describe('EngineProcess', { timeout: PROCESS_TEST_TIMEOUT_MS }, () => {
   const dir = mkdtempSync(join(tmpdir(), 'swapdeck-engine-'));
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
   /** `node headless ...` con uno script precaricato che decide l'uscita. */
-  const fakeEnv = (code: string) => {
-    const file = join(dir, `pre-${Math.random().toString(36).slice(2)}.cjs`);
-    writeFileSync(file, code);
-    return { ...process.env, NODE_OPTIONS: `--require "${file.replaceAll('\\', '/')}"` };
-  };
+  const fakeEnv = (code: string) => preloadEnv(dir, code);
   const waitExit = (engine: EngineProcess) =>
     vi.waitFor(() => expect(engine.running).toBe(false), { timeout: 10_000 });
 
