@@ -214,6 +214,8 @@ const lines = [
   '  set SWAPDECK_CSWAP=C:\\prova\\cswap.exe      (finto cswap)',
   '  set SWAPDECK_HOME=C:\\prova\\home            (config, lock e storico di prova)',
   '  swapdeck.exe',
+  'La config di prova sta in C:\\prova\\home\\config\\config.json: con { "autostart": false }',
+  "l'app non registra l'avvio automatico al primo avvio (la voce di Windows è unica per utente).",
   '',
   'DISINSTALLAZIONE',
   '- Installer: Impostazioni > App > SwapDeck > Disinstalla. I dati restano in %APPDATA%\\swapdeck.',

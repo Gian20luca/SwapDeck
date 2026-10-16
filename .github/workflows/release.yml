@@ -13,6 +13,11 @@ on:
         description: 'Prova: carica solo gli artefatti, nessuna release'
         type: boolean
         default: true
+      platforms:
+        description: 'Piattaforme (solo per le prove: macOS costa 10 volte i minuti)'
+        type: choice
+        options: [tutte, windows, linux, macos]
+        default: tutte
 
 permissions:
   contents: read
@@ -27,24 +32,36 @@ env:
   CARGO_NET_RETRY: '10'
 
 jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      include: ${{ steps.m.outputs.include }}
+    steps:
+      - id: m
+        env:
+          PLATFORMS: ${{ inputs.platforms || 'tutte' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: |
+          all='[
+            {"family":"windows","os":"windows-latest","target":"x86_64-pc-windows-msvc","bundles":"nsis"},
+            {"family":"linux","os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","bundles":"appimage,deb"},
+            {"family":"macos","os":"macos-latest","target":"aarch64-apple-darwin","bundles":"app,dmg"},
+            {"family":"macos","os":"macos-latest","target":"x86_64-apple-darwin","bundles":"app,dmg"}
+          ]'
+          if [ "$PLATFORMS" != tutte ] && [ "$DRY_RUN" != true ]; then
+            echo "::error::una release vera richiede tutte le piattaforme"
+            exit 1
+          fi
+          echo "include=$(jq -c --arg p "$PLATFORMS" '[.[] | select($p == "tutte" or .family == $p)]' <<<"$all")" >> "$GITHUB_OUTPUT"
+
   app:
     name: app (${{ matrix.target }})
+    needs: matrix
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            bundles: nsis
-          - os: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-            bundles: appimage,deb
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            bundles: app,dmg
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            bundles: app,dmg
+        include: ${{ fromJSON(needs.matrix.outputs.include) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
     outputs:
@@ -159,6 +176,8 @@ jobs:
           set -euo pipefail
           while read -r vs rust ext; do
             cli="artifacts/app-$rust/cli/swapdeck-cli-$rust$ext"
+            # Manca solo nelle prove su una parte delle piattaforme (vedi job matrix).
+            if [ ! -f "$cli" ]; then echo "::warning::$vs: swapdeck-cli assente"; continue; fi
             chmod +x "$cli"
             node apps/vscode/scripts/package.mjs --target "$vs" --cli "$cli"
           done <<'EOF'
