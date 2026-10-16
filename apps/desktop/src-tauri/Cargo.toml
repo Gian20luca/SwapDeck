@@ -21,6 +21,7 @@ swapdeck-core = { path = "../../../crates/swapdeck-core" }
 tauri = { version = "2.12.4", features = ["tray-icon"] }
 tauri-plugin-notification = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
 auto-launch = "0.5"
 
 [target.'cfg(windows)'.dependencies]

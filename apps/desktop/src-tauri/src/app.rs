@@ -16,7 +16,7 @@ use crate::autostart::{self, MINIMIZED_ARG, Startup};
 use crate::poller::Poller;
 use crate::settings::SettingsStore;
 use crate::state::{STATE_EVENT, Shared, Snapshot, lock, now_ms};
-use crate::{commands, engine_loop, text, tray, windows};
+use crate::{commands, engine_loop, text, tray, updater, windows};
 
 /// Cartella dati (storico e lock del motore); `None` se la home non è determinabile.
 pub struct DataDir(pub Option<PathBuf>);
@@ -156,6 +156,7 @@ pub fn run(api: Arc<dyn CswapApi>) {
     let start_hidden = std::env::args().any(|a| a == MINIMIZED_ARG);
     let interval = settings.poll_interval;
     let rules = settings.engine.clone();
+    let updates = settings.updates_enabled;
     let data_dir = AppPaths::from_env_or_system().map(|p| p.data_dir);
     let shared = Arc::new(Shared::new(api, store, settings));
 
@@ -165,6 +166,7 @@ pub fn run(api: Arc<dyn CswapApi>) {
             windows::show_main(app);
         }))
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Arc::clone(&shared))
         .manage(DataDir(data_dir.clone()))
         .invoke_handler(tauri::generate_handler![
@@ -185,6 +187,9 @@ pub fn run(api: Arc<dyn CswapApi>) {
             let handle = app.handle().clone();
             sync_autostart(&handle, &shared);
             tray::create(&handle)?;
+            if updates {
+                updater::spawn(&handle);
+            }
             let cb = handle.clone();
             let engine_cb = handle.clone();
             let api = Arc::clone(&shared.api);
@@ -244,6 +249,8 @@ pub fn run(api: Arc<dyn CswapApi>) {
             if let Err(e) = app.state::<Arc<Shared>>().save_settings() {
                 eprintln!("config non salvata all'uscita: {e}");
             }
+            // Per ultimo, dopo l'arresto ordinato: su Windows avvia l'installer e termina.
+            updater::install_pending(app);
         }
         _ => {}
     });

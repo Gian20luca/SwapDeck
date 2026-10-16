@@ -13,6 +13,7 @@
     "format": "prettier --write .",
     "test:rust": "cargo test --workspace",
     "lint:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings",
+    "dist:local": "node scripts/dist-local.mjs",
     "gen:types": "pnpm --filter @swapdeck/types gen:types"
   },
   "devDependencies": {

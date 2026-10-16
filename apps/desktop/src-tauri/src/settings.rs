@@ -1,6 +1,6 @@
 //! Impostazioni dell'app lette dalla config di SwapDeck (`config.json` di swapdeck-core):
-//! intervallo, soglie, lingua, più due chiavi dell'app desktop conservate in `extra`
-//! (`autostart`, `miniWidget`).
+//! intervallo, soglie, lingua, più le chiavi dell'app desktop conservate in `extra`
+//! (`autostart`, `miniWidget`; `updates.enabled` in sola lettura).
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -15,6 +15,7 @@ use crate::text::Lang;
 /// Chiavi dell'app desktop dentro `config.json`.
 const KEY_AUTOSTART: &str = "autostart";
 const KEY_MINI: &str = "miniWidget";
+const KEY_UPDATES: &str = "updates";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
@@ -27,6 +28,9 @@ pub struct Settings {
     pub autostart_saved: bool,
     /// Ultima posizione del mini-widget, in pixel fisici.
     pub mini_position: Option<(i32, i32)>,
+    /// Aggiornamenti dalle GitHub Releases (`updates.enabled`): spenti di default finché il
+    /// repo è privato. Letti all'avvio e mai riscritti dall'app.
+    pub updates_enabled: bool,
     /// Regole del motore (sezione `engine`), lette all'avvio e mai riscritte dall'app.
     pub engine: EngineRules,
 }
@@ -67,6 +71,12 @@ impl Settings {
                 .and_then(Value::as_bool)
                 .is_some(),
             mini_position: mini_position(c.extra.get(KEY_MINI)),
+            updates_enabled: c
+                .extra
+                .get(KEY_UPDATES)
+                .and_then(|u| u.get("enabled"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
             engine: c.engine.clone(),
         }
     }
@@ -161,6 +171,22 @@ mod tests {
         assert_eq!(s.thresholds, [80.0, 95.0]);
         assert!(s.autostart);
         assert_eq!(s.mini_position, None);
+        assert!(!s.updates_enabled, "aggiornamenti spenti di default");
+    }
+
+    #[test]
+    fn updates_are_read_but_never_written() {
+        let mut c = AppConfig::default();
+        c.extra
+            .insert(KEY_UPDATES.into(), json!({ "enabled": true }));
+        let s = Settings::from_config(&c);
+        assert!(s.updates_enabled);
+        let mut out = AppConfig::default();
+        s.patch(&mut out);
+        assert!(!out.extra.contains_key(KEY_UPDATES));
+        c.extra
+            .insert(KEY_UPDATES.into(), json!({ "enabled": "si" }));
+        assert!(!Settings::from_config(&c).updates_enabled);
     }
 
     #[test]
