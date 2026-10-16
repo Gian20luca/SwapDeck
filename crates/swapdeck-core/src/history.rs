@@ -25,6 +25,32 @@ pub const DEFAULT_RETENTION_DAYS: u32 = 30;
 const MAX_RANGE_DAYS: i64 = 400;
 /// File cancellati al massimo per rotazione (una al giorno).
 pub const MAX_PRUNE_PER_CALL: usize = 5;
+/// Intervallo di default di [`History::events`] (come l'interfaccia): 7 giorni.
+pub const DEFAULT_EVENTS_SECS: i64 = 7 * 86_400;
+/// Cambi e decisioni restituiti al massimo da [`History::events`], per tipo.
+pub const MAX_EVENTS: usize = 5_000;
+
+/// Filtro dello storico chiesto dall'interfaccia.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryQuery {
+    /// Solo questo account; senza, tutti.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub account: Option<u32>,
+    /// Inizio dell'intervallo in secondi Unix; default: 7 giorni fa.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub since_seconds: Option<i64>,
+}
+
+/// Cambi di account e decisioni del motore, dal più vecchio al più recente.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryEvents {
+    pub switches: Vec<SwitchRecord>,
+    pub decisions: Vec<DecisionRecord>,
+}
 
 /// Consumo di un account in un istante.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
@@ -173,6 +199,38 @@ impl History {
             }
         }
         Ok(out)
+    }
+
+    /// Cambi e decisioni da `query.since_seconds` (default 7 giorni, mai prima della
+    /// conservazione di [`DEFAULT_RETENTION_DAYS`] giorni né dopo `now`) fino a `now`, dal più
+    /// vecchio, al massimo [`MAX_EVENTS`] per tipo (i più recenti). Con `account`, solo i cambi
+    /// da o verso quell'account; le decisioni restano tutte.
+    pub fn events(&self, query: &HistoryQuery, now: i64) -> io::Result<HistoryEvents> {
+        let oldest = now - i64::from(DEFAULT_RETENTION_DAYS) * 86_400;
+        let from = query
+            .since_seconds
+            .unwrap_or(now - DEFAULT_EVENTS_SECS)
+            .clamp(oldest, now);
+        let mut events = HistoryEvents::default();
+        for record in self.read_range(from, now)? {
+            match record {
+                HistoryRecord::Switch(s)
+                    if query
+                        .account
+                        .is_none_or(|a| s.to == a || s.from == Some(a)) =>
+                {
+                    events.switches.push(s);
+                }
+                HistoryRecord::Decision(d) => events.decisions.push(d),
+                _ => {}
+            }
+        }
+        events.switches.sort_by_key(|s| s.ts);
+        events.decisions.sort_by_key(|d| d.ts);
+        let keep_last = |n: usize| n.saturating_sub(MAX_EVENTS);
+        events.switches.drain(..keep_last(events.switches.len()));
+        events.decisions.drain(..keep_last(events.decisions.len()));
+        Ok(events)
     }
 
     /// Cancella i file più vecchi di `retention_days` giorni, al massimo
@@ -520,5 +578,84 @@ mod tests {
         use std::os::unix::fs::PermissionsExt;
         let dir = path.parent().unwrap();
         fs::set_permissions(dir, fs::Permissions::from_mode(0o700)).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod events_tests {
+    use super::*;
+    use crate::engine::{IdleReason, SwitchCause};
+
+    fn switch(ts: i64, from: u32, to: u32) -> String {
+        serde_json::to_string(&HistoryRecord::Switch(SwitchRecord {
+            ts,
+            from: Some(from),
+            to,
+            cause: SwitchCause::PrimaryAtLimit,
+            switched: true,
+            message: String::new(),
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn events_filter_clamp_and_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let history = History::new(dir.path());
+        fs::create_dir_all(history.dir()).unwrap();
+        let now = 1_800_000_000;
+        let decision = serde_json::to_string(&HistoryRecord::Decision(DecisionRecord {
+            ts: now - 50,
+            decision: serde_json::from_value(serde_json::json!({
+                "kind": "noAction", "reason": IdleReason::BelowThreshold
+            }))
+            .unwrap(),
+            dry_run: false,
+        }))
+        .unwrap();
+        let lines = [
+            switch(now - 10, 3, 6),
+            switch(now - 100, 6, 3),
+            switch(now - 40 * 86_400, 6, 1),
+            decision,
+        ];
+        for (i, line) in lines.iter().enumerate() {
+            let ts = [now - 10, now - 100, now - 40 * 86_400, now - 50][i];
+            let file = history.dir().join(file_name(utc_date(ts).unwrap()));
+            let mut f = OpenOptions::new().create(true).append(true).open(file).unwrap();
+            writeln!(f, "{line}").unwrap();
+        }
+        let all = history
+            .events(
+                &HistoryQuery {
+                    account: None,
+                    since_seconds: Some(0),
+                },
+                now,
+            )
+            .unwrap();
+        let ts: Vec<i64> = all.switches.iter().map(|s| s.ts).collect();
+        assert_eq!(ts, [now - 100, now - 10], "ordine e limite di conservazione");
+        assert_eq!(all.decisions.len(), 1);
+        let only1 = history
+            .events(
+                &HistoryQuery {
+                    account: Some(1),
+                    since_seconds: None,
+                },
+                now,
+            )
+            .unwrap();
+        assert!(only1.switches.is_empty());
+        let future = history
+            .events(
+                &HistoryQuery {
+                    account: None,
+                    since_seconds: Some(now + 1000),
+                },
+                now,
+            )
+            .unwrap();
+        assert!(future.switches.is_empty() && future.decisions.is_empty());
     }
 }

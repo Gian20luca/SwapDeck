@@ -1,13 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "mini",
-  "description": "Mini-widget: sola lettura, trascinamento e apertura della finestra principale.",
+  "description": "Mini-widget: sola lettura (lista e preferenze per lingua e tema), trascinamento e apertura della finestra principale.",
   "windows": ["mini"],
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "core:window:allow-start-dragging",
     "allow-list-accounts",
-    "allow-show-main"
+    "allow-show-main",
+    "allow-get-preferences"
   ]
 }

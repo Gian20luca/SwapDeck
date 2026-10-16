@@ -195,6 +195,80 @@ impl AppConfig {
     }
 }
 
+/// Impostazioni modificabili dall'interfaccia: la config senza le regole del motore.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AppPreferences {
+    pub poll_interval_seconds: u32,
+    /// Soglie delle notifiche in percentuale, crescenti.
+    pub notification_thresholds: Vec<f64>,
+    pub language: Language,
+    pub theme: Theme,
+}
+
+/// Modifica di [`AppPreferences`]: solo i campi presenti; un campo sconosciuto è un errore.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PreferencesPatch {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub poll_interval_seconds: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub notification_thresholds: Option<Vec<f64>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub language: Option<Language>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub theme: Option<Theme>,
+}
+
+impl AppConfig {
+    pub fn preferences(&self) -> AppPreferences {
+        AppPreferences {
+            poll_interval_seconds: self.poll_interval_seconds,
+            notification_thresholds: self.notifications.thresholds.clone(),
+            language: self.language,
+            theme: self.theme,
+        }
+    }
+
+    /// Applica la modifica con gli stessi limiti di [`AppConfig::validate`]; se non è valida
+    /// la config resta com'era. Lingua o tema scelti qui prendono il posto di un valore
+    /// sconosciuto conservato dal file.
+    pub fn apply_preferences(&mut self, patch: &PreferencesPatch) -> Result<(), ConfigError> {
+        let mut next = self.clone();
+        if let Some(v) = patch.poll_interval_seconds {
+            next.poll_interval_seconds = v;
+        }
+        if let Some(v) = &patch.notification_thresholds {
+            next.notifications.thresholds.clone_from(v);
+        }
+        if let Some(v) = patch.language {
+            next.language = v;
+            next.preserved.remove("language");
+        }
+        if let Some(v) = patch.theme {
+            next.theme = v;
+            next.preserved.remove("theme");
+        }
+        next.validate()?;
+        *self = next;
+        Ok(())
+    }
+
+    /// Sostituisce le regole del motore dopo [`EngineRules::validate_for_save`].
+    pub fn set_engine_rules(&mut self, rules: EngineRules) -> Result<(), ConfigError> {
+        let problems = rules.validate_for_save();
+        if !problems.is_empty() {
+            return Err(ConfigError::Invalid(problems.join("; ")));
+        }
+        self.engine = rules;
+        Ok(())
+    }
+}
+
 /// Esito del caricamento.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Loaded {
@@ -281,6 +355,18 @@ pub fn load(path: &Path) -> Result<Loaded, ConfigError> {
         from_file: true,
         warnings,
     })
+}
+
+/// Rilegge la config, applica `change` e la riscrive in modo atomico: le altre chiavi restano.
+/// Un file non valido dà errore e non viene mai sovrascritto.
+pub fn update(
+    path: &Path,
+    change: impl FnOnce(&mut AppConfig) -> Result<(), ConfigError>,
+) -> Result<AppConfig, ConfigError> {
+    let mut config = load(path)?.config;
+    change(&mut config)?;
+    save(path, &config)?;
+    Ok(config)
 }
 
 /// Valida e scrive in modo atomico (file temporaneo nella stessa cartella, poi rinomina).
@@ -467,5 +553,79 @@ mod tests {
         let link = tmp.path().join(CONFIG_FILE);
         std::os::unix::fs::symlink(&target, &link).unwrap();
         assert!(load(&link).is_err());
+    }
+}
+
+#[cfg(test)]
+mod preferences_tests {
+    use super::*;
+
+    #[test]
+    fn preferences_patch_is_validated_and_partial() {
+        let mut c = AppConfig::default();
+        let patch: PreferencesPatch =
+            serde_json::from_str(r#"{"pollIntervalSeconds":120,"theme":"dark"}"#).unwrap();
+        c.apply_preferences(&patch).unwrap();
+        let p = c.preferences();
+        assert_eq!(p.poll_interval_seconds, 120);
+        assert_eq!(p.theme, Theme::Dark);
+        assert_eq!(p.language, Language::It, "campo assente: invariato");
+        for bad in [
+            r#"{"pollIntervalSeconds":59}"#,
+            r#"{"pollIntervalSeconds":3601}"#,
+            r#"{"notificationThresholds":[95,80]}"#,
+            r#"{"notificationThresholds":[0]}"#,
+            r#"{"notificationThresholds":[10,20,30,40,50,60]}"#,
+        ] {
+            let patch: PreferencesPatch = serde_json::from_str(bad).unwrap();
+            assert!(c.apply_preferences(&patch).is_err(), "{bad}");
+            assert_eq!(c.poll_interval_seconds, 120, "config invariata dopo l'errore");
+        }
+        for bad in [
+            r#"{"language":"fr"}"#,
+            r#"{"theme":"auto"}"#,
+            r#"{"engine":{}}"#,
+        ] {
+            assert!(serde_json::from_str::<PreferencesPatch>(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn update_keeps_other_keys_and_never_overwrites_invalid_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(CONFIG_FILE);
+        std::fs::write(
+            &path,
+            r#"{"schemaVersion":1,"theme":"neon","autostart":false,"engine":{"primary":6,"enabled":true},"futureKey":{"a":1}}"#,
+        )
+        .unwrap();
+        let patch = PreferencesPatch {
+            poll_interval_seconds: Some(300),
+            ..PreferencesPatch::default()
+        };
+        update(&path, |c| c.apply_preferences(&patch)).unwrap();
+        let saved: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(saved["pollIntervalSeconds"], 300);
+        assert_eq!(saved["autostart"], false);
+        assert_eq!(saved["futureKey"]["a"], 1);
+        assert_eq!(saved["theme"], "neon", "valore sconosciuto conservato");
+        assert_eq!(saved["engine"]["primary"], 6);
+        let rules = EngineRules {
+            primary: Some(3),
+            ..EngineRules::default()
+        };
+        let c = update(&path, |c| c.set_engine_rules(rules.clone())).unwrap();
+        assert_eq!(c.engine, rules);
+        assert_eq!(c.poll_interval_seconds, 300);
+        let invalid = EngineRules {
+            enabled: true,
+            ..EngineRules::default()
+        };
+        assert!(update(&path, |c| c.set_engine_rules(invalid)).is_err());
+        assert_eq!(load(&path).unwrap().config.engine, rules, "file invariato");
+        std::fs::write(&path, "{ rotto").unwrap();
+        assert!(update(&path, |c| c.apply_preferences(&patch)).is_err());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{ rotto");
     }
 }

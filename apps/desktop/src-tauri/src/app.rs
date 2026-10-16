@@ -155,7 +155,6 @@ pub fn run(api: Arc<dyn CswapApi>) {
     }
     let start_hidden = std::env::args().any(|a| a == MINIMIZED_ARG);
     let interval = settings.poll_interval;
-    let rules = settings.engine.clone();
     let data_dir = AppPaths::from_env_or_system().map(|p| p.data_dir);
     let shared = Arc::new(Shared::new(api, store, settings));
 
@@ -180,6 +179,12 @@ pub fn run(api: Arc<dyn CswapApi>) {
             commands::set_autostart,
             commands::show_main,
             commands::get_snapshot,
+            commands::list_mappings,
+            commands::get_engine_state,
+            commands::set_engine_rules,
+            commands::get_preferences,
+            commands::set_preferences,
+            commands::get_history_events,
         ])
         .on_window_event(windows::on_window_event)
         .setup(move |app| {
@@ -190,17 +195,30 @@ pub fn run(api: Arc<dyn CswapApi>) {
             let engine_cb = handle.clone();
             let api = Arc::clone(&shared.api);
             let dir = data_dir.clone();
+            let live = Arc::clone(&shared);
+            let found = Arc::clone(&shared);
             let (poller, thread) = Poller::spawn_with(
                 interval,
                 move |r| on_list(&cb, r),
                 move |lp| {
-                    engine_loop::run(lp, api, dir, rules, interval, move |view| {
-                        // Senza invio: l'esito della lettura segue subito e lo manda.
-                        update_snapshot(&engine_cb, |s| {
-                            s.set_engine(view);
-                            false
-                        });
-                    });
+                    engine_loop::run(
+                        lp,
+                        api,
+                        dir,
+                        // Regole e intervallo riletti a ogni giro (cambiano dalla UI).
+                        move || {
+                            let s = lock(&live.settings);
+                            (s.engine.clone(), s.poll_interval)
+                        },
+                        move |view| {
+                            // Senza invio: l'esito della lettura segue subito e lo manda.
+                            update_snapshot(&engine_cb, |s| {
+                                s.set_engine(view);
+                                false
+                            });
+                        },
+                        move |conflicts| *lock(&found.conflicts) = conflicts.to_vec(),
+                    );
                 },
             );
             app.manage(poller);

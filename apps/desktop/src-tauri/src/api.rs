@@ -8,7 +8,7 @@ use std::time::Duration;
 pub use swapdeck_core::cswap::{ActionOutcome as Outcome, CommandSpec};
 use swapdeck_core::cswap::{
     AutoEvent, AutoMessage, AutoProcess, ConfigGetResponse, ConfigListResponse, CswapAction,
-    CswapClient, CswapError, ListResponse, StatusResponse,
+    CswapClient, CswapError, CswapErrorKind, DirectoryMapping, ListResponse, StatusResponse,
 };
 
 use crate::state::lock;
@@ -21,6 +21,10 @@ pub trait CswapApi: Send + Sync {
     fn status(&self) -> Res<StatusResponse>;
     fn config_list(&self) -> Res<ConfigListResponse>;
     fn config_get(&self, key: &str) -> Res<ConfigGetResponse>;
+    /// Cartelle mappate (`cswap map`, testo interpretato dal core).
+    fn mappings(&self) -> Res<Vec<DirectoryMapping>> {
+        Err(CswapError::new(CswapErrorKind::Failed, "cartelle mappate non disponibili"))
+    }
     /// Esegue un'azione di F0 (la conferma si chiede prima, con `CswapAction::confirmation`).
     fn execute(&self, action: &CswapAction) -> Res<Outcome>;
     /// Stato di `cswap auto` avviato dall'app; svuota gli eventi arrivati nel frattempo.
@@ -175,6 +179,9 @@ impl CswapApi for ClientApi {
     }
     fn config_get(&self, key: &str) -> Res<ConfigGetResponse> {
         self.with(|c| c.config_get(key))
+    }
+    fn mappings(&self) -> Res<Vec<DirectoryMapping>> {
+        self.with(CswapClient::mappings)
     }
     fn execute(&self, action: &CswapAction) -> Res<Outcome> {
         match action {

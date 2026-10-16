@@ -498,6 +498,27 @@ impl<'o, 'r> Engine<'o, 'r> {
     pub fn release(mut self) {
         self.runner.release();
     }
+
+    /// Regole nuove dal giro successivo, senza riavvio (il `dry_run` delle opzioni resta).
+    pub fn set_rules(&mut self, rules: &EngineRules) {
+        let r = &mut self.runner;
+        r.rules = rules.clone();
+        r.rules.dry_run |= r.opts.dry_run;
+    }
+
+    /// Intervallo nuovo (riportato in 60–3600 s): vale per il battito e la scadenza del lock.
+    pub fn set_interval(&mut self, secs: u32) {
+        let r = &mut self.runner;
+        r.interval = secs.clamp(MIN_POLL_INTERVAL_SECONDS, MAX_POLL_INTERVAL_SECONDS);
+        if let Some(h) = r.holder.as_mut() {
+            h.guard.set_interval(r.interval);
+        }
+    }
+
+    /// Regole in uso (con il `dry_run` delle opzioni).
+    pub fn rules(&self) -> &EngineRules {
+        &self.runner.rules
+    }
 }
 
 impl Drop for Engine<'_, '_> {

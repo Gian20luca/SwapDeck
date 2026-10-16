@@ -160,7 +160,7 @@ Il cambio vale per tutte le sessioni di Claude Code della macchina (riscrive `~/
 | `alias <id> <name>` / `alias <id> --unset` | Imposta / toglie (lettere, cifre, `.`, `-`, `_`, non solo cifre) | `Set alias 'x' for Account N` / `Removed alias for Account N` |
 | `swap <a> <b>` | Scambia i numeri di slot | Nessun prompt |
 | `move <id> <slot>` | Sposta (scambia se occupato) | Nessun prompt |
-| `map` | Elenca | `No directory mappings yet.` [V] |
+| `map` | Elenca | `No directory mappings yet.` [V]; con mappature `Directory mappings:` poi `  <path> → <slot>: <email> [<organizzazione o personal>]` o `  <path> → <email> (account removed)` [S] |
 | `map <id> [path]` | Mappa una cartella (default: cwd) | `Mapped <path> → Account-N (<email>)` |
 | `unmap [path]` | Toglie la mappatura | `Unmapped <path>` o `No mapping for <path>` (uscita 0) [V] |
 | `unclaimed` | Elenca credenziali parcheggiate | `<id>  slot <n>  <motivo>` o `No unclaimed credential entries` [V] |

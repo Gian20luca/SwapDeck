@@ -14,6 +14,8 @@ const STDERR_TAIL_BYTES = 4096;
 export const DEFAULT_TIMEOUT_MS = 60_000;
 /** Le azioni che scrivono hanno già un loro timeout in Rust (30 s, `upgrade` di più). */
 export const ACTION_TIMEOUT_MS = 6 * 60_000;
+/** Dopo il timeout: attesa dell'uscita del processo prima di `SIGKILL` (e poi del rifiuto). */
+export const KILL_GRACE_MS = 2_000;
 
 export function cliExecutable(platform: NodeJS.Platform): string {
   return platform === 'win32' ? 'swapdeck-cli.exe' : 'swapdeck-cli';
@@ -115,23 +117,35 @@ export function createCliRunner(getPath: () => string): CliRunner {
       let size = 0;
       let stderr = '';
       let settled = false;
+      let expired = false;
+      let killTimer: NodeJS.Timeout | undefined;
       const finish = (fn: () => void) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        clearTimeout(killTimer);
         fn();
       };
-      const timer = setTimeout(() => {
-        child.kill();
-        finish(() =>
-          reject(
-            new CliError({
-              kind: 'timeout',
-              message: `swapdeck-cli ${args[0] ?? ''}: nessuna risposta in tempo`,
-            }),
-          ),
+      const rejectTimeout = () =>
+        reject(
+          new CliError({
+            kind: 'timeout',
+            message: `swapdeck-cli ${args[0] ?? ''}: nessuna risposta in tempo`,
+          }),
         );
+      // Timeout: si termina il processo e si rifiuta quando è uscito (se non esce: `SIGKILL`,
+      // poi un'altra attesa), così chi chiama non lascia processi vivi alle spalle.
+      const timer = setTimeout(() => {
+        expired = true;
+        child.kill();
+        killTimer = setTimeout(() => {
+          child.kill('SIGKILL');
+          killTimer = setTimeout(() => finish(rejectTimeout), KILL_GRACE_MS);
+        }, KILL_GRACE_MS);
       }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+      child.on('exit', () => {
+        if (expired) finish(rejectTimeout);
+      });
       child.stdout.on('data', (chunk: Buffer) => {
         size += chunk.length;
         if (size > MAX_STDOUT_BYTES) {

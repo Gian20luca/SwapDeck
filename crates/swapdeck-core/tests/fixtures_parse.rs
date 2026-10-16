@@ -7,7 +7,7 @@ use swapdeck_core::cswap::client::parse_auto_line;
 use swapdeck_core::cswap::error::{account_issue, parse_error_envelope};
 use swapdeck_core::cswap::{
     AutoEvent, AutoMessage, ConfigGetResponse, ConfigListResponse, CswapErrorKind, CswapVersion,
-    ListResponse, StatusResponse, SwitchReason, SwitchResponse, UsageStatus,
+    ListResponse, StatusResponse, SwitchReason, SwitchResponse, UsageStatus, parse_map_listing,
 };
 
 fn dir() -> PathBuf {
@@ -168,6 +168,22 @@ fn auto_events_and_version() {
     assert!(parse_auto_line(r#"{"schemaVersion":1,"event":"nuovo","ts":"x"}"#).is_none());
     let v = CswapVersion::parse(&read("version.txt")).unwrap();
     assert!(v.is_supported());
+}
+
+#[test]
+fn map_fixtures() {
+    assert!(parse_map_listing(&read("map-empty.txt")).unwrap().is_empty());
+    let m = parse_map_listing(&read("map.txt")).unwrap();
+    let got: Vec<_> = m.iter().map(|m| (m.path.as_str(), m.account)).collect();
+    assert_eq!(
+        got,
+        [
+            (r"c:\work\project-a", Some(3)),
+            ("~/work/project-b", Some(6)),
+            ("~/work/project-c", None),
+        ]
+    );
+    assert_eq!(m[2].email, "user9@example.com");
 }
 
 #[test]

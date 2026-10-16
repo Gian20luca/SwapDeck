@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
-  "description": "Finestra principale: lettura, azioni di cswap, impostazioni dell'app, selettori di file e cartelle.",
+  "description": "Finestra principale: lettura, azioni di cswap, impostazioni dell'app, regole del motore, preferenze, storico, selettori di file e cartelle.",
   "windows": ["main"],
   "permissions": [
     "core:event:allow-listen",
@@ -17,6 +17,12 @@
     "allow-run-action",
     "allow-get-app-settings",
     "allow-set-autostart",
-    "allow-get-snapshot"
+    "allow-get-snapshot",
+    "allow-list-mappings",
+    "allow-get-engine-state",
+    "allow-set-engine-rules",
+    "allow-get-preferences",
+    "allow-set-preferences",
+    "allow-get-history-events"
   ]
 }

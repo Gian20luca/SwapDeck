@@ -384,6 +384,12 @@ impl CswapClient {
         self.text(Args::new(&["map"]))
     }
 
+    /// `cswap map` interpretato (il comando non ha `--json`).
+    pub fn mappings(&self) -> Res<Vec<super::DirectoryMapping>> {
+        super::parse_map_listing(&self.maps()?)
+            .map_err(|m| CswapError::new(CswapErrorKind::Failed, m))
+    }
+
     /// `cswap unclaimed` (testo).
     pub fn unclaimed(&self) -> Res<String> {
         self.text(Args::new(&["unclaimed"]))
