@@ -400,7 +400,16 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
             rows={rows}
             nameOf={nameOf}
             disabled={busy}
-            onMove={(from, to) => setDraft((d) => moveRow(d, accounts, from, to))}
+            onMove={(n, to) =>
+              setDraft((d) =>
+                moveRow(
+                  d,
+                  accounts,
+                  flowRows(d, accounts).findIndex((r) => r.number === n),
+                  to,
+                ),
+              )
+            }
             onToggle={(n, included) => setDraft((d) => setIncluded(d, accounts, n, included))}
             onUseNow={(n) =>
               void runner.run(actions.switchTo(n), {

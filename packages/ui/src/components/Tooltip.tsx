@@ -16,6 +16,14 @@ import {
 const InsideTooltip = createContext(false);
 
 const MARGIN = 8;
+
+function focusVisible(el: EventTarget): boolean {
+  try {
+    return (el as Element).matches(':focus-visible');
+  } catch {
+    return true;
+  }
+}
 const OPEN_DELAY_MS = 350;
 
 export interface TooltipProps {
@@ -28,7 +36,7 @@ export interface TooltipProps {
 }
 
 /**
- * Tooltip accessibile: si apre al passaggio del mouse (con un breve ritardo) e subito al focus, si
+ * Tooltip accessibile: si apre al passaggio del mouse (con un breve ritardo) e subito al focus da tastiera, si
  * chiude con Esc, all'uscita e alla perdita del focus. Il testo resta nel DOM (`role="tooltip"`,
  * nascosto) così `aria-describedby` lo legge anche quando non si vede. La bolla è `position:
  * fixed`, tenuta dentro la finestra: niente scroll orizzontale nemmeno a 420 px. Annidato in un
@@ -88,9 +96,11 @@ export function Tooltip({ text, children, block = false }: TooltipProps) {
           clear();
           setOpen(false);
         }}
-        onFocus={() => {
+        onFocus={(event) => {
           clear();
-          setOpen(true);
+          // Solo col focus da tastiera: un focus dato dal codice (per esempio «Indietro» all'apertura
+          // di una pagina dopo un clic) non deve coprire il contenuto.
+          if (focusVisible(event.target)) setOpen(true);
         }}
         onBlur={() => setOpen(false)}
         onPointerDown={() => {

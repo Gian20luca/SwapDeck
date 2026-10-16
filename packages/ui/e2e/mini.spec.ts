@@ -83,7 +83,7 @@ test('mini-widget compresso, tema scuro: nessun overflow', async ({ page }) => {
 test('pulsante Aggiorna: stato «in aggiornamento» e ritorno alla quiete', async ({ page }) => {
   const mini = await openMini(page, 'on');
   const refresh = mini.getByRole('button', { name: /^Aggiorna ora/ });
-  await expect(refresh).toHaveAttribute('title', /ogni 3 minuti/);
+  await expect(refresh).toHaveAccessibleDescription(/ogni 3 minuti/);
   await refresh.click();
   await expect(mini.getByRole('button', { name: 'Aggiornamento in corso…' })).toHaveAttribute(
     'aria-busy',
@@ -113,7 +113,8 @@ test('trattini del motore: rosso se acceso, tooltip con mouse e tastiera', async
   await expect(page.getByRole('tooltip').filter({ hasText: /^A 95%/ })).toBeHidden();
   await five.hover();
   const tip = page.getByRole('tooltip').filter({
-    hasText: /^A 95% il motore passa a un’altra utenza \(riserva con la settimanale più bassa\)$/,
+    hasText:
+      /^A 95% il motore passa a un’altra utenza \(riserva con la settimanale più bassa\) \(ora: alias\d\)$/,
   });
   await expect(tip).toBeVisible();
   await page.screenshot({

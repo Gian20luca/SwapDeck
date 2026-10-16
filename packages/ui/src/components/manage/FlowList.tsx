@@ -9,8 +9,11 @@ export interface FlowListProps {
   rows: FlowRow[];
   nameOf: (number: number) => string;
   disabled?: boolean;
-  /** Sposta la riga `from` in posizione `to`. */
-  onMove: (from: number, to: number) => void;
+  /**
+   * Sposta l'utenza `number` in posizione `to`. Per numero e non per indice: durante un
+   * trascinamento più movimenti arrivano prima che la lista si ridisegni.
+   */
+  onMove: (number: number, to: number) => void;
   onToggle: (number: number, included: boolean) => void;
   onUseNow: (number: number) => void;
 }
@@ -61,7 +64,7 @@ export function FlowList({ rows, nameOf, disabled, onMove, onToggle, onUseNow }:
         if (i < from && event.clientY < mid) to = Math.min(to, i);
         if (i > from && event.clientY > mid) to = Math.max(to, i);
       });
-      if (to !== from) onMove(from, to);
+      if (to !== from) onMove(dragging, to);
     };
     const onUp = () => {
       const at = indexOf(dragging);
@@ -100,11 +103,11 @@ export function FlowList({ rows, nameOf, disabled, onMove, onToggle, onUseNow }:
       event.preventDefault();
       const to = event.key === 'ArrowUp' ? index - 1 : index + 1;
       if (to < 0 || to >= total) return;
-      onMove(index, to);
+      onMove(n, to);
       say('flow.moved', n, to);
     } else if (event.key === 'Escape' && grabbed?.number === n) {
       event.preventDefault();
-      if (index !== grabbed.from) onMove(index, grabbed.from);
+      if (index !== grabbed.from) onMove(n, grabbed.from);
       setGrabbed(null);
       say('flow.cancelled', n, grabbed.from);
     }

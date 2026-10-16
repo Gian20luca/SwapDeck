@@ -44,10 +44,11 @@ async function noHorizontalScroll(page: Page) {
 test('navigazione a schede a 420×640 senza scroll orizzontale', async ({ page }) => {
   await open(page);
   await noHorizontalScroll(page);
-  // Pannello delle azioni aperto: è la parte più larga della scheda Account.
+  // Pagina di dettaglio dell'utenza: la parte più larga della scheda Account.
   await page.getByRole('button', { name: 'Gestisci l’account alias1' }).click();
-  await expect(page.getByRole('group', { name: 'Gestione di alias1' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Gestione di alias1' })).toBeVisible();
   await noHorizontalScroll(page);
+  await page.getByRole('button', { name: /Indietro/ }).click();
   // Senza fullPage: allungando la pagina sparisce la barra e il ritaglio non sarebbe fedele.
   await page.screenshot({ path: `${SHOTS}/account-420x640.png` });
 
@@ -59,7 +60,7 @@ test('navigazione a schede a 420×640 senza scroll orizzontale', async ({ page }
   await tab(page, 'Regole');
   await expect(page.getByRole('heading', { name: 'Regole del motore' })).toBeVisible();
   await expect(page.getByRole('alert', { name: 'Stato del motore' })).toContainText(
-    'Attività pianificata cswap-guard',
+    'Un’altra attività pianificata usa cswap',
   );
   await noHorizontalScroll(page);
 
@@ -86,7 +87,7 @@ test('navigazione a schede a 420×640 senza scroll orizzontale', async ({ page }
 test('rimuovere un account chiede conferma e lo toglie dalla lista', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'Gestisci l’account alias1' }).click();
-  const panel = page.getByRole('group', { name: 'Gestione di alias1' });
+  const panel = page.getByRole('region', { name: 'Gestione di alias1' });
   await panel.getByRole('button', { name: 'Rimuovi' }).click();
   const dialog = page.getByRole('alertdialog');
   await expect(dialog).toContainText('Rimuovere alias1?');
@@ -94,7 +95,7 @@ test('rimuovere un account chiede conferma e lo toglie dalla lista', async ({ pa
   // Annullando l'account resta.
   await dialog.getByRole('button', { name: 'Annulla' }).click();
   await expect(page.getByRole('alertdialog')).toHaveCount(0);
-  await expect(page.getByRole('list', { name: 'Account' }).getByRole('listitem')).toHaveCount(5);
+  await expect(panel).toBeVisible();
 
   await panel.getByRole('button', { name: 'Rimuovi' }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Rimuovi' }).click();
@@ -120,17 +121,18 @@ test('purge: doppia conferma con la parola, poi non resta alcun account', async 
   await page.screenshot({ path: `${SHOTS}/purge-eseguito.png`, fullPage: true });
 });
 
-test('regole: preset come cswap-guard, salvataggio e conflitto ignorato', async ({ page }) => {
+test('regole: preset «Principale con riserve», salvataggio e conflitto ignorato', async ({
+  page,
+}) => {
   await open(page);
   await tab(page, 'Regole');
-  await page.getByRole('button', { name: 'Preset come cswap-guard' }).click();
-  await expect(page.getByLabel('Account principale')).toHaveValue('6');
-  await expect(page.getByRole('status').filter({ hasText: 'Preset applicato' })).toBeVisible();
+  await page.getByLabel('Mappa attiva').selectOption('priority-reserves');
+  await expect(page.getByText('Mappa attiva: Principale con riserve.')).toBeVisible();
   await page.getByLabel('Solo osservazione').check();
   await page.getByRole('button', { name: 'Salva' }).click();
-  await expect(page.getByText('Regole salvate.')).toBeVisible();
+  await expect(page.getByText('Regole salvate.', { exact: true })).toBeVisible();
   await page
-    .getByRole('button', { name: 'Ignora il conflitto Attività pianificata cswap-guard' })
+    .getByRole('button', { name: /Ignora il conflitto Un’altra attività pianificata/ })
     .click();
   await expect(page.getByRole('status', { name: 'Stato del motore' })).toContainText(
     'Motore acceso',
