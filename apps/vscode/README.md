@@ -2,12 +2,28 @@
 
 Monitor e cambio degli account di `cswap` dentro VS Code.
 
+## Installazione
+
+1. Serve `cswap` installato per l'utente (lo stesso usato dal terminale).
+2. Da terminale: `code --install-extension swapdeck-vscode-<piattaforma>-<versione>.vsix`, oppure in VS Code «Estensioni» → «...» → «Installa da VSIX...».
+3. Le finestre già aperte attivano l'estensione al prossimo «Ricarica finestra» (o alla riapertura); quelle nuove subito.
+
+Il .vsix è per piattaforma (contiene `bin/swapdeck-cli`) e non richiede privilegi di amministratore. L'estensione gira sempre sulla macchina locale (`extensionKind: ui`), anche con Remote/WSL.
+
+## Funzioni
+
 - **Barra di stato:** alias e consumi 5h/7d dell'account attivo, colore alle soglie, dettagli nel tooltip. Un clic apre il cambio rapido.
 - **Cambio rapido:** account migliore (`best`), prossimo disponibile (`next-available`) o un account preciso.
 - **Comandi:** `SwapDeck: Apri pannello`, `Aggiorna`, `Cambia account`, `Avvia motore`, `Ferma motore`.
 - **Pannello:** la dashboard di SwapDeck (schede, ritmo, storico).
+- **Conferme:** le azioni che lo richiedono (rimozione, import/export, swap/move, unmap, disattivazione dell'account attivo...) chiedono conferma con un dialogo modale di VS Code; `purge` chiede anche di digitare la parola. Il cambio di account non chiede conferma.
 - **Notifiche:** al superamento delle soglie dell'account attivo e quando l'account attivo cambia.
-- **Motore (facoltativo, spento di default):** `swapdeck-cli headless` come processo figlio, fermato alla chiusura. Rispetta il lock: se il motore gira già altrove (app desktop o un'altra finestra), resta in attesa.
+
+## Motore
+
+Facoltativo e **spento di default**. Con `swapdeck.engine.enabled` (o `SwapDeck: Avvia motore`) la finestra avvia `swapdeck-cli headless` come processo figlio, che applica le regole della config di SwapDeck e cambia account da solo; si ferma con `Ferma motore` o alla chiusura della finestra.
+
+Un solo motore alla volta per utente, grazie al lock: se gira già nell'app desktop o in un'altra finestra, questa resta in attesa senza avvisi (barra: «motore attivo in un'altra istanza») e lo riavvia da sé quando il lock si libera. Le righe del motore sono nel canale di output «SwapDeck».
 
 ## Impostazioni
 

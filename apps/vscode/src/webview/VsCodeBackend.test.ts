@@ -37,6 +37,10 @@ describe('VsCodeBackend', () => {
     await expect(b).resolves.toEqual({ v: 1 });
   });
 
+  it("dichiara che le conferme le chiede l'host", () => {
+    expect(setup().backend.hostConfirms).toBe(true);
+  });
+
   it('rifiuta con BackendError e ignora id sconosciuti', async () => {
     const { backend, reply } = setup();
     const p = backend.getStatus();

@@ -40,8 +40,8 @@ pub const USAGE: &str = "uso: swapdeck-cli <comando>
   state
   status
   cswap-config [CHIAVE]
-  confirm <json|-> [--active N]
-  action <json|->
+  confirm - [--active N|none]  (azione JSON da stdin)
+  action -                     (azione JSON da stdin)
   history [--from SECONDI] [--to SECONDI] [--account N]
   config get
   config set <json|->
@@ -107,16 +107,20 @@ fn dispatch(args: &[String]) -> Res<Value> {
         ["status"] => to_value(client()?.status()?),
         ["cswap-config"] => to_value(client()?.config_list()?),
         ["cswap-config", key] => to_value(client()?.config_get(key)?),
-        ["confirm", input, rest @ ..] => confirm(input, rest),
-        ["action", input] => to_value(action(&parse_action(&read_input(input)?)?)?),
+        ["confirm", "-", rest @ ..] => confirm(&read_input("-")?, rest),
+        ["action", "-"] => to_value(action(&parse_action(&read_input("-")?)?)?),
+        ["confirm" | "action", ..] => Err(usage_error(format!(
+            "l'azione va passata da stdin (-)\n{USAGE}"
+        ))),
         ["history", rest @ ..] => to_value(history(rest)?),
         ["config", "get"] => to_value(config_get()?),
         ["config", "set", input] => to_value(config_set(&read_input(input)?)?),
         ["engine", "status"] => to_value(engine_status(&paths()?)),
         [] | ["help" | "--help" | "-h"] => Err(usage_error(USAGE)),
-        _ => Err(usage_error(format!(
+        // Solo il primo argomento (accorciato): gli altri possono contenere dati dell'utente.
+        [first, ..] => Err(usage_error(format!(
             "comando non valido: {}\n{USAGE}",
-            args.join(" ")
+            first.chars().take(40).collect::<String>()
         ))),
     }
 }
@@ -129,8 +133,8 @@ fn client() -> Res<CswapClient> {
     CswapClient::locate()
 }
 
-/// JSON da argomento, o da stdin con `-` (obbligatorio per i token di `addToken`: gli argomenti
-/// sono visibili agli altri processi).
+/// JSON da argomento, o da stdin con `-` (obbligatorio per le azioni: gli argomenti sono visibili
+/// agli altri processi e possono contenere un token).
 fn read_input(arg: &str) -> Res<String> {
     if arg != "-" {
         if arg.len() as u64 > MAX_INPUT_BYTES {
@@ -232,15 +236,14 @@ fn engine_status(paths: &AppPaths) -> EngineStatus {
     status
 }
 
-fn confirm(input: &str, rest: &[&str]) -> Res<Value> {
+fn confirm(text: &str, rest: &[&str]) -> Res<Value> {
     let active = match rest {
         [] => client()?.list()?.active_account_number,
         ["--active", "none"] => None,
         ["--active", n] => Some(parse_u32("--active", n)?),
         _ => return Err(usage_error(format!("opzioni non valide\n{USAGE}"))),
     };
-    let action = parse_action(&read_input(input)?)?;
-    to_value(action.confirmation(active))
+    to_value(parse_action(text)?.confirmation(active))
 }
 
 fn parse_u32(name: &str, value: &str) -> Res<u32> {
@@ -481,5 +484,22 @@ mod tests {
         assert_eq!(v["kind"], "simple");
         let v = confirm(r#"{"kind":"disable","account":3}"#, &["--active", "6"]).unwrap();
         assert_eq!(v["kind"], "none");
+    }
+
+    #[test]
+    fn actions_only_from_stdin_and_errors_do_not_echo_arguments() {
+        let secret = r#"{"kind":"addToken","token":"sk-ant-oat01-NOT-REAL"}"#;
+        for cmd in ["action", "confirm"] {
+            let e = dispatch(&[cmd.to_owned(), secret.to_owned()]).unwrap_err();
+            assert_eq!(e.kind, CswapErrorKind::InvalidUsage);
+            assert!(!e.message.contains("NOT-REAL"), "{}", e.message);
+        }
+        let e = dispatch(&["bogus".to_owned(), secret.to_owned()]).unwrap_err();
+        assert!(
+            e.message.starts_with("comando non valido: bogus"),
+            "{}",
+            e.message
+        );
+        assert!(!e.message.contains("NOT-REAL"));
     }
 }

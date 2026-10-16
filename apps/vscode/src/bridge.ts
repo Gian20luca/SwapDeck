@@ -1,5 +1,11 @@
 /** Richieste del webview tradotte in comandi di `swapdeck-cli` (lato extension host). */
-import type { ActionOutcome, CswapAction, HistoryRecord, ListResponse } from '@swapdeck/types';
+import type {
+  ActionOutcome,
+  Confirmation,
+  CswapAction,
+  HistoryRecord,
+  ListResponse,
+} from '@swapdeck/types';
 import type { HistoryPoint } from '@swapdeck/ui';
 import { ACTION_TIMEOUT_MS, CliError, type CliRunner } from './cli.js';
 import type { CliState } from './generated/index.js';
@@ -17,19 +23,75 @@ export interface BridgeDeps {
   refresh: () => Promise<CliState>;
   /** Dopo un'azione riuscita: nuova lista, terminale per `run`, avvisi. */
   onOutcome: (outcome: ActionOutcome) => Promise<void> | void;
+  /** Conferma chiesta dall'host (dialoghi modali di VS Code); `false` = annullata. */
+  confirm: (
+    action: CswapAction,
+    needed: Exclude<Confirmation, { kind: 'none' }>,
+  ) => Promise<boolean>;
   now?: () => number;
 }
+
+/** Tutti i `kind` di `CswapAction`: un `kind` fuori elenco è `invalidUsage` già nell'host. */
+export const ACTION_KINDS = [
+  'switch',
+  'add',
+  'addToken',
+  'remove',
+  'disable',
+  'enable',
+  'setAlias',
+  'swap',
+  'move',
+  'map',
+  'unmap',
+  'configSet',
+  'configUnset',
+  'export',
+  'import',
+  'unclaimedPurge',
+  'purge',
+  'upgrade',
+  'run',
+  'autoStart',
+  'autoStop',
+] as const satisfies ReadonlyArray<CswapAction['kind']>;
+
+// Errore di compilazione se il Rust aggiunge un `kind` che manca qui.
+type MissingKind = Exclude<CswapAction['kind'], (typeof ACTION_KINDS)[number]>;
+const allKindsListed: [MissingKind] extends [never] ? true : MissingKind = true;
+void allKindsListed;
+
+/**
+ * Argomenti di `claude` ammessi per `run` dal webview: solo flag senza valore e senza effetti sui
+ * permessi (il comando si apre in un terminale dell'utente).
+ */
+export const SAFE_CLAUDE_ARGS: ReadonlySet<string> = new Set(['--continue', '--verbose']);
 
 function invalid(message: string): CliError {
   return new CliError({ kind: 'invalidUsage', message });
 }
 
-function isAction(value: unknown): value is CswapAction {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { kind?: unknown }).kind === 'string'
-  );
+/** Azione con `kind` noto; per `run` solo argomenti di `claude` dell'elenco chiuso. */
+function checkedAction(value: unknown): CswapAction {
+  if (typeof value !== 'object' || value === null) throw invalid('azione non valida');
+  const kind = (value as { kind?: unknown }).kind;
+  if (typeof kind !== 'string' || !(ACTION_KINDS as readonly string[]).includes(kind)) {
+    throw invalid('azione sconosciuta');
+  }
+  if (kind === 'run') {
+    const options = (value as { options?: unknown }).options;
+    const args =
+      typeof options === 'object' && options !== null
+        ? (options as { claudeArgs?: unknown }).claudeArgs
+        : undefined;
+    if (
+      args !== undefined &&
+      (!Array.isArray(args) || !args.every((a) => typeof a === 'string' && SAFE_CLAUDE_ARGS.has(a)))
+    ) {
+      throw invalid('argomenti di claude non ammessi');
+    }
+  }
+  return value as CswapAction;
 }
 
 function optionalInt(value: unknown, name: string): number | undefined {
@@ -99,17 +161,15 @@ export function createRequestHandler(deps: BridgeDeps) {
         if (account !== undefined) args.push('--account', String(account));
         return toHistoryPoints(await deps.cli<HistoryRecord[]>(args));
       }
-      case 'confirmationFor': {
-        const action = params['action'];
-        if (!isAction(action)) throw invalid('azione non valida');
-        const list = deps.lastState()?.list;
-        const args = ['confirm', '-'];
-        if (list) args.push('--active', String(list.activeAccountNumber ?? 'none'));
-        return deps.cli(args, { stdin: JSON.stringify(action) });
-      }
+      case 'confirmationFor':
+        return confirmationFor(checkedAction(params['action']));
       case 'runAction': {
-        const action = params['action'];
-        if (!isAction(action)) throw invalid('azione non valida');
+        const action = checkedAction(params['action']);
+        // La conferma la impone l'host: il webview non è fidato.
+        const needed = await confirmationFor(action);
+        if (needed.kind !== 'none' && !(await deps.confirm(action, needed))) {
+          throw new CliError({ kind: 'cancelled', message: 'azione annullata' });
+        }
         const outcome = await deps.cli<ActionOutcome>(['action', '-'], {
           stdin: JSON.stringify(action),
           timeoutMs: ACTION_TIMEOUT_MS,
@@ -118,5 +178,41 @@ export function createRequestHandler(deps: BridgeDeps) {
         return outcome;
       }
     }
+  }
+
+  function confirmationFor(action: CswapAction): Promise<Confirmation> {
+    const list = deps.lastState()?.list;
+    const args = ['confirm', '-'];
+    if (list) args.push('--active', String(list.activeAccountNumber ?? 'none'));
+    return deps.cli<Confirmation>(args, { stdin: JSON.stringify(action) });
+  }
+}
+
+/** Descrizione breve dell'azione per il dialogo di conferma (mai il token di `addToken`). */
+export function describeAction(action: CswapAction): string {
+  switch (action.kind) {
+    case 'remove':
+    case 'disable':
+    case 'enable':
+    case 'setAlias':
+      return `${action.kind} #${action.account}`;
+    case 'swap':
+      return `swap #${action.a} ↔ #${action.b}`;
+    case 'move':
+      return `move #${action.account} → ${action.slot}`;
+    case 'map':
+      return `map #${action.account} ${action.path}`;
+    case 'unmap':
+    case 'import':
+      return `${action.kind} ${action.path}`;
+    case 'export':
+      return `export${action.account === undefined ? '' : ` #${action.account}`} → ${action.path}`;
+    case 'unclaimedPurge':
+      return `unclaimed --purge ${action.id}`;
+    case 'configSet':
+    case 'configUnset':
+      return `${action.kind} ${action.key}`;
+    default:
+      return action.kind;
   }
 }

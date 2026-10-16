@@ -28,6 +28,8 @@ interface Pending {
 
 /** `Backend` del webview di VS Code: ogni chiamata è un messaggio all'extension host. */
 export class VsCodeBackend implements Backend {
+  /** Le conferme le impone l'extension host (`bridge.ts`) con i dialoghi modali di VS Code. */
+  readonly hostConfirms = true;
   private nextId = 1;
   private readonly pending = new Map<number, Pending>();
   private readonly stateListeners = new Set<(state: ListResponse) => void>();

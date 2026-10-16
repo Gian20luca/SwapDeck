@@ -3,7 +3,7 @@ import type { ActionOutcome, Confirmation, CswapAction, SwitchStrategy } from '@
 import { displayUsage } from '@swapdeck/ui/account';
 import { displayPct, shortEmail } from '@swapdeck/ui/format';
 import * as vscode from 'vscode';
-import { createRequestHandler } from './bridge.js';
+import { createRequestHandler, describeAction } from './bridge.js';
 import {
   ACTION_TIMEOUT_MS,
   CliError,
@@ -13,10 +13,11 @@ import {
   resolveCliPath,
   toCswapError,
 } from './cli.js';
-import { DEACTIVATE_GRACE_MS, EngineProcess } from './engine.js';
+import { DEACTIVATE_GRACE_MS, EngineProcess, shouldRetryEngine } from './engine.js';
 import type { CliState } from './generated/index.js';
 import { UsageNotifier, type Notice } from './notifier.js';
 import { DashboardPanel } from './panel.js';
+import { Refresher } from './refresher.js';
 import {
   accountLabel,
   colorThresholds,
@@ -63,9 +64,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
   const cli = createCliRunner(cliPath);
 
   let state: CliState | undefined;
-  let inflight: Promise<CliState> | undefined;
   let timer: NodeJS.Timeout | undefined;
   let engineWarned = false;
+  /** Il lock è di un'altra finestra o dell'app desktop: si ritenta quando si libera. */
+  let waitingLock = false;
   let panelReady = false;
   const notifier = new UsageNotifier();
 
@@ -90,6 +92,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
           ),
         );
       }
+      render();
+    },
+    onLockBusy: () => {
+      waitingLock = true;
+      output.info('[motore] attivo altrove (lock occupato): riprovo quando si libera');
       render();
     },
   });
@@ -140,6 +147,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
       lastState: () => state,
       refresh: () => refresh(),
       onOutcome: (outcome) => afterAction(outcome),
+      confirm: (action, needed) =>
+        askConfirmation(needed, t('SwapDeck: confirm "{0}"?', describeAction(action))),
     }),
     () => {
       panelReady = true;
@@ -147,41 +156,51 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     },
   );
 
-  async function refresh(): Promise<CliState> {
-    if (inflight) return inflight;
-    inflight = (async () => {
-      try {
-        const next = await cli<CliState>(['state']);
-        state = next;
-        if (next.error) output.warn(`state: ${next.error.kind}: ${next.error.message}`);
-        if (next.list) {
-          notify(notifier.update(next.list, settings().thresholds));
-          panel.post({ type: 'state', list: next.list });
-        }
-        return next;
-      } catch (error) {
-        const info = toCswapError(error);
-        output.error(`state: ${info.message}`);
-        state = {
-          list: null,
-          error: info,
-          updatedAtMs: Date.now(),
-          engine: state?.engine ?? {
-            enabled: false,
-            dryRun: false,
-            pollIntervalSeconds: 60,
-            running: false,
-            lock: null,
-          },
-        };
-        return state;
-      } finally {
-        inflight = undefined;
-        render();
-      }
-    })();
-    return inflight;
+  /** Lettura di `state`: non rifiuta, un errore della CLI diventa uno stato con `error`. */
+  async function readState(): Promise<CliState> {
+    try {
+      return await cli<CliState>(['state']);
+    } catch (error) {
+      const info = toCswapError(error);
+      output.error(`state: ${info.message}`);
+      return {
+        list: null,
+        error: info,
+        updatedAtMs: Date.now(),
+        engine: state?.engine ?? {
+          enabled: false,
+          dryRun: false,
+          pollIntervalSeconds: 60,
+          running: false,
+          lock: null,
+        },
+      };
+    }
   }
+
+  const refresher = new Refresher(readState, (next, current) => {
+    if (!current) return state ?? next; // partita prima di un'azione: lo stato nuovo è già lì
+    state = next;
+    if (next.error) output.warn(`state: ${next.error.kind}: ${next.error.message}`);
+    if (next.list) {
+      notify(notifier.update(next.list, settings().thresholds));
+      panel.post({ type: 'state', list: next.list });
+    }
+    if (
+      shouldRetryEngine({
+        enabled: settings().engineEnabled,
+        localRunning: engine.running,
+        waitingLock,
+        lockHeldElsewhere: next.engine.problem ? undefined : next.engine.running,
+      })
+    ) {
+      output.info('[motore] lock libero: nuovo avvio');
+      syncEngine();
+    }
+    render();
+    return next;
+  });
+  const refresh = () => refresher.refresh();
 
   const schedule = () => {
     clearTimeout(timer);
@@ -191,6 +210,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
   };
 
   async function afterAction(outcome: ActionOutcome): Promise<void> {
+    refresher.invalidate();
     if (outcome.command) {
       const term = vscode.window.createTerminal({
         name: 'cswap run',
@@ -224,14 +244,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     const args = ['confirm', '-'];
     if (state?.list) args.push('--active', String(active ?? 'none'));
     const needed = await cli<Confirmation>(args, { stdin: JSON.stringify(action) });
-    if (needed.kind === 'none') return true;
-    if (needed.kind === 'simple') {
-      const ok = t('Confirm');
-      const choice = await vscode.window.showWarningMessage(label, { modal: true }, ok);
-      return choice === ok;
-    }
+    return needed.kind === 'none' || askConfirmation(needed, label);
+  }
+
+  /** Dialogo modale; per la conferma con parola (`purge`) poi anche la parola da digitare. */
+  async function askConfirmation(
+    needed: Exclude<Confirmation, { kind: 'none' }>,
+    label: string,
+  ): Promise<boolean> {
+    const ok = t('Confirm');
+    const choice = await vscode.window.showWarningMessage(label, { modal: true }, ok);
+    if (choice !== ok) return false;
+    if (needed.kind === 'simple') return true;
     const typed = await vscode.window.showInputBox({
       prompt: t('{0} — type "{1}" to confirm', label, needed.word),
+      ignoreFocusOut: true,
       validateInput: (v) => (v === needed.word ? undefined : t('Type "{0}"', needed.word)),
     });
     return typed === needed.word;
@@ -308,11 +335,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     const s = settings();
     if (s.engineEnabled && !engine.running) {
       engineWarned = false;
+      waitingLock = false;
       output.info(`[motore] avvio: ${cliPath()} headless`);
       engine.start(cliPath());
     } else if (!s.engineEnabled && engine.running) {
       output.info('[motore] arresto');
-      void engine.stop().then(render);
+      void engine.stop().then(syncEngine);
+    } else if (!s.engineEnabled) {
+      waitingLock = false;
     }
     render();
   };

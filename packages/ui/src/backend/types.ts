@@ -59,6 +59,11 @@ export class BackendError extends Error {
  * Un'azione che cambia lo stato (switch, disable, ...) deve far scattare `onStateChanged` con la lista aggiornata: la UI non la rilegge da sola.
  */
 export interface Backend {
+  /**
+   * L'host chiede da sé le conferme dovute dentro `runAction` (dialoghi nativi, es. VS Code):
+   * la UI allora non mostra il suo `ConfirmDialog`, per non chiedere due volte.
+   */
+  readonly hostConfirms?: boolean;
   /** `cswap list --json`. Con `refresh` forza una nuova lettura invece di usare l'ultima. */
   listAccounts(options?: { refresh?: boolean }): Promise<ListResponse>;
   /** `cswap status --json`. */

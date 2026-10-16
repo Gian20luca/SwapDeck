@@ -106,14 +106,10 @@ fn state_switch_and_confirm() {
     assert_eq!(s["engine"]["running"], false);
     assert_eq!(s["engine"]["enabled"], false);
 
-    let (code, c) = env.run(&["confirm", r#"{"kind":"disable","account":6}"#]);
+    let disable6 = r#"{"kind":"disable","account":6}"#;
+    let (code, c) = env.run_stdin(&["confirm", "-"], disable6);
     assert_eq!((code, c["kind"].as_str()), (0, Some("simple")));
-    let (code, c) = env.run(&[
-        "confirm",
-        r#"{"kind":"disable","account":6}"#,
-        "--active",
-        "3",
-    ]);
+    let (code, c) = env.run_stdin(&["confirm", "-", "--active", "3"], disable6);
     assert_eq!((code, c["kind"].as_str()), (0, Some("none")));
 
     let (code, out) = env.run_stdin(&["action", "-"], r#"{"kind":"switch","target":3}"#);
@@ -126,13 +122,18 @@ fn state_switch_and_confirm() {
 #[test]
 fn action_errors_are_json() {
     let env = Env::new();
-    let (code, v) = env.run(&["action", "{not json"]);
+    let (code, v) = env.run_stdin(&["action", "-"], "{not json");
     assert_eq!(code, 2);
     assert_eq!(v["error"]["kind"], "invalidUsage");
-    let (code, v) = env.run(&["action", r#"{"kind":"switch","target":42}"#]);
+    let (code, v) = env.run(&["action", r#"{"kind":"switch","target":3}"#]);
+    assert_eq!(
+        (code, v["error"]["kind"].as_str()),
+        (2, Some("invalidUsage"))
+    );
+    let (code, v) = env.run_stdin(&["action", "-"], r#"{"kind":"switch","target":42}"#);
     assert_eq!(code, 1, "{v}");
     assert!(v["error"]["message"].is_string());
-    let (code, v) = env.run(&["action", r#"{"kind":"autoStop"}"#]);
+    let (code, v) = env.run_stdin(&["action", "-"], r#"{"kind":"autoStop"}"#);
     assert_eq!(
         (code, v["error"]["kind"].as_str()),
         (2, Some("invalidUsage"))
@@ -153,7 +154,10 @@ fn add_token_reads_stdin_and_never_echoes_it() {
 #[test]
 fn run_returns_the_command_to_open() {
     let env = Env::new();
-    let (code, out) = env.run(&["action", r#"{"kind":"run","options":{"account":3}}"#]);
+    let (code, out) = env.run_stdin(
+        &["action", "-"],
+        r#"{"kind":"run","options":{"account":3}}"#,
+    );
     assert_eq!(code, 0, "{out}");
     assert!(out["command"]["program"].is_string(), "{out}");
     assert!(out["command"]["args"].is_array());

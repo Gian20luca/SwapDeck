@@ -27,5 +27,6 @@
   "Switch to account #{0}?": "Passare all'account #{0}?",
   "Type \"{0}\"": "Scrivi «{0}»",
   "unknown error": "errore sconosciuto",
-  "Updated at {0}": "Aggiornato alle {0}"
+  "Updated at {0}": "Aggiornato alle {0}",
+  "SwapDeck: confirm \"{0}\"?": "SwapDeck: confermi \"{0}\"?"
 }
