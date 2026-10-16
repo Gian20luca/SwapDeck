@@ -13,3 +13,10 @@ unsafe_code = "forbid"
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+
+# Build di sviluppo leggere su disco: niente debuginfo per le dipendenze, solo righe per il workspace.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
