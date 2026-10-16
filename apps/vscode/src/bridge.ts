@@ -9,7 +9,7 @@ import type {
 import type { HistoryPoint } from '@swapdeck/ui';
 import { ACTION_TIMEOUT_MS, CliError, type CliRunner } from './cli.js';
 import type { CliState } from './generated/index.js';
-import { isRequestMethod, type RequestMethod } from './protocol.js';
+import { isRequestMethod, type PickParams, type RequestMethod } from './protocol.js';
 
 const DAY_SECONDS = 24 * 3600;
 const DEFAULT_HISTORY_SECONDS = 7 * DAY_SECONDS;
@@ -28,6 +28,8 @@ export interface BridgeDeps {
     action: CswapAction,
     needed: Exclude<Confirmation, { kind: 'none' }>,
   ) => Promise<boolean>;
+  /** Selettori nativi di file e cartelle; assente = metodo non disponibile. */
+  pick?: (kind: 'openFile' | 'saveFile' | 'folder', options: PickParams) => Promise<string | null>;
   now?: () => number;
 }
 
@@ -92,6 +94,35 @@ function checkedAction(value: unknown): CswapAction {
     }
   }
   return value as CswapAction;
+}
+
+/** Opzioni del selettore: solo testi, estensioni semplici; il webview non è fidato. */
+export function checkedPick(params: Record<string, unknown>): PickParams {
+  const out: PickParams = {};
+  for (const key of ['title', 'defaultPath'] as const) {
+    const value = params[key];
+    if (value === undefined) continue;
+    if (typeof value !== 'string' || value.length > 1000) throw invalid(`${key} non valido`);
+    out[key] = value;
+  }
+  const filters = params['filters'];
+  if (filters !== undefined) {
+    if (!Array.isArray(filters) || filters.length > 10) throw invalid('filtri non validi');
+    out.filters = filters.map((f: unknown) => {
+      const name = (f as { name?: unknown } | null)?.name;
+      const extensions = (f as { extensions?: unknown } | null)?.extensions;
+      if (
+        typeof name !== 'string' ||
+        name.length > 100 ||
+        !Array.isArray(extensions) ||
+        !extensions.every((e) => typeof e === 'string' && /^[A-Za-z0-9]{1,10}$/.test(e))
+      ) {
+        throw invalid('filtri non validi');
+      }
+      return { name, extensions: extensions as string[] };
+    });
+  }
+  return out;
 }
 
 function optionalInt(value: unknown, name: string): number | undefined {
@@ -160,6 +191,18 @@ export function createRequestHandler(deps: BridgeDeps) {
         args.push('--to', String(nowSec));
         if (account !== undefined) args.push('--account', String(account));
         return toHistoryPoints(await deps.cli<HistoryRecord[]>(args));
+      }
+      case 'pickOpenFile':
+      case 'pickSaveFile':
+      case 'pickFolder': {
+        if (!deps.pick) throw invalid('selettore non disponibile');
+        const kind =
+          method === 'pickOpenFile'
+            ? 'openFile'
+            : method === 'pickSaveFile'
+              ? 'saveFile'
+              : 'folder';
+        return deps.pick(kind, checkedPick(params));
       }
       case 'confirmationFor':
         return confirmationFor(checkedAction(params['action']));

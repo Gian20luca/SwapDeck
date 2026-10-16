@@ -168,3 +168,55 @@ describe('createRequestHandler', () => {
     ]);
   });
 });
+
+describe('selettori di file e cartelle', () => {
+  function withPick(result: string | null = 'C:/scelto') {
+    const pick = vi.fn(async (_kind: string, _options: unknown) => result);
+    const handle = createRequestHandler({
+      cli: (async () => null) as CliRunner,
+      lastState: () => undefined,
+      refresh: async () => cliState(fixtureList()),
+      onOutcome: () => undefined,
+      confirm: async () => true,
+      pick,
+    });
+    return { handle, pick };
+  }
+
+  it('inoltra il tipo di selettore e solo le opzioni valide', async () => {
+    const { handle, pick } = withPick();
+    const filters = [{ name: 'JSON', extensions: ['json'] }];
+    await expect(handle('pickOpenFile', { title: 'T', filters, extra: 1 })).resolves.toBe(
+      'C:/scelto',
+    );
+    expect(pick).toHaveBeenLastCalledWith('openFile', { title: 'T', filters });
+    await handle('pickSaveFile', { defaultPath: 'a.json' });
+    expect(pick).toHaveBeenLastCalledWith('saveFile', { defaultPath: 'a.json' });
+    await handle('pickFolder', {});
+    expect(pick).toHaveBeenLastCalledWith('folder', {});
+  });
+
+  it('annullato: null; opzioni non valide: invalidUsage senza aprire nulla', async () => {
+    const { handle, pick } = withPick(null);
+    await expect(handle('pickFolder', {})).resolves.toBeNull();
+    const invalid = { info: { kind: 'invalidUsage' } };
+    pick.mockClear();
+    await expect(handle('pickOpenFile', { title: 1 })).rejects.toMatchObject(invalid);
+    await expect(handle('pickOpenFile', { filters: 'x' })).rejects.toMatchObject(invalid);
+    await expect(
+      handle('pickOpenFile', { filters: [{ name: 'x', extensions: ['a/b'] }] }),
+    ).rejects.toMatchObject(invalid);
+    await expect(handle('pickOpenFile', { filters: [null] })).rejects.toMatchObject(invalid);
+    await expect(
+      handle('pickOpenFile', { filters: Array(11).fill({ name: 'x', extensions: [] }) }),
+    ).rejects.toMatchObject(invalid);
+    expect(pick).not.toHaveBeenCalled();
+  });
+
+  it('senza il selettore dell’host: metodo non disponibile', async () => {
+    const { handle } = setup();
+    await expect(handle('pickFolder', {})).rejects.toMatchObject({
+      info: { kind: 'invalidUsage', message: 'selettore non disponibile' },
+    });
+  });
+});

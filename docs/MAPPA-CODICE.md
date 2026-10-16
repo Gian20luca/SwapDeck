@@ -77,12 +77,12 @@ Esporta i sorgenti (`src/index.ts`), non una build: i consumatori (Tauri, webvie
 
 | Percorso (`src/`) | Ruolo |
 |---|---|
-| `backend/types.ts` | interfaccia `Backend` (async, `onStateChanged`, `hostConfirms` facoltativo: l'host chiede da sé le conferme), `HistoryPoint`, `BackendError`; `actions.ts` costruisce le `CswapAction`; `context.tsx`, `useAccounts.ts` |
+| `backend/types.ts` | interfaccia `Backend` (async, `onStateChanged`, `hostConfirms` facoltativo: l'host chiede da sé le conferme), `HistoryPoint`, `BackendError`; `actions.ts` costruisce le `CswapAction`; `context.tsx`, `useAccounts.ts` ; metodi facoltativi di gestione (step 5): `listMappings`, `getEngineState`/`setEngineRules`, `getPreferences`/`setPreferences`, `getAppSettings`/`setAutostart`, `getHistoryEvents`, `pickOpenFile`/`pickSaveFile`/`pickFolder` (un host senza metodo ottiene «non disponibile» o il solo campo di testo); `useActionRunner.tsx` esegue le azioni con la conferma dovuta (`confirmationFor`, saltata se `hostConfirms`), `useLoad` in `lib/` |
 | `dev/` | `FakeBackend` (fixture di `fixtures/cswap/` con istanti riallineati a «ora», cambi simulati), `history.ts` (storico sintetico di 7 giorni), `main.tsx` (anteprima con demo dei dialoghi di conferma) |
-| `components/` | `Dashboard`, `AccountCard`, `UsageBar`, `PaceIndicator`, `QuickSwitch`, `HistoryPanel`, `UsageChart` (uPlot), `MiniWidget`, `ConfirmDialog` (anche a doppia conferma con parola), `PreferenceControls` |
-| `i18n/` | dizionari `it.ts` (fonte delle chiavi) ed `en.ts`, `I18nProvider`, `useI18n` |
+| `components/` | `Dashboard`, `AccountCard`, `UsageBar`, `PaceIndicator`, `QuickSwitch`, `HistoryPanel`, `UsageChart` (uPlot), `MiniWidget`, `ConfirmDialog` (anche a doppia conferma con parola), `PreferenceControls`; `SwapDeckApp` (schede Account, Cartelle, Regole, Storico, Strumenti, Impostazioni, a misura di 420×640) e `manage/` (`AddAccount`, `AccountActions`, `FoldersPage`, `RulesPage`, `HistoryPage`, `ToolsPage`, `SettingsPage`, `common.tsx`); `Dashboard manage` aggiunge le azioni sulle schede |
+| `i18n/` | dizionari `it.ts` (fonte delle chiavi) ed `en.ts`, `I18nProvider`, `useI18n`; i testi della gestione sono in `it.manage.ts` ed `en.manage.ts` |
 | `theme/`, `styles/index.css` | `ThemeProvider` (chiaro/scuro/auto via `data-theme`), variabili CSS, test di contrasto AA |
-| `lib/` | soglie e formattazione (`format.ts`), helper degli account (`account.ts`), `useNow` |
+| `lib/` | soglie e formattazione (`format.ts`), helper degli account (`account.ts`), `useNow`, `engineRules.ts` (preset cswap-guard, bozza e validazione come `EngineRules::validate`), `cswapConfig.ts` (chiavi e valori di `cswap config`), `historyEvents.ts`, `useLoad.ts` |
 | `e2e/`, `playwright.config.ts` (fuori da `src/`) | Playwright su Chromium contro l'anteprima (porta 5199): `pnpm --filter @swapdeck/ui e2e`; screenshot in `e2e/screenshots/` (ignorati da git). Copertura: `pnpm --filter @swapdeck/ui test:coverage` (v8, soglia 80% righe e funzioni, esclusi `src/dev/**`) |
 
 ### `apps/desktop` (step 4)
@@ -92,9 +92,9 @@ Build di sviluppo: `pnpm --filter @swapdeck/desktop build`, poi `cargo build -p 
 
 | Percorso | Ruolo |
 |---|---|
-| `src/TauriBackend.ts` | `Backend` con `invoke` ed evento `state-changed` (`Snapshot`: lista, errore, `engine`, `engineSuspended`, `autoRunning`); comandi dell'app (`getSnapshot`, `getAppSettings`, `setAutostart`, `showMain`) |
+| `src/TauriBackend.ts` | `Backend` con `invoke` ed evento `state-changed` (`Snapshot`: lista, errore, `engine`, `engineSuspended`, `autoRunning`); comandi dell'app (`getSnapshot`, `getAppSettings`, `setAutostart`, `showMain`); step 5: metodi di gestione (`list_mappings`, `get_engine_state`, `set_engine_rules`, `get_preferences`, `set_preferences`, `get_history_events`: comandi Rust ancora da scrivere) e selettori con `tauri-plugin-dialog` (permessi `dialog:allow-open/save` solo nella finestra `main`) |
 | `src/EngineStatus.tsx` | righe di stato sopra la dashboard: motore sospeso (motivo e conflitti), sola osservazione, `cswap auto` in esecuzione |
-| `src/main.tsx` | dashboard nella finestra `main`, `MiniWidget` trascinabile nella finestra `mini` (scelta dall'etichetta della finestra); `AutostartToggle.tsx` |
+| `src/main.tsx` | `SwapDeckApp` nella finestra `main` (lingua e tema iniziali da `get_preferences`, se c'è), `MiniWidget` trascinabile nella finestra `mini` (scelta dall'etichetta della finestra) |
 | `src-tauri/src/api.rs` | interfaccia sottile `CswapApi`; `ClientApi` sopra `CswapClient` (ricerca pigra, una chiamata alla volta, `cswap auto` in un Job Object con `KILL_ON_JOB_CLOSE`, `auto_poll`, `shutdown` all'uscita); finto per i test |
 | `src-tauri/src/auto_watch.rs` | controllo di `cswap auto` ogni 2 s: eventi, cambi, fine o errore (stato nella UI e notifica) |
 | `src-tauri/src/engine_loop.rs` | motore nel ciclo di lettura (`headless::Engine`): con il lock storico, battito, decisione e cambio; senza solo osservazione; `EngineView` per la UI; conflitti letti solo a motore acceso |

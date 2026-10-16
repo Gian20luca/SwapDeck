@@ -13,6 +13,9 @@ export const REQUEST_METHODS = [
   'getHistory',
   'confirmationFor',
   'runAction',
+  'pickOpenFile',
+  'pickSaveFile',
+  'pickFolder',
 ] as const;
 
 export type RequestMethod = (typeof REQUEST_METHODS)[number];
@@ -22,6 +25,13 @@ export interface HistoryParams {
   sinceSeconds?: number;
 }
 
+/** Opzioni dei selettori nativi (`PickOptions` della UI). */
+export interface PickParams {
+  title?: string;
+  defaultPath?: string;
+  filters?: Array<{ name: string; extensions: string[] }>;
+}
+
 export type RequestParams =
   | { method: 'listAccounts'; params: { refresh?: boolean } }
   | { method: 'getStatus'; params: Record<string, never> }
@@ -29,7 +39,8 @@ export type RequestParams =
   | { method: 'getConfigValue'; params: { key: string } }
   | { method: 'getHistory'; params: HistoryParams }
   | { method: 'confirmationFor'; params: { action: CswapAction } }
-  | { method: 'runAction'; params: { action: CswapAction } };
+  | { method: 'runAction'; params: { action: CswapAction } }
+  | { method: 'pickOpenFile' | 'pickSaveFile' | 'pickFolder'; params: PickParams };
 
 /** Webview → host. */
 export type WebviewMessage = ({ type: 'request'; id: number } & RequestParams) | { type: 'ready' };

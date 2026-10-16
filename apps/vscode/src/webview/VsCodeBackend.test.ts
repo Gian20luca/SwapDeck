@@ -102,6 +102,29 @@ describe('VsCodeBackend', () => {
     expect(isUnsubscribed()).toBe(true);
   });
 
+  it('i selettori nativi diventano richieste all’host', async () => {
+    const { backend, sent, reply } = setup();
+    const folder = backend.pickFolder({ title: 'Cartella' });
+    const open = backend.pickOpenFile({ filters: [{ name: 'JSON', extensions: ['json'] }] });
+    const save = backend.pickSaveFile();
+    expect(sent).toEqual([
+      { type: 'request', id: 1, method: 'pickFolder', params: { title: 'Cartella' } },
+      {
+        type: 'request',
+        id: 2,
+        method: 'pickOpenFile',
+        params: { filters: [{ name: 'JSON', extensions: ['json'] }] },
+      },
+      { type: 'request', id: 3, method: 'pickSaveFile', params: {} },
+    ]);
+    reply({ type: 'response', id: 1, ok: true, result: 'C:/x' });
+    reply({ type: 'response', id: 2, ok: true, result: null });
+    reply({ type: 'response', id: 3, ok: true, result: 'C:/y' });
+    await expect(folder).resolves.toBe('C:/x');
+    await expect(open).resolves.toBeNull();
+    await expect(save).resolves.toBe('C:/y');
+  });
+
   it('postMessage che lancia diventa BackendError', async () => {
     const backend = new VsCodeBackend(
       () => {

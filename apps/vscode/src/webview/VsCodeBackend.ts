@@ -14,9 +14,16 @@ import {
   type Backend,
   type HistoryPoint,
   type HistoryQuery,
+  type PickOptions,
   type Unsubscribe,
 } from '@swapdeck/ui';
-import type { HostMessage, RequestParams, ViewSettings, WebviewMessage } from '../protocol.js';
+import type {
+  HostMessage,
+  PickParams,
+  RequestParams,
+  ViewSettings,
+  WebviewMessage,
+} from '../protocol.js';
 
 export type PostFn = (message: WebviewMessage) => void;
 export type SubscribeFn = (handler: (message: HostMessage) => void) => Unsubscribe;
@@ -126,6 +133,19 @@ export class VsCodeBackend implements Backend {
     return result;
   }
 
+  /** Selettori nativi di VS Code (`showOpenDialog`/`showSaveDialog` nell'host); `null` se annullati. */
+  pickOpenFile(options: PickOptions = {}): Promise<string | null> {
+    return this.request({ method: 'pickOpenFile', params: pickParams(options) });
+  }
+
+  pickSaveFile(options: PickOptions = {}): Promise<string | null> {
+    return this.request({ method: 'pickSaveFile', params: pickParams(options) });
+  }
+
+  pickFolder(options: PickOptions = {}): Promise<string | null> {
+    return this.request({ method: 'pickFolder', params: pickParams(options) });
+  }
+
   onStateChanged(listener: (state: ListResponse) => void): Unsubscribe {
     this.stateListeners.add(listener);
     return () => this.stateListeners.delete(listener);
@@ -136,4 +156,12 @@ export class VsCodeBackend implements Backend {
     this.viewListeners.add(listener);
     return () => this.viewListeners.delete(listener);
   }
+}
+
+function pickParams(options: PickOptions): PickParams {
+  return {
+    ...(options.title ? { title: options.title } : {}),
+    ...(options.defaultPath ? { defaultPath: options.defaultPath } : {}),
+    ...(options.filters ? { filters: options.filters } : {}),
+  };
 }
