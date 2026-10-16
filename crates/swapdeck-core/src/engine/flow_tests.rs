@@ -554,6 +554,11 @@ fn criteria_fall_back_when_their_data_is_missing() {
         ["modello «Ghost» sconosciuto: nessuna utenza lo riporta"]
     );
     assert!(rules_with(ModelHeadroom).validate_with_list(&l).is_empty());
+    // Solo gli avvisi della lista, senza ripetere quelli di validate (pagina Regole).
+    assert_eq!(
+        ghost.list_warnings(&l),
+        ["modello «Ghost» sconosciuto: nessuna utenza lo riporta"]
+    );
     let unknown_list = list(Some(6), vec![main(), acc(1, 0.0, 40.0)]);
     assert!(
         ghost.validate_with_list(&unknown_list).is_empty(),

@@ -449,6 +449,11 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
               {errors.weights && <span className="sd-field-error">{t(errors.weights)}</span>}
             </fieldset>
           )}
+          {(data.engine.warnings ?? []).map((w) => (
+            <div key={w} className="sd-notice" data-tone="warn" role="status">
+              {w}
+            </div>
+          ))}
           {draft.reserveCriterion === 'model-headroom' && (
             <TextField
               label={t('flow.model')}

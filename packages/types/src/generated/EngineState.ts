@@ -10,4 +10,9 @@ export type EngineState = { rules: EngineRules,
 /**
  * `null` se il motore non ha ancora fatto un giro.
  */
-view: EngineView | null, conflicts: Array<Conflict>, };
+view: EngineView | null, conflicts: Array<Conflict>, 
+/**
+ * Avvisi che si vedono solo con la lista di cswap (per esempio un modello di «margine sul
+ * modello» che nessuna utenza riporta); vuoto se la lista non è nota.
+ */
+warnings?: Array<string>, };

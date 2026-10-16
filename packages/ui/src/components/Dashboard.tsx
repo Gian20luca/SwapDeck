@@ -42,7 +42,7 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
   const backend = useBackend();
   const { state, refresh } = useAccounts();
   const now = useNow();
-  const engineMarks = useEngineMarks();
+  const engineMarks = useEngineMarks(state.status === 'ready' ? state.data.accounts : undefined);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const navigate = useNavigate();

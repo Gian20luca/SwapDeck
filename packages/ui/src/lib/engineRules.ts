@@ -72,8 +72,7 @@ export function toDraft(rules: EngineRules): RulesDraft {
 }
 
 /**
- * Le regole salvate con i campi della bozza sopra. La lista va solo in `order` (fonte di verità del
- * Rust): `primary` e `reserves` restano quelli di `base`, derivati dal Rust al salvataggio. I pesi
+ * Le regole salvate con i campi della bozza sopra. I pesi
  * e il modello si scrivono solo se cambiano rispetto a `base` (assenti = default del Rust).
  */
 export function fromDraft(draft: RulesDraft, base: EngineRules): EngineRules {
@@ -91,7 +90,19 @@ export function fromDraft(draft: RulesDraft, base: EngineRules): EngineRules {
     minSwitchGapSecs: Number(draft.minSwitchGapSecs),
     ignoredConflicts: [...draft.ignoredConflicts],
   };
-  if (draft.order.length > 0 || base.order) out.order = [...draft.order];
+  // La lista va in `order` (fonte di verità del Rust); `primary` e `reserves` si scrivono
+  // derivati, perché un `primary: null` esplicito accanto a `order` vuol dire «nessuna
+  // principale» e farebbe scartare la lista.
+  const [first, ...rest] = draft.order;
+  if (first !== undefined) {
+    out.order = [...draft.order];
+    out.primary = first;
+    out.reserves = rest;
+  } else if (base.order || base.primary !== null) {
+    delete out.order;
+    out.primary = null;
+    out.reserves = [];
+  }
   const weights: ScoreWeights = {
     fiveHour: Number(draft.weights.fiveHour),
     sevenDay: Number(draft.weights.sevenDay),

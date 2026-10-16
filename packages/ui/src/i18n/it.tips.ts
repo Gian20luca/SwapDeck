@@ -44,4 +44,5 @@ export const itTips = {
   'tools.purge.action.tip':
     'Cancella tutti i dati di cswap, dopo una doppia conferma. Non si torna indietro.',
   'mini.refresh.tip': 'Riprova a leggere i consumi.',
+  'engineMark.target': ' (ora: {name})',
 } as const;

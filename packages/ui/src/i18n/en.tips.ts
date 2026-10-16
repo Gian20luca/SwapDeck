@@ -46,4 +46,5 @@ export const enTips: Record<keyof typeof itTips, string> = {
   'tools.purge.action.tip':
     'Deletes all cswap data, after a double confirmation. It cannot be undone.',
   'mini.refresh.tip': 'Tries reading usage again.',
+  'engineMark.target': ' (now: {name})',
 };

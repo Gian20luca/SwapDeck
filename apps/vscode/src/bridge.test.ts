@@ -217,6 +217,25 @@ describe('mappe', () => {
   });
 });
 
+describe('notifiche', () => {
+  it('regole lette e patch da stdin, validata', async () => {
+    const { handle, calls } = setup();
+    await handle('getNotificationSettings', {});
+    await handle('setNotificationSettings', { patch: { switched: { enabled: false } } });
+    expect(calls).toEqual([
+      { args: ['notifications', 'get'] },
+      {
+        args: ['notifications', 'set', '-'],
+        options: { stdin: '{"switched":{"enabled":false}}' },
+      },
+    ]);
+    await expect(handle('setNotificationSettings', { patch: 'x' })).rejects.toMatchObject({
+      info: { kind: 'invalidUsage' },
+    });
+    expect(calls).toHaveLength(2);
+  });
+});
+
 describe('selettori di file e cartelle', () => {
   function withPick(result: string | null = 'C:/scelto') {
     const pick = vi.fn(async (_kind: string, _options: unknown) => result);

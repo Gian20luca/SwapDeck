@@ -8,6 +8,7 @@ import { displayPct, formatClock, isStale, levelFor } from '../lib/format.js';
 import { useEngineMarks } from '../lib/useEngineMarks.js';
 import { useNow } from '../lib/useNow.js';
 import { UsageBar } from './UsageBar.js';
+import { MiniMapSelect } from './MiniMapSelect.js';
 import { Tooltip } from './Tooltip.js';
 
 /** Durata minima dell'indicazione «in aggiornamento»: una lettura dalla cache sarebbe invisibile. */
@@ -117,7 +118,7 @@ export function MiniWidget() {
   const win = useBackend().miniWindow;
   const { state, refresh } = useAccounts();
   const now = useNow();
-  const marks = useEngineMarks();
+  const marks = useEngineMarks(state.status === 'ready' ? state.data.accounts : undefined);
   const [pending, setPending] = useState(false);
   /** `null` finché l'host non ha detto com'era (una finestra già ridotta non deve lampeggiare espansa). */
   const [compact, setCompactState] = useState<boolean | null>(win ? null : false);
@@ -299,6 +300,7 @@ export function MiniWidget() {
               {t(stale ? 'mini.staleAt' : 'mini.updatedAt', { time: clock })}
             </div>
           )}
+          <MiniMapSelect />
         </>
       );
     }

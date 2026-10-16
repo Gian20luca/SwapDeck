@@ -37,10 +37,12 @@ export function engineTip(mark: EngineMark, t: Translate): string {
   const pct = mark.pct;
   switch (mark.mode) {
     case 'active':
-      return t('engineMark.active', {
-        pct,
-        criterion: t(`engineMark.criterion.${mark.criterion}`),
-      });
+      return (
+        t('engineMark.active', {
+          pct,
+          criterion: t(`engineMark.criterion.${mark.criterion}`),
+        }) + (mark.targetName ? t('engineMark.target', { name: mark.targetName }) : '')
+      );
     case 'observe':
       return t('engineMark.observe', { pct });
     case 'suspended':

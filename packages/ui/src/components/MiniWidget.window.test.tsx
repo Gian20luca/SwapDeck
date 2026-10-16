@@ -43,7 +43,7 @@ describe('MiniWidget: pulsanti della finestra', () => {
       'Hide the mini-widget (stays in the notification area)',
       'Collapse to a strip',
     ]) {
-      expect(screen.getByRole('button', { name })).toHaveAttribute('title', name);
+      expect(screen.getByRole('button', { name })).toHaveAccessibleDescription(name);
     }
   });
 

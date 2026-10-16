@@ -39,7 +39,7 @@ describe('RulesPage: flusso a lista', () => {
     expect(screen.getByRole('button', { name: 'Salva' })).toBeDisabled();
   });
 
-  it('tastiera: Spazio prende, frecce spostano, Spazio lascia; si salva solo order', async () => {
+  it('tastiera: Spazio prende, frecce spostano, Spazio lascia; la lista va in order', async () => {
     const { save, user } = await setup({ rules: { primary: 6, reserves: [1, 3] } });
     screen.getByRole('button', { name: 'Sposta alias3, posizione 3 di 5' }).focus();
     await user.keyboard(' ');
@@ -54,8 +54,8 @@ describe('RulesPage: flusso a lista', () => {
     const sent = save.mock.calls[0]![0];
     expect(sent.order).toEqual([3, 6, 1, 2, 5]);
     expect(sent.excluded).toEqual([2, 5]);
-    expect(sent.primary).toBe(6);
-    expect(sent.reserves).toEqual([1, 3]);
+    expect(sent.primary).toBe(3);
+    expect(sent.reserves).toEqual([6, 1, 2, 5]);
   });
 
   it('tastiera: Esc annulla lo spostamento', async () => {
@@ -375,5 +375,19 @@ describe('RulesPage: stato sospeso e conflitti', () => {
   it('host senza le regole del motore: funzione non disponibile', async () => {
     renderWith(<RulesPage />, bareBackend(new FakeBackend()));
     expect(await screen.findByText(/non è disponibile in questo ambiente/)).toBeInTheDocument();
+  });
+});
+
+describe('RulesPage: avvisi dalla lista di cswap', () => {
+  it('modello sconosciuto: avviso nell’editor della mappa', async () => {
+    const backend = new FakeBackend({ rules: { primary: 6, reserveCriterion: 'model-headroom' } });
+    const state = await backend.getEngineState();
+    vi.spyOn(backend, 'getEngineState').mockResolvedValue({
+      ...state,
+      rules: { ...state.rules, headroomModel: 'Ghost' },
+      warnings: ['modello «Ghost» sconosciuto: nessuna utenza lo riporta'],
+    });
+    renderWith(<RulesPage />, backend);
+    expect(await screen.findByText(/«Ghost» sconosciuto/)).toBeInTheDocument();
   });
 });

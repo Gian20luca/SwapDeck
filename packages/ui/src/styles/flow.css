@@ -170,3 +170,16 @@
   margin: 0 0 6px 24px;
   min-width: 0;
 }
+
+.sd-mini__map {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 12px;
+}
+.sd-mini__map .sd-input {
+  min-width: 0;
+  font-size: 12px;
+  padding: 1px 4px;
+}

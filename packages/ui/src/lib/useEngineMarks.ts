@@ -1,9 +1,13 @@
-import { useEffect, useState } from 'react';
+import type { Account } from '@swapdeck/types';
+import { useEffect, useMemo, useState } from 'react';
 import { useBackend } from '../backend/context.js';
-import { engineMarks, type EngineMarks } from './engineMarks.js';
+import { engineMarks, withTargetNames, type EngineMarks } from './engineMarks.js';
 
-/** Soglie del motore dal Backend; rilette a ogni aggiornamento dello stato. `null` se l'host non le offre. */
-export function useEngineMarks(): EngineMarks | null {
+/**
+ * Soglie del motore dal Backend; rilette a ogni aggiornamento dello stato. `null` se l'host non le
+ * offre. Con `accounts` i trattini portano anche il nome dell'utenza di destinazione.
+ */
+export function useEngineMarks(accounts?: readonly Account[]): EngineMarks | null {
   const backend = useBackend();
   const [marks, setMarks] = useState<EngineMarks | null>(null);
   useEffect(() => {
@@ -22,5 +26,8 @@ export function useEngineMarks(): EngineMarks | null {
       off();
     };
   }, [backend]);
-  return marks;
+  return useMemo(
+    () => (marks && accounts ? withTargetNames(marks, accounts) : marks),
+    [marks, accounts],
+  );
 }

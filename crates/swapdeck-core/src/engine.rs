@@ -678,6 +678,22 @@ pub struct EngineState {
     /// `null` se il motore non ha ancora fatto un giro.
     pub view: Option<EngineView>,
     pub conflicts: Vec<Conflict>,
+    /// Avvisi che si vedono solo con la lista di cswap (per esempio un modello di «margine sul
+    /// modello» che nessuna utenza riporta); vuoto se la lista non è nota.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<String>>", optional)]
+    pub warnings: Vec<String>,
+}
+
+impl EngineRules {
+    /// I soli problemi di [`Self::validate_with_list`] che [`Self::validate`] non vede.
+    pub fn list_warnings(&self, list: &ListResponse) -> Vec<String> {
+        let base = self.validate();
+        self.validate_with_list(list)
+            .into_iter()
+            .filter(|p| !base.contains(p))
+            .collect()
+    }
 }
 
 /// Decide cosa fare. Pura: stessi argomenti, stessa decisione.

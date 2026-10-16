@@ -252,10 +252,17 @@ pub async fn list_mappings(shared: State<'_, Arc<Shared>>) -> Res<Vec<DirectoryM
 
 /// Regole in uso, vista del motore all'ultimo giro e conflitti dell'ultima lettura.
 pub fn engine_state(shared: &Shared) -> EngineState {
+    let rules = lock(&shared.settings).engine.clone();
+    let warnings = lock(&shared.snapshot)
+        .list
+        .as_ref()
+        .map(|list| rules.list_warnings(list))
+        .unwrap_or_default();
     EngineState {
-        rules: lock(&shared.settings).engine.clone(),
+        rules,
         view: lock(&shared.snapshot).engine.clone(),
         conflicts: lock(&shared.conflicts).clone(),
+        warnings,
     }
 }
 

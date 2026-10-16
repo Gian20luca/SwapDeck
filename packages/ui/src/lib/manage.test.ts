@@ -30,13 +30,13 @@ describe('engineRules', () => {
     expect(fromDraft({ ...draft, fiveHourThreshold: 'abc' }, base).fiveHourThreshold).toBeNaN();
   });
 
-  it('la lista va solo in order: principale e riserve restano quelli salvati', () => {
+  it('la lista va in order; principale e riserve ne sono derivati', () => {
     const base = rules({ order: [6, 1, 3], primary: 6, reserves: [1, 3] });
     const moved = moveRow(toDraft(base), accounts, 2, 0);
     const out = fromDraft(moved, base);
     expect(out.order).toEqual([3, 6, 1, 2]);
-    expect(out.primary).toBe(6);
-    expect(out.reserves).toEqual([1, 3]);
+    expect(out.primary).toBe(3);
+    expect(out.reserves).toEqual([6, 1, 2]);
     // 2 non era nella lista: entra in fondo ma esclusa, così il motore fa come prima.
     expect(out.excluded).toEqual([2]);
   });

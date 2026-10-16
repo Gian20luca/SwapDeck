@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "mini",
-  "description": "Mini-widget: sola lettura (lista, preferenze per lingua e tema, stato del motore per le soglie), trascinamento, apertura della finestra principale e controllo della propria finestra (nascondi, comprimi, altezza).",
+  "description": "Mini-widget: sola lettura (lista, preferenze per lingua e tema, stato del motore per le soglie), scelta della mappa attiva, trascinamento, apertura della finestra principale e controllo della propria finestra (nascondi, comprimi, altezza).",
   "windows": ["mini"],
   "permissions": [
     "core:event:allow-listen",
@@ -11,6 +11,8 @@
     "allow-show-main",
     "allow-get-preferences",
     "allow-get-engine-state",
+    "allow-get-engine-profiles",
+    "allow-apply-engine-profile",
     "allow-mini-hide",
     "allow-mini-set-compact",
     "allow-mini-is-compact",

@@ -481,6 +481,7 @@ fn engine_state(paths: &AppPaths) -> Res<EngineState> {
         rules,
         view,
         conflicts,
+        warnings: Vec::new(),
     })
 }
 
