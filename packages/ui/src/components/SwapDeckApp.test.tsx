@@ -152,3 +152,58 @@ describe('SwapDeckApp: primo avvio e aggiornamento di cswap', () => {
     expect(screen.getByRole('tablist')).toBeVisible();
   });
 });
+
+describe('SwapDeckApp: pagina di dettaglio dell’utenza', () => {
+  async function openDetail(name: string, backend = new FakeBackend()) {
+    renderWith(<SwapDeckApp />, backend);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: `Gestisci l’account ${name}` }));
+    return { user, backend, page: screen.getByRole('region', { name: `Gestione di ${name}` }) };
+  }
+
+  it('apre solo quell’utenza, col focus su «Indietro»; «Indietro» torna all’elenco snello', async () => {
+    const { user, page } = await openDetail('alias3');
+    expect(screen.getByRole('heading', { name: 'alias3' })).toBeInTheDocument();
+    expect(within(page).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(page).getByText(/5 ore/)).toBeInTheDocument();
+    const back = screen.getByRole('button', { name: /Indietro/ });
+    expect(back).toHaveFocus();
+    await user.click(back);
+    expect(screen.queryByRole('region', { name: 'Gestione di alias3' })).toBeNull();
+    expect(screen.getByRole('list', { name: 'Account' })).toBeInTheDocument();
+    // Nell'elenco nessun pannello di gestione aperto sotto le schede.
+    expect(screen.queryByLabelText('Alias')).toBeNull();
+  });
+
+  it('«Storico» porta alla scheda Storico con l’account aperto', async () => {
+    const { user } = await openDetail('alias3');
+    await user.click(screen.getByRole('button', { name: 'Apri lo storico di alias3' }));
+    expect(screen.getByRole('tab', { name: 'Storico' })).toHaveAttribute('aria-selected', 'true');
+    expect(
+      await screen.findByRole('button', { name: 'Nascondi lo storico di alias3' }),
+    ).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('rimuovi con conferma: si torna all’elenco con l’esito', async () => {
+    const { user, backend } = await openDetail('alias3');
+    const run = vi.spyOn(backend, 'runAction');
+    await user.click(screen.getByRole('button', { name: 'Rimuovi' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(run).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Rimuovi' }));
+    await waitFor(() => expect(run).toHaveBeenCalledWith({ kind: 'remove', account: 3 }));
+    expect(await screen.findByRole('list', { name: 'Account' })).toBeInTheDocument();
+    expect(screen.getByText(/alias3.*rimoss/i)).toBeInTheDocument();
+  });
+
+  it('sposta in un altro slot: la pagina segue l’utenza', async () => {
+    const { user } = await openDetail('alias3');
+    await user.type(screen.getByLabelText('Sposta nello slot'), '9');
+    await user.click(screen.getByRole('button', { name: 'Sposta' }));
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Sposta' }),
+    );
+    expect(await screen.findByText(/slot 9/)).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Gestione di alias3' })).toBeInTheDocument();
+  });
+});

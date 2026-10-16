@@ -15,7 +15,7 @@ import { SCENARIO_NAMES, type ScenarioName } from './fixtures.js';
 
 type View = 'full' | 'mini';
 
-/** Stati del motore per provare i trattini sulle barre: `conflict` è quello di partenza (cswap-guard attivo). */
+/** Stati del motore per provare i trattini sulle barre: `conflict` è quello di partenza (un'altra attività pianificata usa cswap). */
 const ENGINE_DEMOS = ['conflict', 'on', 'off', 'observe'] as const;
 type EngineDemo = (typeof ENGINE_DEMOS)[number];
 
@@ -100,9 +100,9 @@ function Preview() {
             ? []
             : [
                 {
-                  id: 'task:cswap-guard',
+                  id: 'task:account-switcher',
                   kind: 'scheduledTask',
-                  label: 'Attività pianificata cswap-guard',
+                  label: 'Un’altra attività pianificata usa cswap: account-switcher',
                   certain: true,
                 },
                 {

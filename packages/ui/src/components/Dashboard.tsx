@@ -11,6 +11,7 @@ import { useNow } from '../lib/useNow.js';
 import { AccountCard } from './AccountCard.js';
 import { useNavigate } from './navigation.js';
 import { AccountActions } from './manage/AccountActions.js';
+import { AccountDetailPage } from './manage/AccountDetailPage.js';
 import { AddAccount } from './manage/AddAccount.js';
 import { QuickSwitch, type QuickStrategy } from './QuickSwitch.js';
 
@@ -44,6 +45,8 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const navigate = useNavigate();
+  /** Utenza aperta nella pagina di dettaglio (solo con `manage`). */
+  const [detail, setDetail] = useState<number | null>(null);
 
   const accounts = useMemo(
     () => (state.status === 'ready' ? sortAccounts(state.data.accounts) : []),
@@ -76,6 +79,56 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
   const onQuick = (strategy: QuickStrategy) => void runSwitch(actions.switchBy(strategy));
   const onSwitch = (account: Account) => void runSwitch(actions.switchTo(account.number));
 
+  const cardFor = (account: Account, withManage: boolean) => (
+    <AccountCard
+      key={account.number}
+      account={account}
+      now={now}
+      engine={engineMarks}
+      busy={busy}
+      onSwitch={onSwitch}
+      {...(navigate
+        ? {
+            onOpenHistory: (a: Account) => navigate({ tab: 'history', account: a.number }),
+          }
+        : {})}
+      {...(withManage ? { extra: <AccountActions account={account} onManage={setDetail} /> } : {})}
+    />
+  );
+
+  const liveNotice = (
+    <div aria-live="polite">
+      {notice && (
+        <div
+          className="sd-notice"
+          data-tone={notice.tone}
+          role={notice.tone === 'danger' ? 'alert' : 'status'}
+        >
+          {notice.text}
+        </div>
+      )}
+    </div>
+  );
+
+  if (manage && detail !== null && state.status === 'ready') {
+    const account = accounts.find((a) => a.number === detail);
+    return (
+      <main className="sd-app">
+        {liveNotice}
+        <AccountDetailPage
+          account={account}
+          accounts={accounts}
+          card={account ? cardFor(account, false) : null}
+          onBack={(text) => {
+            setDetail(null);
+            setNotice(text ? { tone: 'info', text } : null);
+          }}
+          onNumberChange={setDetail}
+        />
+      </main>
+    );
+  }
+
   const updated =
     state.status === 'ready'
       ? t('dashboard.updated', { age: formatAge(Math.max(0, (now - state.receivedAt) / 1000)) })
@@ -106,17 +159,7 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
         </div>
       )}
 
-      <div aria-live="polite">
-        {notice && (
-          <div
-            className="sd-notice"
-            data-tone={notice.tone}
-            role={notice.tone === 'danger' ? 'alert' : 'status'}
-          >
-            {notice.text}
-          </div>
-        )}
-      </div>
+      {liveNotice}
 
       {manage && <AddAccount />}
 
@@ -162,25 +205,7 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
             </div>
           )}
           <ul className="sd-list" aria-label={t('dashboard.title')}>
-            {accounts.map((account) => (
-              <AccountCard
-                key={account.number}
-                account={account}
-                now={now}
-                engine={engineMarks}
-                busy={busy}
-                onSwitch={onSwitch}
-                {...(navigate
-                  ? {
-                      onOpenHistory: (a: Account) =>
-                        navigate({ tab: 'history', account: a.number }),
-                    }
-                  : {})}
-                {...(manage
-                  ? { extra: <AccountActions account={account} accounts={accounts} /> }
-                  : {})}
-              />
-            ))}
+            {accounts.map((account) => cardFor(account, manage))}
           </ul>
         </>
       )}

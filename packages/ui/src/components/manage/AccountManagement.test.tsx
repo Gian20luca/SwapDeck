@@ -23,7 +23,7 @@ async function setup(options: FakeBackendOptions = {}) {
 
 async function openManage(user: ReturnType<typeof userEvent.setup>, name: string) {
   await user.click(screen.getByRole('button', { name: `Gestisci l’account ${name}` }));
-  return screen.getByRole('group', { name: `Gestione di ${name}` });
+  return screen.getByRole('region', { name: `Gestione di ${name}` });
 }
 
 describe('Aggiunta di un account', () => {

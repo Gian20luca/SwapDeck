@@ -184,7 +184,7 @@ export function generateEvents(
     if (i % 6 === 5) {
       decisions.push({
         ts: ts - 90,
-        decision: { kind: 'suspended', reason: 'conflict', detail: ['task:cswap-guard'] },
+        decision: { kind: 'suspended', reason: 'conflict', detail: ['task:account-switcher'] },
         dryRun: false,
       });
     }

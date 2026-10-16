@@ -109,4 +109,28 @@ export const itFlow = {
   'rules.save.tip': 'Salva le regole della mappa: il motore le usa dal giro successivo.',
   'rules.conflict.ignore.tip': 'Il motore smette di sospendersi per questo conflitto.',
   'rules.conflict.unignore.tip': 'Il motore torna a sospendersi se questo conflitto è presente.',
+  'detail.open': 'Gestisci utenza',
+  'detail.open.tip':
+    'Apre la pagina di questa utenza: alias, attivazione, slot, terminale e rimozione.',
+  'detail.back': 'Indietro',
+  'detail.back.tip': 'Torna all’elenco degli account.',
+  'detail.gone': 'Questa utenza non c’è più in cswap.',
+  'detail.alias.tip': 'Nome breve dell’utenza, mostrato al posto dell’email.',
+  'detail.alias.set.tip': 'Salva l’alias in cswap.',
+  'detail.alias.unset.tip': 'Toglie l’alias: si torna a vedere il numero dell’utenza.',
+  'detail.name': 'Nome',
+  'detail.use': 'Uso',
+  'detail.enable.tip': 'Riattiva l’utenza: torna a essere scelta da cambi e motore.',
+  'detail.disable.tip': 'Disattiva l’utenza: nessun cambio la sceglie finché non la riattivi.',
+  'detail.run.tip':
+    'Apre un terminale con Claude Code già collegato a questa utenza, senza cambiare quella attiva.',
+  'detail.slot': 'Slot',
+  'detail.move.field.tip': 'Numero dello slot di destinazione.',
+  'detail.move.tip':
+    'Sposta l’utenza nello slot indicato, dopo una conferma; se è occupato le due si scambiano.',
+  'detail.swap.field.tip': 'Utenza con cui scambiare lo slot.',
+  'detail.swap.tip': 'Scambia gli slot delle due utenze, dopo una conferma.',
+  'detail.danger': 'Rimozione',
+  'detail.remove.tip':
+    'Toglie l’utenza da cswap, dopo una conferma. Per riaverla serve un nuovo login.',
 } as const;

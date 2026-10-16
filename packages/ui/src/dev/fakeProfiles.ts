@@ -10,7 +10,7 @@ import { configuredOrder } from '../lib/engineRules.js';
 
 /** Specchio semplificato delle mappe del Rust (`engine/profiles.rs`), solo per il FakeBackend. */
 const PRESETS: readonly { id: string; name: string; kind: PresetKind }[] = [
-  { id: 'cswap-guard', name: 'Come cswap-guard', kind: 'cswapGuard' },
+  { id: 'priority-reserves', name: 'Principale con riserve', kind: 'cswapGuard' },
   { id: 'eco', name: 'Eco', kind: 'eco' },
   { id: 'sport', name: 'Sport', kind: 'sport' },
   { id: 'safe', name: 'Sicura', kind: 'safe' },
@@ -25,8 +25,7 @@ function presetRules(kind: PresetKind, base: EngineRules): EngineRules {
     reserveCriterion: 'lowest-weekly',
     returnHysteresis: 10,
   };
-  if (kind === 'cswapGuard')
-    Object.assign(r, { order: [6, 1, 3], excluded: [], returnHysteresis: 45 });
+  if (kind === 'cswapGuard') Object.assign(r, { returnHysteresis: 45 });
   if (kind === 'eco')
     Object.assign(r, { reserveCriterion: 'reset-soonest', fiveHourThreshold: 90 });
   if (kind === 'sport') Object.assign(r, { reserveCriterion: 'lowest5h', fiveHourThreshold: 98 });

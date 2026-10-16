@@ -114,4 +114,27 @@ export const enFlow: Record<keyof typeof itFlow, string> = {
   'rules.save.tip': 'Saves the map rules: the engine uses them from the next round.',
   'rules.conflict.ignore.tip': 'The engine stops pausing for this conflict.',
   'rules.conflict.unignore.tip': 'The engine pauses again when this conflict is present.',
+  'detail.open': 'Manage account',
+  'detail.open.tip': 'Opens the page of this account: alias, enabling, slot, terminal and removal.',
+  'detail.back': 'Back',
+  'detail.back.tip': 'Goes back to the account list.',
+  'detail.gone': 'This account is no longer in cswap.',
+  'detail.alias.tip': 'Short name of the account, shown instead of the email.',
+  'detail.alias.set.tip': 'Saves the alias in cswap.',
+  'detail.alias.unset.tip': 'Removes the alias: the account number is shown again.',
+  'detail.name': 'Name',
+  'detail.use': 'Use',
+  'detail.enable.tip': 'Enables the account again: switches and the engine can pick it.',
+  'detail.disable.tip': 'Disables the account: no switch picks it until you enable it again.',
+  'detail.run.tip':
+    'Opens a terminal with Claude Code already using this account, without changing the active one.',
+  'detail.slot': 'Slot',
+  'detail.move.field.tip': 'Number of the target slot.',
+  'detail.move.tip':
+    'Moves the account to the given slot, after confirmation; if it is taken the two are swapped.',
+  'detail.swap.field.tip': 'Account to swap the slot with.',
+  'detail.swap.tip': 'Swaps the slots of the two accounts, after confirmation.',
+  'detail.danger': 'Removal',
+  'detail.remove.tip':
+    'Removes the account from cswap, after confirmation. Getting it back needs a new login.',
 };
