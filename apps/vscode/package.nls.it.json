@@ -1,0 +1,12 @@
+{
+  "description": "Monitor e cambio degli account di cswap: barra di stato, cambio rapido, pannello e motore opzionale.",
+  "command.openPanel": "Apri pannello",
+  "command.refresh": "Aggiorna",
+  "command.switchAccount": "Cambia account",
+  "command.startEngine": "Avvia motore",
+  "command.stopEngine": "Ferma motore",
+  "config.refreshIntervalSeconds": "Ogni quanti secondi leggere `cswap list`.",
+  "config.cliPath": "Percorso assoluto di `swapdeck-cli`. Vuoto: quello incluso nell'estensione.",
+  "config.engine.enabled": "Esegue il motore di SwapDeck (`swapdeck-cli headless`) mentre VS Code è aperto. Rispetta il lock di istanza unica e le regole della config di SwapDeck.",
+  "config.notifications.thresholds": "Soglie di consumo (%) dell'account attivo che fanno partire una notifica. La più bassa colora la barra di stato come avviso, la più alta come critica."
+}
