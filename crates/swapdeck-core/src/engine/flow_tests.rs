@@ -58,10 +58,6 @@ fn at_limit_to(to: u32) -> Decision {
     sw(6, to, SwitchCause::PrimaryAtLimit)
 }
 
-fn no_target() -> Decision {
-    susp(SuspendReason::NoViableTarget)
-}
-
 /// Principale al limite e riserve date: dove va ogni criterio.
 #[test]
 #[rustfmt::skip]
@@ -82,7 +78,7 @@ fn criteria_tables() {
             case("reset sconosciuto: esclusa", 6, vec![main(), week(1, 0.0, 10.0, 3.0), no_reset.clone()], at_limit_to(1)),
             case("reset passato: esclusa", 6, vec![main(), week(1, 0.0, 10.0, 3.0), week(2, 0.0, 10.0, -0.1)], at_limit_to(1)),
             case("riserva sopra soglia saltata", 6, vec![main(), week(1, 0.0, 10.0, 3.0), week(2, 96.0, 10.0, 1.0)], at_limit_to(1)),
-            case("nessun dato: nessuna candidata", 6, vec![main(), no_reset], no_target()),
+            case("reset sconosciuto ovunque: settimanale più bassa", 6, vec![main(), { let mut a = week(1, 0.0, 40.0, 0.5); a.usage.as_mut().unwrap().seven_day.as_mut().unwrap().resets_at = None; a }, no_reset], at_limit_to(2)),
         ]),
         (PaceSafe, vec![
             case("arriva al reset con più margine", 6, vec![main(), pace(acc(1, 0.0, 40.0), Some(true), Some(45.0), None), pace(acc(2, 0.0, 40.0), Some(true), Some(60.0), None), pace(acc(3, 0.0, 10.0), Some(false), Some(5.0), Some(1))], at_limit_to(2)),
@@ -92,7 +88,7 @@ fn criteria_tables() {
             case("ritmo sconosciuto: esclusa", 6, vec![main(), pace(acc(1, 0.0, 40.0), None, Some(90.0), None), pace(acc(2, 0.0, 40.0), Some(true), Some(41.0), None)], at_limit_to(2)),
             case("atteso sconosciuto: esclusa", 6, vec![main(), pace(acc(1, 0.0, 40.0), Some(true), None, None), pace(acc(2, 0.0, 40.0), Some(true), Some(41.0), None)], at_limit_to(2)),
             case("esaurimento sconosciuto: esclusa", 6, vec![main(), pace(acc(1, 0.0, 40.0), Some(false), Some(30.0), None), pace(acc(2, 0.0, 40.0), Some(false), Some(30.0), Some(1))], at_limit_to(2)),
-            case("nessun dato di ritmo", 6, vec![main(), acc(1, 0.0, 40.0)], no_target()),
+            case("nessun dato di ritmo: settimanale più bassa", 6, vec![main(), acc(1, 0.0, 40.0), acc(3, 0.0, 20.0)], at_limit_to(3)),
         ]),
         (Lowest5h, vec![
             case("5h più libera", 6, vec![main(), acc(1, 60.0, 10.0), acc(2, 10.0, 70.0), acc(3, 30.0, 0.0)], at_limit_to(2)),
@@ -114,7 +110,8 @@ fn criteria_tables() {
             // Default: 1 → 0,4·(35/95) + 0,3·(88/98) + 0,15·(1-3/7) + 0,15·0,5 ≈ 0,58;
             // 2 → 0,4·(95/95) + 0,3·(28/98) + 0,15·(1-1/7) + 0,15·0,9 ≈ 0,75.
             case("punteggio più alto", 6, vec![main(), pace(week(1, 60.0, 10.0, 3.0), Some(true), Some(10.0), None), pace(week(2, 0.0, 70.0, 1.0), Some(true), Some(110.0), None)], at_limit_to(2)),
-            case("ritmo sconosciuto: esclusa", 6, vec![main(), pace(week(1, 60.0, 10.0, 3.0), Some(true), Some(10.0), None), week(2, 0.0, 70.0, 1.0)], at_limit_to(1)),
+            // 2 senza ritmo: (0,4·1 + 0,3·(28/98) + 0,15·(6/7)) / 0,85 ≈ 0,72 contro 0,58.
+            case("ritmo sconosciuto: pesi rinormalizzati", 6, vec![main(), pace(week(1, 60.0, 10.0, 3.0), Some(true), Some(10.0), None), week(2, 0.0, 70.0, 1.0)], at_limit_to(2)),
         ]),
     ];
     for (criterion, cases) in tables {
@@ -380,7 +377,7 @@ fn reasons_never_contain_emails() {
 fn rules_migration_from_primary_and_reserves() {
     let old: EngineRules =
         serde_json::from_str(r#"{"enabled":true,"primary":6,"reserves":[1,3]}"#).unwrap();
-    assert_eq!(old.order, None);
+    assert_eq!(old.order, Some(vec![6, 1, 3]), "riallineata in lettura");
     assert_eq!(old.configured_order(), vec![6, 1, 3]);
     let mut synced = old.clone();
     synced.sync_order();
@@ -400,10 +397,34 @@ fn rules_migration_from_primary_and_reserves() {
     let mut mirrored = new.clone();
     mirrored.sync_order();
     assert_eq!((mirrored.primary, mirrored.reserves), (Some(6), vec![1, 3]));
-    // Forma precedente scritta dall'interfaccia attuale: prevale su `order`.
+    // Con `order` presente `primary` e `reserves` sono derivati: quelli vecchi non contano.
     let ui: EngineRules =
         serde_json::from_str(r#"{"order":[6,1,3],"primary":1,"reserves":[3]}"#).unwrap();
-    assert_eq!(ui.configured_order(), vec![1, 3]);
+    assert_eq!(ui.configured_order(), vec![6, 1, 3]);
+    assert_eq!((ui.primary, ui.reserves.clone()), (Some(6), vec![1, 3]));
+    let stale = EngineRules {
+        order: Some(vec![2, 3]),
+        primary: Some(6),
+        reserves: vec![1],
+        ..EngineRules::default()
+    };
+    assert_eq!(stale.configured_order(), vec![2, 3]);
+    let v = serde_json::to_value(&stale).unwrap();
+    assert_eq!(
+        (&v["primary"], &v["reserves"]),
+        (&2.into(), &serde_json::json!([3]))
+    );
+    // `primary` esplicito a null con `order`: nessuna principale, restano le riserve.
+    let none: EngineRules =
+        serde_json::from_str(r#"{"order":[6,1,3],"primary":null,"reserves":[1]}"#).unwrap();
+    assert!(none.configured_order().is_empty());
+    assert_eq!((none.order.clone(), none.reserves.clone()), (None, vec![1]));
+    assert_eq!(none.validate(), ["manca l'account principale"]);
+    let again: EngineRules = serde_json::from_str(&serde_json::to_string(&none).unwrap()).unwrap();
+    assert_eq!(again, none);
+    // Lista vuota: nessuna principale.
+    let empty: EngineRules = serde_json::from_str(r#"{"order":[],"primary":6}"#).unwrap();
+    assert_eq!((empty.order, empty.primary), (None, None));
     // Bozza senza principale: le riserve restano.
     let mut draft = EngineRules {
         reserves: vec![1],
@@ -417,26 +438,36 @@ fn rules_migration_from_primary_and_reserves() {
 }
 
 #[test]
-fn legacy_memory_is_absorbed_on_switch() {
+fn legacy_memory_is_absorbed_once_at_load() {
     let rules = user_rules();
     let mut mem: EngineMemory = serde_json::from_str(
         r#"{"lastSwitchAt":1,"leftPrimaryAt":5,"primaryResetAt":7,"primaryLeftWindows":["sevenDay"]}"#,
     )
     .unwrap();
+    mem.absorb_legacy(&rules);
+    let legacy_6 = LeftAccount {
+        number: 6,
+        left_at: 5,
+        reset_at: Some(7),
+        windows: vec![LimitWindow::SevenDay],
+    };
+    assert_eq!(mem.left_accounts, vec![legacy_6.clone()]);
+    assert!(!mem.has_legacy());
+    // Cambio di mappa dopo il caricamento: la memoria resta della 6, non passa alla 1.
+    let other = EngineRules {
+        order: Some(vec![1, 6, 3]),
+        ..user_rules()
+    };
+    mem.absorb_legacy(&other);
     let l = list(
         Some(1),
         vec![acc(6, 0.0, 0.0), acc(1, 99.0, 0.0), acc(3, 0.0, 0.0)],
     );
-    mem.record_switch(&rules, &l, 3, NOW);
+    mem.record_switch(&other, &l, 3, NOW);
     assert_eq!(
         mem.left_accounts,
         vec![
-            LeftAccount {
-                number: 6,
-                left_at: 5,
-                reset_at: Some(7),
-                windows: vec![LimitWindow::SevenDay],
-            },
+            legacy_6,
             LeftAccount {
                 number: 1,
                 left_at: NOW,
@@ -445,22 +476,103 @@ fn legacy_memory_is_absorbed_on_switch() {
             },
         ]
     );
-    assert_eq!(
-        (
-            mem.left_primary_at,
-            mem.primary_reset_at,
-            mem.primary_left_windows.clone()
-        ),
-        (None, None, None)
-    );
-    // Ritorno alla principale: la sua memoria si toglie.
+    // Ritorno alla 6: la sua memoria si toglie.
     let l = list(Some(3), vec![acc(6, 0.0, 0.0), acc(3, 0.0, 0.0)]);
-    mem.record_switch(&rules, &l, 6, NOW + 10);
+    mem.record_switch(&other, &l, 6, NOW + 10);
     assert_eq!(
         mem.left_accounts
             .iter()
             .map(|r| r.number)
             .collect::<Vec<_>>(),
         [1, 3]
+    );
+    // Memoria vecchia non assorbita: il motore legge solo `left_accounts`.
+    let raw: EngineMemory = serde_json::from_str(r#"{"primaryResetAt":7}"#).unwrap();
+    assert_eq!(raw.left(6).map(|r| r.number), None);
+}
+
+/// Motivo della valutazione con la principale al limite.
+fn fallback_reason(rules: &EngineRules, accounts: Vec<Account>) -> (Option<u32>, String) {
+    let l = list(Some(6), accounts);
+    let obs = Observation {
+        list: &l,
+        conflicts: &[],
+    };
+    let e = evaluate(obs, rules, &EngineMemory::default(), NOW);
+    (e.decision.target(), e.reason)
+}
+
+#[test]
+fn criteria_fall_back_when_their_data_is_missing() {
+    use ReserveCriterion::*;
+    let main = || acc(6, 99.0, 30.0);
+    // Ritmo assente ovunque: settimanale più bassa, scritto nel motivo.
+    let (to, why) = fallback_reason(
+        &rules_with(PaceSafe),
+        vec![main(), acc(1, 0.0, 40.0), acc(3, 0.0, 20.0)],
+    );
+    assert_eq!(to, Some(3));
+    assert!(
+        why.contains("ritmo non disponibile: scelgo la settimanale più bassa (20%)"),
+        "{why}"
+    );
+    // Senza 7d neppure la settimanale: ordine della lista.
+    let no_7d = |n: u32| {
+        let mut a = acc(n, 0.0, 0.0);
+        a.usage.as_mut().unwrap().seven_day = None;
+        a
+    };
+    let (to, why) = fallback_reason(&rules_with(EvenSpread), vec![main(), no_7d(3), no_7d(1)]);
+    assert_eq!(to, Some(1));
+    assert!(
+        why.contains(
+            "settimanale non disponibile: scelgo la prima libera nella lista (posizione 2)"
+        ),
+        "{why}"
+    );
+    // Modello che nessuna utenza riporta: ripiego e avviso; la validazione lo segnala.
+    let ghost = EngineRules {
+        headroom_model: Some("Ghost".to_owned()),
+        ..rules_with(ModelHeadroom)
+    };
+    let accounts = vec![
+        main(),
+        scoped(acc(1, 0.0, 40.0), "Fable", 10.0),
+        scoped(acc(3, 0.0, 20.0), "Fable", 90.0),
+    ];
+    let (to, why) = fallback_reason(&ghost, accounts.clone());
+    assert_eq!(to, Some(3));
+    assert!(
+        why.contains(
+            "modello Ghost sconosciuto: nessuna utenza lo riporta: scelgo la settimanale più bassa"
+        ),
+        "{why}"
+    );
+    let l = list(Some(6), accounts);
+    assert_eq!(
+        ghost.validate_with_list(&l),
+        ["modello «Ghost» sconosciuto: nessuna utenza lo riporta"]
+    );
+    assert!(rules_with(ModelHeadroom).validate_with_list(&l).is_empty());
+    let unknown_list = list(Some(6), vec![main(), acc(1, 0.0, 40.0)]);
+    assert!(
+        ghost.validate_with_list(&unknown_list).is_empty(),
+        "modelli non noti: nessun avviso"
+    );
+    // Criterio sconosciuto (versione più recente): settimanale più bassa con avviso.
+    let future: EngineRules = serde_json::from_str(
+        r#"{"enabled":true,"order":[6,1,3],"reserveCriterion":"quantum-pick"}"#,
+    )
+    .unwrap();
+    let (to, why) = fallback_reason(&future, vec![main(), acc(1, 0.0, 40.0), acc(3, 0.0, 20.0)]);
+    assert_eq!(to, Some(3));
+    assert!(
+        why.contains("criterio sconosciuto: scelgo la settimanale più bassa"),
+        "{why}"
+    );
+    let text = serde_json::to_string(&future).unwrap();
+    assert!(
+        text.contains(r#""reserveCriterion":"quantum-pick""#),
+        "{text}"
     );
 }

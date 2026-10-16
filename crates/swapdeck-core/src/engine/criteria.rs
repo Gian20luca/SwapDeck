@@ -1,6 +1,7 @@
 //! Criteri di scelta della riserva. Ogni criterio ha una chiave per candidata (`None` = dati
 //! che servono mancanti: candidata esclusa) e un confronto; a parità vince la prima nella
-//! lista (`min_by` tiene il primo minimo e le candidate arrivano in ordine).
+//! lista (`min_by` tiene il primo minimo e le candidate arrivano in ordine). Se il criterio
+//! non sceglie nessuna candidata si ripiega sulla settimanale più bassa e poi sull'ordine.
 
 use std::cmp::Ordering;
 
@@ -15,8 +16,8 @@ const WEEK_SECS: f64 = 7.0 * 86_400.0;
 
 /// Pesi di [`ReserveCriterion::BalancedScore`]. Ogni componente vale 0–1 e il punteggio è la
 /// media pesata: margine 5h e 7d rispetto alle soglie, vicinanza del reset 7d (1 = adesso,
-/// 0 = tra una settimana), ritmo (`0,5 + (expectedPct - pct) / 100`). Un peso a 0 toglie la
-/// componente, e con essa la richiesta dei suoi dati.
+/// 0 = tra una settimana), ritmo (`0,5 + (expectedPct - pct) / 100`). Un fattore senza dati si
+/// toglie e i pesi degli altri si rinormalizzano; un peso a 0 toglie la componente.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", default)]
 pub struct ScoreWeights {
@@ -76,17 +77,70 @@ fn reset_at(w: &UsageWindow, now: i64) -> Option<i64> {
         .filter(|r| *r > now)
 }
 
+fn win5(a: &Account) -> Option<&UsageWindow> {
+    a.usage.as_ref().and_then(|u| u.five_hour.as_ref())
+}
+
+fn win7(a: &Account) -> Option<&UsageWindow> {
+    a.usage.as_ref().and_then(|u| u.seven_day.as_ref())
+}
+
 /// Riserva scelta tra le candidate (già sotto soglia, in ordine di lista) e il suo motivo.
+/// Se il criterio non ne sceglie nessuna (dati mancanti) ripiega sulla settimanale più bassa
+/// tra quelle con la 7d nota e poi sulla prima della lista, e lo dice nel motivo.
 pub(super) fn choose(ctx: &Ctx<'_>, cands: &[(usize, &Account)]) -> Option<(u32, String)> {
+    let &(first_pos, first) = cands.first()?;
+    if let Some(pick) = by_criterion(ctx, cands) {
+        return Some(pick);
+    }
+    let missing = missing_data(ctx);
+    let now = ctx.now;
+    let key =
+        |a: &Account| win7(a).map(|w| (effective_pct(Some(w), now), effective_pct(win5(a), now)));
+    let asc2 = |x: &(f64, f64), y: &(f64, f64)| x.0.total_cmp(&y.0).then(x.1.total_cmp(&y.1));
+    Some(match best_by(cands, key, asc2) {
+        Some((a, k)) => (
+            a.number,
+            format!("{missing}: scelgo la settimanale più bassa ({}%)", pct(k.0)),
+        ),
+        None => (
+            first.number,
+            format!("{missing}: scelgo la {}", explain::order_why(first_pos)),
+        ),
+    })
+}
+
+/// Dato che manca al criterio, per il motivo del ripiego.
+fn missing_data(ctx: &Ctx<'_>) -> String {
+    match &ctx.rules.reserve_criterion {
+        ReserveCriterion::ResetSoonest => "reset settimanale non disponibile".to_owned(),
+        ReserveCriterion::PaceSafe => "ritmo non disponibile".to_owned(),
+        ReserveCriterion::Lowest5h => "5h non disponibile".to_owned(),
+        ReserveCriterion::EvenSpread => "settimanale non disponibile".to_owned(),
+        ReserveCriterion::BalancedScore => "dati del punteggio non disponibili".to_owned(),
+        ReserveCriterion::ModelHeadroom => match ctx.rules.model() {
+            None => "modello non indicato".to_owned(),
+            Some(m)
+                if super::scoped_names(ctx.list)
+                    .iter()
+                    .any(|n| n.eq_ignore_ascii_case(m)) =>
+            {
+                format!("{m} non disponibile sulle riserve libere")
+            }
+            Some(m) => format!("modello {m} sconosciuto: nessuna utenza lo riporta"),
+        },
+        ReserveCriterion::Unknown(_) => "criterio sconosciuto".to_owned(),
+        ReserveCriterion::LowestWeekly | ReserveCriterion::Best | ReserveCriterion::FixedOrder => {
+            "dati non disponibili".to_owned()
+        }
+    }
+}
+
+/// Scelta del criterio; `None` se nessuna candidata ha i dati che servono.
+fn by_criterion(ctx: &Ctx<'_>, cands: &[(usize, &Account)]) -> Option<(u32, String)> {
     let now = ctx.now;
     let rules = ctx.rules;
     let (t5, t7) = (rules.five_hour_threshold, rules.seven_day_limit());
-    fn win5(a: &Account) -> Option<&UsageWindow> {
-        a.usage.as_ref().and_then(|u| u.five_hour.as_ref())
-    }
-    fn win7(a: &Account) -> Option<&UsageWindow> {
-        a.usage.as_ref().and_then(|u| u.seven_day.as_ref())
-    }
     let p5 = |a: &Account| effective_pct(win5(a), now);
     let p7 = |a: &Account| effective_pct(win7(a), now);
     let asc2 = |x: &(f64, f64), y: &(f64, f64)| x.0.total_cmp(&y.0).then(x.1.total_cmp(&y.1));
@@ -185,43 +239,44 @@ pub(super) fn choose(ctx: &Ctx<'_>, cands: &[(usize, &Account)]) -> Option<(u32,
                 )
             })
         }
+        ReserveCriterion::Unknown(_) => None,
     }
 }
 
-/// Punteggio di [`ReserveCriterion::BalancedScore`] (0–1); `None` se manca un dato di una
-/// componente con peso positivo.
+/// Punteggio di [`ReserveCriterion::BalancedScore`] (0–1): media pesata dei soli fattori con
+/// i dati disponibili (pesi rinormalizzati); `None` se non ce n'è nessuno con peso positivo.
 fn score(ctx: &Ctx<'_>, a: &Account) -> Option<f64> {
     let now = ctx.now;
     let rules = ctx.rules;
     let w = rules.weights();
     let u = a.usage.as_ref()?;
-    let mut sum = 0.0;
-    let mut total = 0.0;
-    let mut add = |weight: f64, value: Option<f64>| -> Option<()> {
-        if weight > 0.0 {
-            sum += weight * value?.clamp(0.0, 1.0);
-            total += weight;
-        }
-        Some(())
-    };
     let margin = |w: Option<&UsageWindow>, t: f64| w.map(|w| (t - effective_pct(Some(w), now)) / t);
-    add(
-        w.five_hour,
-        margin(u.five_hour.as_ref(), rules.five_hour_threshold),
-    )?;
-    add(
-        w.seven_day,
-        margin(u.seven_day.as_ref(), rules.seven_day_limit()),
-    )?;
     let week = live_week(a, now);
-    add(
-        w.reset,
-        week.and_then(|wk| reset_at(wk, now))
-            .map(|r| 1.0 - (r - now) as f64 / WEEK_SECS),
-    )?;
-    add(
-        w.pace,
-        week.and_then(|wk| Some(0.5 + (wk.expected_pct? - wk.pct) / 100.0)),
-    )?;
+    let factors = [
+        (
+            w.five_hour,
+            margin(u.five_hour.as_ref(), rules.five_hour_threshold),
+        ),
+        (
+            w.seven_day,
+            margin(u.seven_day.as_ref(), rules.seven_day_limit()),
+        ),
+        (
+            w.reset,
+            week.and_then(|wk| reset_at(wk, now))
+                .map(|r| 1.0 - (r - now) as f64 / WEEK_SECS),
+        ),
+        (
+            w.pace,
+            week.and_then(|wk| Some(0.5 + (wk.expected_pct? - wk.pct) / 100.0)),
+        ),
+    ];
+    let (sum, total) = factors
+        .iter()
+        .filter(|(weight, _)| *weight > 0.0)
+        .filter_map(|(weight, value)| value.map(|v| (*weight, v)))
+        .fold((0.0, 0.0), |(s, t), (weight, v)| {
+            (s + weight * v.clamp(0.0, 1.0), t + weight)
+        });
     (total > 0.0).then(|| sum / total)
 }

@@ -5,6 +5,12 @@ import type { ScoreWeights } from "./ScoreWeights.js";
 /**
  * Regole del motore, salvate nella config (`config.json`, sezione `engine`): sono le regole
  * della mappa attiva.
+ *
+ * Lista delle utenze: quando c'è, `order` è l'unica fonte di verità e `primary` e `reserves`
+ * ne sono derivati (il primo e i successivi; si riscrivono a ogni salvataggio). Senza `order`
+ * valgono `primary` e `reserves` (forma precedente). Un `primary` esplicito a `null` insieme a
+ * `order` vuol dire «nessuna principale»: la lista si scarta e restano solo le `reserves`
+ * (bozza, motore fermo finché manca la principale).
  */
 export type EngineRules = { 
 /**
@@ -18,17 +24,16 @@ dryRun: boolean,
 /**
  * Utenze in ordine di priorità (numeri di cswap): la prima è la principale. Con la sola
  * principale le altre sono tutte quelle di cswap, in ordine di numero. Le utenze che non
- * esistono in cswap si saltano. Se `primary` è valorizzato prevalgono `primary` e
- * `reserves` (forma precedente, scritta ancora dall'interfaccia): al salvataggio i due
- * elenchi si riallineano.
+ * esistono in cswap si saltano. Quando c'è prevale su `primary` e `reserves`.
  */
 order?: Array<number>, 
 /**
- * Principale: primo elemento di `order` (forma precedente, tenuta allineata).
+ * Principale: primo elemento di `order`, derivato. `null` esplicito con `order` presente =
+ * nessuna principale.
  */
 primary: number | null, 
 /**
- * Riserve in ordine di preferenza: `order` senza la principale (forma precedente).
+ * Riserve in ordine di preferenza: `order` senza la principale, derivato.
  */
 reserves: Array<number>, 
 /**

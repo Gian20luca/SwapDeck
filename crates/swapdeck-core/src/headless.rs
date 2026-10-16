@@ -238,7 +238,16 @@ impl Runner<'_, '_> {
             Acquire::Acquired(guard) => {
                 let history = History::new(&self.opts.data_dir);
                 let writer = history.writer(&guard, self.opts.retention_days)?;
-                let mem = load_memory(&self.opts.data_dir);
+                let mut mem = load_memory(&self.opts.data_dir);
+                // Forma precedente della memoria: si assorbe una volta sola, con la principale
+                // delle regole di adesso, e si riscrive subito (un cambio di mappa successivo
+                // non la deve riattribuire).
+                if mem.has_legacy() {
+                    mem.absorb_legacy(&self.rules);
+                    if let Err(e) = save_memory(&self.opts.data_dir, &mem) {
+                        self.log(now, &format!("memoria del motore non salvata: {e}"));
+                    }
+                }
                 self.holder = Some(Holder { guard, writer, mem });
                 // La decisione vista in attesa del lock va registrata di nuovo da titolare.
                 self.last_decision = None;

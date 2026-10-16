@@ -33,7 +33,10 @@ pub const MAX_MODEL_NAME_LEN: usize = 64;
 
 /// Criterio di scelta della riserva quando l'attiva supera la soglia. A parità vale sempre
 /// l'ordine della lista; con i dati che servono al criterio mancanti la candidata si esclude.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
+/// Se il criterio non può scegliere nessuna candidata (dati mancanti in tutte, modello assente,
+/// criterio sconosciuto) ripiega sulla settimanale più bassa e, senza 7d, sull'ordine della
+/// lista, e lo scrive nel motivo.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum ReserveCriterion {
     /// Settimanale (7d) più bassa; a parità la 5h più bassa.
@@ -61,12 +64,23 @@ pub enum ReserveCriterion {
     /// Più margine sul limite settimanale del modello [`EngineRules::headroom_model`]
     /// (`scoped[]`); a parità la 7d più bassa.
     ModelHeadroom,
+    /// Criterio non noto (scritto da una versione più recente): il motore ripiega sulla
+    /// settimanale più bassa e il valore originale torna nel file al salvataggio.
+    #[serde(untagged)]
+    #[ts(skip)]
+    Unknown(String),
 }
 
 /// Regole del motore, salvate nella config (`config.json`, sezione `engine`): sono le regole
 /// della mappa attiva.
+///
+/// Lista delle utenze: quando c'è, `order` è l'unica fonte di verità e `primary` e `reserves`
+/// ne sono derivati (il primo e i successivi; si riscrivono a ogni salvataggio). Senza `order`
+/// valgono `primary` e `reserves` (forma precedente). Un `primary` esplicito a `null` insieme a
+/// `order` vuol dire «nessuna principale»: la lista si scarta e restano solo le `reserves`
+/// (bozza, motore fermo finché manca la principale).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase", default)]
+#[serde(remote = "Self", rename_all = "camelCase", default)]
 pub struct EngineRules {
     /// Motore acceso. Spento al primo avvio.
     pub enabled: bool,
@@ -74,15 +88,14 @@ pub struct EngineRules {
     pub dry_run: bool,
     /// Utenze in ordine di priorità (numeri di cswap): la prima è la principale. Con la sola
     /// principale le altre sono tutte quelle di cswap, in ordine di numero. Le utenze che non
-    /// esistono in cswap si saltano. Se `primary` è valorizzato prevalgono `primary` e
-    /// `reserves` (forma precedente, scritta ancora dall'interfaccia): al salvataggio i due
-    /// elenchi si riallineano.
+    /// esistono in cswap si saltano. Quando c'è prevale su `primary` e `reserves`.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub order: Option<Vec<u32>>,
-    /// Principale: primo elemento di `order` (forma precedente, tenuta allineata).
+    /// Principale: primo elemento di `order`, derivato. `null` esplicito con `order` presente =
+    /// nessuna principale.
     pub primary: Option<u32>,
-    /// Riserve in ordine di preferenza: `order` senza la principale (forma precedente).
+    /// Riserve in ordine di preferenza: `order` senza la principale, derivato.
     pub reserves: Vec<u32>,
     /// Account mai scelti dal motore; se uno di questi è attivo il motore non lo tocca.
     pub excluded: Vec<u32>,
@@ -134,25 +147,60 @@ impl Default for EngineRules {
     }
 }
 
+/// Lettura con la regola di [`EngineRules`] su `primary` a `null` (serve sapere se il campo
+/// c'era: si passa da un valore JSON), poi i campi derivati riallineati.
+impl<'de> Deserialize<'de> for EngineRules {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(d)?;
+        let no_primary = value.get("primary").is_some_and(serde_json::Value::is_null)
+            && value.get("order").is_some_and(|o| !o.is_null());
+        let mut rules = Self::deserialize(value).map_err(serde::de::Error::custom)?;
+        if no_primary {
+            rules.order = None;
+        }
+        rules.sync_order();
+        Ok(rules)
+    }
+}
+
+/// Scrittura sempre riallineata: `primary` e `reserves` derivati da `order`.
+impl Serialize for EngineRules {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        let mut rules = self.clone();
+        rules.sync_order();
+        Self::serialize(&rules, s)
+    }
+}
+
 impl EngineRules {
-    /// Lista configurata: `primary` più `reserves` se `primary` c'è, altrimenti `order`.
+    /// Lista configurata: `order` se c'è, altrimenti `primary` più `reserves`.
     pub fn configured_order(&self) -> Vec<u32> {
-        match self.primary {
-            Some(p) => std::iter::once(p)
+        match (&self.order, self.primary) {
+            (Some(order), _) => order.clone(),
+            (None, Some(p)) => std::iter::once(p)
                 .chain(self.reserves.iter().copied())
                 .collect(),
-            None => self.order.clone().unwrap_or_default(),
+            (None, None) => Vec::new(),
         }
     }
 
-    /// Riallinea `order` con `primary` e `reserves` (migrazione in lettura e al salvataggio).
-    /// Senza principale né `order` non cambia nulla: le riserve di una bozza restano.
+    /// Riallinea `primary` e `reserves` con `order` (o crea `order` dalla forma precedente):
+    /// in lettura e al salvataggio. Una lista vuota diventa assente; senza principale né
+    /// `order` non cambia nulla: le riserve di una bozza restano.
     pub fn sync_order(&mut self) {
         let order = self.configured_order();
-        if let Some((first, rest)) = order.split_first() {
-            self.primary = Some(*first);
-            self.reserves = rest.to_vec();
-            self.order = Some(order);
+        match order.split_first() {
+            Some((first, rest)) => {
+                self.primary = Some(*first);
+                self.reserves = rest.to_vec();
+                self.order = Some(order);
+            }
+            None if self.order.is_some() => {
+                self.order = None;
+                self.primary = None;
+                self.reserves.clear();
+            }
+            None => {}
         }
     }
 
@@ -162,6 +210,24 @@ impl EngineRules {
             .into_iter()
             .filter(|n| find(list, *n).is_none())
             .collect()
+    }
+
+    /// Come [`Self::validate`], in più i problemi che si vedono solo con la lista di cswap: il
+    /// modello di «margine sul modello» che nessuna utenza riporta (solo se qualche utenza
+    /// riporta dei modelli, cioè se la lista dei modelli è nota).
+    pub fn validate_with_list(&self, list: &ListResponse) -> Vec<String> {
+        let mut out = self.validate();
+        if self.reserve_criterion == ReserveCriterion::ModelHeadroom {
+            if let Some(model) = self.model() {
+                let names = scoped_names(list);
+                if !names.is_empty() && !names.iter().any(|n| n.eq_ignore_ascii_case(model)) {
+                    out.push(format!(
+                        "modello «{model}» sconosciuto: nessuna utenza lo riporta"
+                    ));
+                }
+            }
+        }
+        out
     }
 
     /// Problemi che impediscono al motore di agire (messaggi per l'utente).
@@ -335,18 +401,10 @@ pub enum LimitWindow {
     SevenDay,
 }
 
-/// Utenza lasciata vista dal motore (dalla memoria nuova o dalla forma precedente).
-struct LeftView<'m> {
-    reset_at: Option<i64>,
-    /// `None` = forma precedente senza finestre: solo la 5h.
-    windows: Option<&'m [LimitWindow]>,
-}
-
 impl EngineMemory {
     /// Registra un cambio riuscito da `list` (stato prima del cambio) verso `to`.
     pub fn record_switch(&mut self, rules: &EngineRules, list: &ListResponse, to: u32, now: i64) {
         self.last_switch_at = Some(now);
-        self.absorb_legacy(rules);
         self.left_accounts.retain(|r| r.number != to);
         let Some(from) = list.active_account_number.filter(|f| *f != to) else {
             return;
@@ -364,14 +422,18 @@ impl EngineMemory {
         }
     }
 
-    fn has_legacy(&self) -> bool {
+    /// C'è ancora la forma precedente (da assorbire con [`Self::absorb_legacy`]).
+    pub fn has_legacy(&self) -> bool {
         self.left_primary_at.is_some()
             || self.primary_reset_at.is_some()
             || self.primary_left_windows.is_some()
     }
 
-    /// Sposta la forma precedente (riferita alla principale delle regole) in `left_accounts`.
-    fn absorb_legacy(&mut self, rules: &EngineRules) {
+    /// Sposta la forma precedente (riferita alla principale di `rules`) in `left_accounts`.
+    /// Va chiamata una volta sola, al caricamento della memoria, con le regole della config di
+    /// allora: dopo un cambio di mappa la principale potrebbe essere un'altra. Il motore legge
+    /// solo `left_accounts`.
+    pub fn absorb_legacy(&mut self, rules: &EngineRules) {
         if !self.has_legacy() {
             return;
         }
@@ -393,19 +455,8 @@ impl EngineMemory {
         self.primary_left_windows = None;
     }
 
-    fn left(&self, number: u32, rules: &EngineRules) -> Option<LeftView<'_>> {
-        if let Some(r) = self.left_accounts.iter().find(|r| r.number == number) {
-            return Some(LeftView {
-                reset_at: r.reset_at,
-                windows: Some(&r.windows),
-            });
-        }
-        (self.has_legacy() && rules.configured_order().first() == Some(&number)).then_some(
-            LeftView {
-                reset_at: self.primary_reset_at,
-                windows: self.primary_left_windows.as_deref(),
-            },
-        )
+    fn left(&self, number: u32) -> Option<&LeftAccount> {
+        self.left_accounts.iter().find(|r| r.number == number)
     }
 }
 
@@ -701,9 +752,8 @@ impl<'a> Ctx<'a> {
     /// fatta lasciare; mai lasciata (o memoria assente) = isteresi sulla sola 5h.
     fn return_ready(&self, a: &Account) -> bool {
         let h = self.rules.return_hysteresis;
-        let left = self.mem.left(a.number, self.rules);
-        let windows = left.as_ref().and_then(|l| l.windows);
-        let margins = match windows {
+        let left = self.mem.left(a.number);
+        let margins = match left.map(|l| l.windows.as_slice()) {
             None => (h, 0.0),
             Some(w) => (
                 if w.contains(&LimitWindow::FiveHour) {
@@ -900,11 +950,22 @@ impl<'a> Ctx<'a> {
         let k = self.order.iter().position(|n| *n == active)?;
         self.pick_target(k).map(|p| Candidate {
             number: p.number,
-            criterion: self.rules.reserve_criterion,
+            criterion: self.rules.reserve_criterion.clone(),
             fallback: p.fallback,
             why: p.why,
         })
     }
+}
+
+/// Nomi dei modelli (`scoped[]`) riportati dalle utenze, senza spazi ai lati.
+fn scoped_names(list: &ListResponse) -> Vec<&str> {
+    list.accounts
+        .iter()
+        .filter_map(|a| a.usage.as_ref()?.scoped.as_ref())
+        .flatten()
+        .filter_map(|w| w.name.as_deref().map(str::trim))
+        .filter(|n| !n.is_empty())
+        .collect()
 }
 
 fn find(list: &ListResponse, number: u32) -> Option<&Account> {

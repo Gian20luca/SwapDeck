@@ -3,4 +3,4 @@
 /**
  * Mappe predefinite, ripristinabili.
  */
-export type PresetKind = "cswapGuard" | "eco" | "sport" | "safe";
+export type PresetKind = "priorityReserves" | "eco" | "sport" | "safe";

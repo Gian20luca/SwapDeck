@@ -604,3 +604,30 @@ fn holder_emits_notifications_as_json_lines() {
     });
     assert!(events(&o.output).is_empty(), "{}", o.output);
 }
+
+#[test]
+fn legacy_memory_is_absorbed_once_when_loaded() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        dir.path().join(MEMORY_FILE),
+        r#"{"leftPrimaryAt":5,"primaryResetAt":7,"primaryLeftWindows":["sevenDay"]}"#,
+    )
+    .unwrap();
+    // Motore spento: nessun cambio, la memoria si riscrive solo per l'assorbimento.
+    let rules = EngineRules {
+        enabled: false,
+        ..user_rules()
+    };
+    let o = run_with(dir.path(), rules, at_limit(), Vec::new(), |_| {});
+    assert!(o.port.switches.is_empty());
+    let mem = load_memory(dir.path());
+    assert!(!mem.has_legacy(), "forma precedente tolta dal file");
+    assert_eq!(
+        mem.left_accounts
+            .iter()
+            .map(|r| (r.number, r.reset_at))
+            .collect::<Vec<_>>(),
+        [(6, Some(7))],
+        "riferita alla principale della config al caricamento"
+    );
+}

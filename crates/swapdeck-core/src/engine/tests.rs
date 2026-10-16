@@ -1,4 +1,4 @@
-//! Scenari del motore: regola attuale dell'utente (`cswap-guard`) e casi limite.
+//! Scenari del motore: regola attuale dell'utente (principale 6, riserve 1 e 3) e casi limite.
 
 use super::*;
 use crate::conflicts::{Conflict, ConflictKind};
@@ -150,6 +150,12 @@ pub(crate) fn with_mem(
     }
 }
 
+/// Memoria come la carica il runner: forma precedente già assorbita con `rules`.
+pub(crate) fn loaded(mut mem: EngineMemory, rules: &EngineRules) -> EngineMemory {
+    mem.absorb_legacy(rules);
+    mem
+}
+
 pub(crate) fn run_cases(rules: &EngineRules, cases: Vec<Case>) {
     for c in cases {
         let l = list(c.active, c.accounts);
@@ -158,7 +164,7 @@ pub(crate) fn run_cases(rules: &EngineRules, cases: Vec<Case>) {
             conflicts: &[],
         };
         assert_eq!(
-            decide(obs, rules, &c.mem, NOW),
+            decide(obs, rules, &loaded(c.mem, rules), NOW),
             c.expect,
             "scenario: {}",
             c.name
@@ -171,9 +177,9 @@ pub(crate) fn run_cases(rules: &EngineRules, cases: Vec<Case>) {
 fn user_rule_scenarios() {
     use IdleReason::*;
     use SwitchCause::*;
-    // La regola attuale e il preset «Come cswap-guard» devono decidere allo stesso modo,
+    // La regola attuale e il preset «Principale con riserve» devono decidere allo stesso modo,
     // anche con la memoria nella forma precedente.
-    for rules in guard_rule_sets() {
+    for rules in user_rule_sets() {
     let passed = EngineMemory {
         last_switch_at: Some(NOW - 6 * 3600),
         left_primary_at: Some(NOW - 6 * 3600),
@@ -226,19 +232,20 @@ fn user_rule_scenarios() {
     }
 }
 
-/// Regola attuale (con 2 escluso) e preset «Come cswap-guard» (con 2 escluso).
-pub(crate) fn guard_rule_sets() -> [EngineRules; 2] {
+/// Regola attuale (con 2 escluso) e preset «Principale con riserve» sulla stessa lista.
+pub(crate) fn user_rule_sets() -> [EngineRules; 2] {
     let mut user = user_rules();
     user.excluded = vec![2];
     let on = EngineRules {
         enabled: true,
+        order: Some(vec![6, 1, 3]),
+        excluded: vec![2],
         ..EngineRules::default()
     };
-    let mut preset = PresetKind::CswapGuard.rules(&on);
+    let mut preset = PresetKind::PriorityReserves.rules(&on);
     // I casi usano l'isteresi di default: qui conta la forma (lista contro principale e
     // riserve, memoria vecchia). I valori del preset sono verificati in `profiles`.
     preset.return_hysteresis = user.return_hysteresis;
-    preset.excluded = vec![2];
     [user, preset]
 }
 

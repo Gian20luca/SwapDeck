@@ -3,7 +3,7 @@
 /**
  * Pesi di [`ReserveCriterion::BalancedScore`]. Ogni componente vale 0–1 e il punteggio è la
  * media pesata: margine 5h e 7d rispetto alle soglie, vicinanza del reset 7d (1 = adesso,
- * 0 = tra una settimana), ritmo (`0,5 + (expectedPct - pct) / 100`). Un peso a 0 toglie la
- * componente, e con essa la richiesta dei suoi dati.
+ * 0 = tra una settimana), ritmo (`0,5 + (expectedPct - pct) / 100`). Un fattore senza dati si
+ * toglie e i pesi degli altri si rinormalizzano; un peso a 0 toglie la componente.
  */
 export type ScoreWeights = { fiveHour: number, sevenDay: number, reset: number, pace: number, };

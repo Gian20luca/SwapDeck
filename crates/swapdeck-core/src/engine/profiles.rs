@@ -16,63 +16,81 @@ pub const MAX_PROFILES: usize = 32;
 pub const MAX_PROFILE_NAME_LEN: usize = 60;
 /// Id della mappa creata dalle regole esistenti alla prima lettura.
 pub const PERSONAL_ID: &str = "personal";
+/// Nome della mappa creata dalle regole attive quando la mappa attiva non c'è più.
+pub const RECOVERED_NAME: &str = "Recuperata";
 
 /// Mappe predefinite, ripristinabili.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum PresetKind {
-    /// Principale 6, poi 1 e 3; settimanale più bassa, 5h 95, 7d 98, ritorno dopo il reset con
-    /// la 5h sotto il 50% (isteresi 45), come il preset dell'interfaccia.
-    /// Esempio: i numeri che non esistono in cswap si saltano.
-    CswapGuard,
+    /// Principale con riserve: la lista della mappa attiva (la prima è la principale),
+    /// settimanale più bassa, 5h 95, 7d 98, ritorno dopo il reset con la 5h sotto il 50%
+    /// (isteresi 45). Prende il posto del vecchio preset `cswapGuard` (letto come questo).
+    #[serde(alias = "cswapGuard")]
+    PriorityReserves,
     /// Reset settimanale più vicino, 5h 90.
     Eco,
     /// 5h più libera, 5h 98.
     Sport,
     /// Ritmo sicuro.
     Safe,
+    /// Preset non noto (scritto da una versione più recente): non si ripristina e il valore
+    /// originale torna nel file al salvataggio.
+    #[serde(untagged)]
+    #[ts(skip)]
+    Unknown(String),
 }
 
-impl PresetKind {
-    pub const ALL: [Self; 4] = [Self::CswapGuard, Self::Eco, Self::Sport, Self::Safe];
+/// Nome predefinito del vecchio preset, sostituito alla lettura se la mappa non è stata
+/// rinominata.
+const LEGACY_PRESET_NAME: &str = "Come cswap-guard";
 
-    fn id(self) -> &'static str {
+impl PresetKind {
+    pub const ALL: [Self; 4] = [Self::PriorityReserves, Self::Eco, Self::Sport, Self::Safe];
+
+    fn id(&self) -> &'static str {
         match self {
-            Self::CswapGuard => "cswap-guard",
+            Self::PriorityReserves => "priority-reserves",
             Self::Eco => "eco",
             Self::Sport => "sport",
             Self::Safe => "safe",
+            Self::Unknown(_) => "unknown",
         }
     }
 
-    fn name(self) -> &'static str {
-        match self {
-            Self::CswapGuard => "Come cswap-guard",
-            Self::Eco => "Eco",
-            Self::Sport => "Sport",
-            Self::Safe => "Sicura",
+    /// Nome della mappa creata dal preset (`en` = inglese).
+    pub fn name(&self, en: bool) -> &'static str {
+        match (self, en) {
+            (Self::PriorityReserves, false) => "Principale con riserve",
+            (Self::PriorityReserves, true) => "Primary with reserves",
+            (Self::Eco, _) => "Eco",
+            (Self::Sport, _) => "Sport",
+            (Self::Safe, false) => "Sicura",
+            (Self::Safe, true) => "Safe",
+            (Self::Unknown(_), _) => "?",
         }
     }
 
-    /// Regole del preset. Fuori da «Come cswap-guard» lista ed esclusi restano quelli di
-    /// `base`; le parti comuni a tutte le mappe vengono sempre da `base`.
-    pub fn rules(self, base: &EngineRules) -> EngineRules {
+    /// Regole del preset. Lista (senza gli esclusi) ed esclusi restano quelli di `base`, e così
+    /// le parti comuni a tutte le mappe. Un preset sconosciuto lascia `base` com'è.
+    pub fn rules(&self, base: &EngineRules) -> EngineRules {
         let mut r = EngineRules {
             enabled: base.enabled,
             dry_run: base.dry_run,
             ignored_conflicts: base.ignored_conflicts.clone(),
-            order: Some(base.configured_order()),
+            order: Some(
+                base.configured_order()
+                    .into_iter()
+                    .filter(|n| !base.excluded.contains(n))
+                    .collect(),
+            ),
             primary: None,
             reserves: Vec::new(),
             excluded: base.excluded.clone(),
             ..EngineRules::default()
         };
         match self {
-            Self::CswapGuard => {
-                r.order = Some(vec![6, 1, 3]);
-                r.excluded = Vec::new();
-                r.return_hysteresis = 45.0;
-            }
+            Self::PriorityReserves => r.return_hysteresis = 45.0,
             Self::Eco => {
                 r.reserve_criterion = ReserveCriterion::ResetSoonest;
                 r.five_hour_threshold = 90.0;
@@ -82,9 +100,7 @@ impl PresetKind {
                 r.five_hour_threshold = 98.0;
             }
             Self::Safe => r.reserve_criterion = ReserveCriterion::PaceSafe,
-        }
-        if r.order.as_ref().is_some_and(Vec::is_empty) {
-            r.order = None;
+            Self::Unknown(_) => r = base.clone(),
         }
         r.sync_order();
         r
@@ -165,8 +181,8 @@ impl EngineProfiles {
         }];
         profiles.extend(PresetKind::ALL.iter().map(|k| RulesProfile {
             id: k.id().to_owned(),
-            name: k.name().to_owned(),
-            preset: Some(*k),
+            name: k.name(false).to_owned(),
+            preset: Some(k.clone()),
             rules: k.rules(current),
         }));
         Self {
@@ -203,8 +219,43 @@ impl EngineProfiles {
             return warnings;
         }
         if self.active().is_none() {
-            warnings.push("mappa attiva inesistente: si usa la prima".to_owned());
-            self.active_id = self.profiles[0].id.clone();
+            // Le regole attive (`engine`) non devono finire sopra un'altra mappa.
+            if self.profiles.len() >= MAX_PROFILES {
+                if let Some(dropped) = self.profiles.pop() {
+                    warnings.push(format!(
+                        "troppe mappe: tolta «{}» per recuperare la mappa attiva",
+                        dropped.name
+                    ));
+                }
+            }
+            let name = (1..)
+                .map(|n| match n {
+                    1 => RECOVERED_NAME.to_owned(),
+                    n => format!("{RECOVERED_NAME} {n}"),
+                })
+                .find(|c| self.free_name(c, None).is_ok())
+                .unwrap_or_default();
+            warnings.push(format!(
+                "mappa attiva inesistente: creata «{name}» dalle regole attive"
+            ));
+            let id = self.new_id();
+            self.profiles.push(RulesProfile {
+                id: id.clone(),
+                name,
+                preset: None,
+                rules: engine.clone(),
+            });
+            self.active_id = id;
+        }
+        // Vecchio preset `cswapGuard` (già letto come «Principale con riserve»): regole
+        // dell'utente invariate, nome predefinito sostituito se libero.
+        let renamed = PresetKind::PriorityReserves.name(false);
+        if let Some(i) = self.profiles.iter().position(|p| {
+            p.preset == Some(PresetKind::PriorityReserves) && p.name == LEGACY_PRESET_NAME
+        }) {
+            if self.free_name(renamed, Some(i)).is_ok() {
+                self.profiles[i].name = renamed.to_owned();
+            }
         }
         for p in &mut self.profiles {
             p.rules.sync_order();
@@ -289,7 +340,13 @@ impl EngineProfiles {
                 let i = next.index(id)?;
                 let kind = next.profiles[i]
                     .preset
+                    .clone()
                     .ok_or_else(|| "la mappa non viene da un preset".to_owned())?;
+                if matches!(kind, PresetKind::Unknown(_)) {
+                    return Err(
+                        "preset sconosciuto: aggiorna SwapDeck per ripristinarlo".to_owned()
+                    );
+                }
                 next.profiles[i].rules = kind.rules(&next.profiles[i].rules);
             }
             ProfileCommand::Select { id } => {
@@ -371,7 +428,7 @@ fn name_ok(name: &str) -> Result<String, String> {
 mod tests {
     use super::*;
 
-    fn guard_like() -> EngineRules {
+    fn user_like() -> EngineRules {
         EngineRules {
             enabled: true,
             primary: Some(6),
@@ -383,18 +440,25 @@ mod tests {
 
     #[test]
     fn seeding_and_presets() {
-        let p = EngineProfiles::seeded(&guard_like());
+        let p = EngineProfiles::seeded(&user_like());
         let ids: Vec<&str> = p.profiles.iter().map(|p| p.id.as_str()).collect();
-        assert_eq!(ids, ["personal", "cswap-guard", "eco", "sport", "safe"]);
+        assert_eq!(
+            ids,
+            ["personal", "priority-reserves", "eco", "sport", "safe"]
+        );
         assert_eq!(p.active().unwrap().name, "Personale");
         assert_eq!(p.active().unwrap().rules.order, Some(vec![6, 1, 3]));
-        let guard = &p.profiles[1].rules;
+        let priority = &p.profiles[1].rules;
         let expected = EngineRules {
             order: Some(vec![6, 1, 3]),
             return_hysteresis: 45.0,
-            ..guard_like()
+            ..user_like()
         };
-        assert_eq!(guard, &expected, "«Come cswap-guard» = la regola attuale");
+        assert_eq!(
+            priority, &expected,
+            "«Principale con riserve» = la lista attuale"
+        );
+        assert_eq!(p.profiles[1].name, "Principale con riserve");
         let eco = &p.profiles[2].rules;
         assert_eq!(eco.reserve_criterion, ReserveCriterion::ResetSoonest);
         assert_eq!(eco.five_hour_threshold, 90.0);
@@ -412,7 +476,7 @@ mod tests {
             p.profiles[4].rules.reserve_criterion,
             ReserveCriterion::PaceSafe
         );
-        // Senza regole: i preset diversi da cswap-guard non hanno lista.
+        // Senza regole: i preset non hanno lista.
         let empty = EngineProfiles::seeded(&EngineRules::default());
         assert_eq!(empty.profiles[2].rules.order, None);
         assert!(empty.profiles[2].rules.validate_for_save().is_empty());
@@ -420,7 +484,7 @@ mod tests {
 
     #[test]
     fn crud_select_and_restore() {
-        let cur = guard_like();
+        let cur = user_like();
         let mut p = EngineProfiles::seeded(&cur);
         let r = p
             .apply(&ProfileCommand::Select { id: "eco".into() }, &cur)
@@ -531,7 +595,7 @@ mod tests {
 
     #[test]
     fn normalize_repairs_and_engine_wins() {
-        let cur = guard_like();
+        let cur = user_like();
         let mut p = EngineProfiles::default();
         assert!(p.normalize(&cur).is_empty());
         assert_eq!(p.profiles.len(), 5, "migrazione: Personale e preset");
@@ -542,8 +606,113 @@ mod tests {
         let w = p.normalize(&changed);
         assert_eq!(w, ["mappe non valide tolte"]);
         assert_eq!(p.active().unwrap().rules, changed, "engine prevale");
+        // Mappa attiva sparita: le regole attive vanno in «Recuperata», la prima resta com'è.
+        let first = p.profiles[0].clone();
         p.active_id = "gone".into();
-        assert_eq!(p.normalize(&changed).len(), 1);
-        assert_eq!(p.active_id, "personal");
+        assert_eq!(
+            p.normalize(&changed),
+            ["mappa attiva inesistente: creata «Recuperata» dalle regole attive"]
+        );
+        assert_eq!(p.profiles[0], first);
+        let rec = p.active().unwrap();
+        assert_eq!((rec.name.as_str(), &rec.rules), (RECOVERED_NAME, &changed));
+        assert_ne!(rec.id, first.id);
+        p.active_id = "gone-again".into();
+        p.normalize(&changed);
+        assert_eq!(p.active().unwrap().name, "Recuperata 2");
+        // Al massimo delle mappe si toglie l'ultima per fare posto.
+        while p.profiles.len() < MAX_PROFILES {
+            p.profiles.push(RulesProfile {
+                id: format!("x-{}", p.profiles.len()),
+                name: format!("X {}", p.profiles.len()),
+                preset: None,
+                rules: cur.clone(),
+            });
+        }
+        p.active_id = "gone".into();
+        let w = p.normalize(&changed);
+        assert_eq!(w.len(), 2, "{w:?}");
+        assert_eq!(p.profiles.len(), MAX_PROFILES);
+        assert_eq!(p.active().unwrap().rules, changed);
+    }
+
+    #[test]
+    fn priority_preset_keeps_excluded() {
+        let base = EngineRules {
+            excluded: vec![1, 9],
+            ..user_like()
+        };
+        let r = PresetKind::PriorityReserves.rules(&base);
+        assert_eq!(r.excluded, vec![1, 9]);
+        assert_eq!(r.configured_order(), vec![6, 3]);
+        assert_eq!((r.primary, r.reserves.clone()), (Some(6), vec![3]));
+        assert!(r.validate().is_empty());
+    }
+
+    #[test]
+    fn unknown_preset_and_criterion_survive_a_round_trip() {
+        let text = r#"{"activeId":"m","profiles":[{"id":"m","name":"Futura","preset":"turbo",
+            "rules":{"order":[6,1],"reserveCriterion":"quantum-pick"}}]}"#;
+        let mut p: EngineProfiles = serde_json::from_str(text).unwrap();
+        let m = &p.profiles[0];
+        assert_eq!(m.preset, Some(PresetKind::Unknown("turbo".into())));
+        assert_eq!(
+            m.rules.reserve_criterion,
+            ReserveCriterion::Unknown("quantum-pick".into())
+        );
+        let engine = m.rules.clone();
+        assert!(p.normalize(&engine).is_empty());
+        let err = p
+            .apply(&ProfileCommand::Restore { id: "m".into() }, &engine)
+            .unwrap_err();
+        assert!(err.contains("preset sconosciuto"), "{err}");
+        let saved = serde_json::to_value(&p).unwrap();
+        assert_eq!(saved["profiles"][0]["preset"], "turbo");
+        assert_eq!(
+            saved["profiles"][0]["rules"]["reserveCriterion"],
+            "quantum-pick"
+        );
+        let again: EngineProfiles = serde_json::from_value(saved).unwrap();
+        assert_eq!(again, p);
+        // I valori noti restano quelli di prima.
+        assert_eq!(
+            serde_json::to_value(PresetKind::PriorityReserves).unwrap(),
+            "priorityReserves"
+        );
+        assert_eq!(
+            serde_json::from_str::<ReserveCriterion>(r#""pace-safe""#).unwrap(),
+            ReserveCriterion::PaceSafe
+        );
+    }
+
+    #[test]
+    fn old_guard_preset_becomes_priority_reserves() {
+        let text = r#"{"activeId":"personal","profiles":[
+            {"id":"personal","name":"Personale","rules":{"order":[2,5]}},
+            {"id":"cswap-guard","name":"Come cswap-guard","preset":"cswapGuard",
+             "rules":{"order":[6,1,3],"fiveHourThreshold":80}},
+            {"id":"g2","name":"Mia","preset":"cswapGuard","rules":{"order":[6]}}]}"#;
+        let mut p: EngineProfiles = serde_json::from_str(text).unwrap();
+        let engine = p.profiles[0].rules.clone();
+        assert!(p.normalize(&engine).is_empty());
+        let old = &p.profiles[1];
+        assert_eq!(old.preset, Some(PresetKind::PriorityReserves));
+        assert_eq!(old.name, "Principale con riserve");
+        assert_eq!(old.id, "cswap-guard", "l'id resta");
+        assert_eq!(
+            (old.rules.configured_order(), old.rules.five_hour_threshold),
+            (vec![6, 1, 3], 80.0),
+            "regole dell'utente invariate"
+        );
+        assert_eq!(
+            p.profiles[2].name, "Mia",
+            "nome scelto dall'utente invariato"
+        );
+        let saved = serde_json::to_value(&p).unwrap();
+        assert_eq!(saved["profiles"][1]["preset"], "priorityReserves");
+        assert_eq!(
+            PresetKind::PriorityReserves.name(true),
+            "Primary with reserves"
+        );
     }
 }

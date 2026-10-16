@@ -1,12 +1,13 @@
 //! Avvio dell'app Tauri: plugin, stato, area di notifica, ciclo di lettura.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use swapdeck_core::config::Language;
 use swapdeck_core::cswap::ListResponse;
+use swapdeck_core::engine::EngineRules;
 use swapdeck_core::paths::AppPaths;
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
 use tauri_plugin_notification::NotificationExt as _;
@@ -167,6 +168,21 @@ pub fn apply_outcome(app: &AppHandle, outcome: &Outcome) {
     }
 }
 
+/// Regole e intervallo per un giro del motore. Le regole (e le mappe) si rileggono dal file a
+/// ogni giro, come `--headless`: una mappa scelta da CLI o da VS Code vale dal giro dopo. File
+/// assente o non leggibile: restano quelle in memoria.
+fn engine_inputs(shared: &Shared, config: Option<&Path>) -> (EngineRules, Duration) {
+    let loaded = config
+        .and_then(|p| swapdeck_core::config::load(p).ok())
+        .filter(|l| l.from_file);
+    let mut s = lock(&shared.settings);
+    if let Some(l) = loaded {
+        s.engine = l.config.engine;
+        s.engine_profiles = l.config.engine_profiles;
+    }
+    (s.engine.clone(), s.poll_interval)
+}
+
 pub fn run(api: Arc<dyn CswapApi>) {
     let (store, settings, warnings) = SettingsStore::load();
     for w in warnings {
@@ -176,6 +192,9 @@ pub fn run(api: Arc<dyn CswapApi>) {
     let interval = settings.poll_interval;
     let updates = settings.updates_enabled;
     let data_dir = AppPaths::from_env_or_system().map(|p| p.data_dir);
+    let config_file = AppPaths::from_env_or_system()
+        .filter(|_| store.is_persistent())
+        .map(|p| p.config_file());
     let shared = Arc::new(Shared::new(api, store, settings));
     *lock(&shared.notifier) = AppNotifier::new(data_dir.as_deref());
 
@@ -243,11 +262,9 @@ pub fn run(api: Arc<dyn CswapApi>) {
                         lp,
                         api,
                         dir,
-                        // Regole e intervallo riletti a ogni giro (cambiano dalla UI).
-                        move || {
-                            let s = lock(&live.settings);
-                            (s.engine.clone(), s.poll_interval)
-                        },
+                        // Regole e intervallo riletti a ogni giro (cambiano dalla UI, dalla
+                        // CLI e da VS Code).
+                        move || engine_inputs(&live, config_file.as_deref()),
                         move |rules, step| {
                             lock(&engine_cb.state::<Arc<Shared>>().notifier).on_step(rules, step);
                             let Some(view) = engine_loop::view_of(rules, step) else {
@@ -311,4 +328,42 @@ pub fn run(api: Arc<dyn CswapApi>) {
         }
         _ => {}
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::mock::MockApi;
+    use crate::settings::{Settings, SettingsStore};
+
+    #[test]
+    fn engine_rules_are_reread_from_the_file_each_round() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = AppPaths::from_root(dir.path());
+        paths.ensure().unwrap();
+        let file = paths.config_file();
+        let shared = Shared::new(
+            Arc::new(MockApi::new()),
+            SettingsStore::in_memory(),
+            Settings::default(),
+        );
+        // File assente: restano le regole in memoria.
+        assert_eq!(
+            engine_inputs(&shared, Some(&file)).0,
+            EngineRules::default()
+        );
+        // Mappa cambiata da fuori (CLI o VS Code): vale dal giro dopo.
+        std::fs::write(
+            &file,
+            r#"{"schemaVersion":1,"engine":{"order":[3,1],"fiveHourThreshold":80}}"#,
+        )
+        .unwrap();
+        let (rules, _) = engine_inputs(&shared, Some(&file));
+        assert_eq!((rules.primary, rules.five_hour_threshold), (Some(3), 80.0));
+        assert_eq!(lock(&shared.settings).engine, rules);
+        // File non valido: restano le ultime lette.
+        std::fs::write(&file, "{ non json").unwrap();
+        assert_eq!(engine_inputs(&shared, Some(&file)).0, rules);
+        assert_eq!(engine_inputs(&shared, None).0, rules);
+    }
 }

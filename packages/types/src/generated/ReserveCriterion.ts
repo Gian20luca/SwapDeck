@@ -3,5 +3,8 @@
 /**
  * Criterio di scelta della riserva quando l'attiva supera la soglia. A parità vale sempre
  * l'ordine della lista; con i dati che servono al criterio mancanti la candidata si esclude.
+ * Se il criterio non può scegliere nessuna candidata (dati mancanti in tutte, modello assente,
+ * criterio sconosciuto) ripiega sulla settimanale più bassa e, senza 7d, sull'ordine della
+ * lista, e lo scrive nel motivo.
  */
 export type ReserveCriterion = "lowest-weekly" | "best" | "fixed-order" | "reset-soonest" | "pace-safe" | "lowest5h" | "balanced-score" | "even-spread" | "model-headroom";
