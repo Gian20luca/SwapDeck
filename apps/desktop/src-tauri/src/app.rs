@@ -10,6 +10,7 @@ use swapdeck_core::cswap::ListResponse;
 use swapdeck_core::engine::EngineRules;
 use swapdeck_core::paths::AppPaths;
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
+#[cfg(not(windows))]
 use tauri_plugin_notification::NotificationExt as _;
 
 use crate::api::{AutoPoll, CswapApi, Outcome, Res};
@@ -49,6 +50,27 @@ pub fn poller(app: &AppHandle) -> Poller {
     app.state::<Poller>().inner().clone()
 }
 
+/// Su Windows con lo stesso notificatore di `--headless` (AUMID registrato `com.swapdeck.desktop`,
+/// nome e icona di SwapDeck): il plugin usa l'identificativo solo fuori da `target\debug` e
+/// `target\release`, così sviluppo, zip portatile e installer si comportano uguale.
+#[cfg(windows)]
+pub fn notify(_app: &AppHandle, (title, body): (String, String)) {
+    use swapdeck_core::headless::{OsNotifier as _, SystemNotifier};
+    use swapdeck_core::notify::Severity;
+    // In un thread: la notifica può attendere fino a 5 s e non deve fermare il chiamante.
+    let spawned = std::thread::Builder::new()
+        .name("app-notify".into())
+        .spawn(move || {
+            if let Err(e) = SystemNotifier.show(&title, &body, Severity::Info) {
+                eprintln!("notifica non mostrata: {e}");
+            }
+        });
+    if let Err(e) = spawned {
+        eprintln!("notifica non mostrata: {e}");
+    }
+}
+
+#[cfg(not(windows))]
 pub fn notify(app: &AppHandle, (title, body): (String, String)) {
     if let Err(e) = app.notification().builder().title(title).body(body).show() {
         eprintln!("notifica non mostrata: {e}");
@@ -184,6 +206,7 @@ fn engine_inputs(shared: &Shared, config: Option<&Path>) -> (EngineRules, Durati
 }
 
 pub fn run(api: Arc<dyn CswapApi>) {
+    swapdeck_core::headless::log_app_id_registration(swapdeck_core::headless::register_app_id());
     let (store, settings, warnings) = SettingsStore::load();
     for w in warnings {
         eprintln!("config: {w}");

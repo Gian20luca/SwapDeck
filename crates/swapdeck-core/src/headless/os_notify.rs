@@ -1,8 +1,11 @@
 //! Notifiche di sistema del motore senza interfaccia (`--notify=os|stdout|both`).
 //!
-//! - Windows: toast con l'AppUserModelID dell'app installata (`identifier` di Tauri, registrato
-//!   dall'installer sul collegamento del menu Start); senza collegamento, quello di PowerShell
-//!   (ripiego di `notify-rust`, funziona anche dallo zip portatile).
+//! - Windows: toast con l'AppUserModelID dell'app (`identifier` di Tauri), registrato per utente
+//!   in `HKCU\Software\Classes\AppUserModelId` con nome e icona ([`register_app_id`], anche dallo
+//!   zip portatile) o dall'installer sul collegamento del menu Start; senza nessuno dei due, quello
+//!   di PowerShell (ripiego di `notify-rust`). Windows tiene in memoria nome e icona di un AUMID
+//!   dal suo primo toast: se quello è partito prima della registrazione, «SwapDeck» compare solo
+//!   dopo un nuovo accesso (la voce in `Notifications\Settings` non c'entra, provato).
 //! - Linux: D-Bus (`org.freedesktop.Notifications`); senza bus di sessione o sessione grafica si
 //!   salta senza errori.
 //! - macOS: Centro notifiche, con l'identificativo dell'app se il bundle è installato.
@@ -10,6 +13,7 @@
 //! Un errore non ferma mai il motore: il chiamante lo scrive in una riga di log.
 
 use std::ffi::OsString;
+use std::io::{self, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
@@ -20,6 +24,15 @@ use crate::notify::Severity;
 pub const APP_IDENTIFIER: &str = "com.swapdeck.desktop";
 /// `productName` di Tauri: nome del collegamento nel menu Start e del bundle macOS.
 pub const PRODUCT_NAME: &str = "SwapDeck";
+/// Chiave per utente dell'AUMID sotto `HKEY_CURRENT_USER` (metodo per le app non pacchettizzate);
+/// la toglie anche il disinstallatore NSIS (`apps/desktop/src-tauri/windows/hooks.nsh`).
+pub const AUMID_KEY: &str = r"Software\Classes\AppUserModelId\com.swapdeck.desktop";
+/// Icona dei toast nella cartella dati standard dell'utente (non `SWAPDECK_HOME`: la chiave del
+/// registro è una sola per utente). La toglie anche il disinstallatore NSIS.
+pub const ICON_FILE: &str = "notify-icon.png";
+/// Icona incorporata nel binario: vale anche per lo zip portatile.
+#[cfg(windows)]
+const ICON_BYTES: &[u8] = include_bytes!("../../../../apps/desktop/src-tauri/icons/128x128.png");
 /// Attesa massima di una notifica (D-Bus senza risposta, servizio bloccato).
 const SHOW_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -104,10 +117,13 @@ fn show_blocking(title: &str, body: &str, severity: Severity) -> Result<(), Stri
     let mut n = notify_rust::Notification::new();
     n.summary(title).body(body).appname(PRODUCT_NAME);
     #[cfg(windows)]
-    if let Some(id) = windows_app_id(&[
-        std::env::var_os("APPDATA").map(PathBuf::from),
-        std::env::var_os("ProgramData").map(PathBuf::from),
-    ]) {
+    if let Some(id) = windows_app_id(
+        RegistryStore::open().is_some_and(|s| aumid_registered(&s)),
+        &[
+            std::env::var_os("APPDATA").map(PathBuf::from),
+            std::env::var_os("ProgramData").map(PathBuf::from),
+        ],
+    ) {
         n.app_id(id);
     }
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -123,10 +139,14 @@ fn show_blocking(title: &str, body: &str, severity: Severity) -> Result<(), Stri
     n.show().map(|_| ()).map_err(|e| e.to_string())
 }
 
-/// AUMID per i toast di Windows: quello dell'app se l'installer ha messo il collegamento nel menu
-/// Start (per utente in `APPDATA`, per macchina in `ProgramData`); `None` = ripiego di PowerShell.
+/// AUMID per i toast di Windows: quello dell'app se è registrato nel registro (`registered`) o se
+/// l'installer ha messo il collegamento nel menu Start (per utente in `APPDATA`, per macchina in
+/// `ProgramData`); `None` = ripiego di PowerShell (un AUMID sconosciuto non mostrerebbe nulla).
 #[cfg_attr(not(windows), allow(dead_code))]
-pub(crate) fn windows_app_id(roots: &[Option<PathBuf>]) -> Option<&'static str> {
+pub(crate) fn windows_app_id(registered: bool, roots: &[Option<PathBuf>]) -> Option<&'static str> {
+    if registered {
+        return Some(APP_IDENTIFIER);
+    }
     let shortcut = format!("{PRODUCT_NAME}.lnk");
     roots
         .iter()
@@ -141,6 +161,140 @@ pub(crate) fn windows_app_id(roots: &[Option<PathBuf>]) -> Option<&'static str> 
         // Senza seguire collegamenti simbolici: conta solo un file vero.
         .any(|p| std::fs::symlink_metadata(p).is_ok_and(|m| m.is_file()))
         .then_some(APP_IDENTIFIER)
+}
+
+/// Esito di [`register_app_id`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Registration {
+    /// Chiave e icona già a posto: nessuna scrittura.
+    Unchanged,
+    /// Scritte (prima volta, o valori e icona diversi).
+    Updated,
+    /// Non serve su questo sistema (Linux, macOS).
+    NotNeeded,
+}
+
+/// Registra per utente l'AUMID dell'app (nome «SwapDeck» e icona), senza amministratore: si scrive
+/// solo ciò che manca o è diverso. `Err` con un testo breve per il log: le notifiche ripiegano sul
+/// comportamento di prima (collegamento del menu Start o PowerShell) e il motore continua.
+pub fn register_app_id() -> Result<Registration, String> {
+    #[cfg(windows)]
+    {
+        let base = crate::paths::AppPaths::from_system()
+            .ok_or("cartella dati dell'utente non determinabile")?;
+        let icon = base.data_dir.join(ICON_FILE);
+        crate::paths::create_private_dir(&base.data_dir)
+            .map_err(|e| format!("cartella dell'icona: {e}"))?;
+        let icon_written = ensure_icon(&icon, ICON_BYTES).map_err(|e| format!("icona: {e}"))?;
+        let values = aumid_values(&icon).ok_or("percorso dell'icona non rappresentabile")?;
+        let mut store = RegistryStore::create()?;
+        let key_written = ensure_aumid(&mut store, &values)?;
+        Ok(if icon_written || key_written {
+            Registration::Updated
+        } else {
+            Registration::Unchanged
+        })
+    }
+    #[cfg(not(windows))]
+    Ok(Registration::NotNeeded)
+}
+
+/// Valori della chiave dell'AUMID (finta nei test).
+pub(crate) trait AumidStore {
+    fn get(&self, name: &str) -> Option<String>;
+    fn set(&mut self, name: &str, value: &str) -> Result<(), String>;
+}
+
+/// Nome mostrato e icona (percorso assoluto `.png`); `None` se il percorso non è Unicode valido.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn aumid_values(icon: &Path) -> Option<[(&'static str, String); 2]> {
+    Some([
+        ("DisplayName", PRODUCT_NAME.to_owned()),
+        ("IconUri", icon.to_str()?.to_owned()),
+    ])
+}
+
+/// Scrive solo i valori mancanti o diversi; `true` se ha scritto qualcosa.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn ensure_aumid(
+    store: &mut impl AumidStore,
+    values: &[(&str, String)],
+) -> Result<bool, String> {
+    let mut written = false;
+    for (name, value) in values {
+        if store.get(name).as_deref() != Some(value.as_str()) {
+            store.set(name, value)?;
+            written = true;
+        }
+    }
+    Ok(written)
+}
+
+/// AUMID utilizzabile: chiave con il nome dell'app.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn aumid_registered(store: &impl AumidStore) -> bool {
+    store.get("DisplayName").is_some_and(|n| !n.is_empty())
+}
+
+/// Scrive l'icona solo se manca o è diversa, in modo atomico (file temporaneo nella stessa
+/// cartella e rinomina, che sostituisce un eventuale collegamento senza seguirlo).
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn ensure_icon(path: &Path, bytes: &[u8]) -> io::Result<bool> {
+    let same = std::fs::symlink_metadata(path).is_ok_and(|m| m.is_file())
+        && std::fs::read(path).is_ok_and(|current| current == bytes);
+    if same {
+        return Ok(false);
+    }
+    let dir = path
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "percorso senza cartella"))?;
+    let mut tmp = tempfile::NamedTempFile::new_in(dir)?;
+    tmp.write_all(bytes)?;
+    tmp.as_file().sync_all()?;
+    tmp.persist(path).map_err(|e| e.error)?;
+    Ok(true)
+}
+
+/// Chiave dell'AUMID nel registro di Windows (`winreg`, senza `unsafe` nel progetto).
+#[cfg(windows)]
+struct RegistryStore(winreg::RegKey);
+
+#[cfg(windows)]
+impl RegistryStore {
+    fn hkcu() -> winreg::RegKey {
+        winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+    }
+
+    /// Solo lettura; `None` se la chiave non c'è.
+    fn open() -> Option<Self> {
+        Self::hkcu()
+            .open_subkey_with_flags(AUMID_KEY, winreg::enums::KEY_READ)
+            .ok()
+            .map(Self)
+    }
+
+    fn create() -> Result<Self, String> {
+        Self::hkcu()
+            .create_subkey_with_flags(
+                AUMID_KEY,
+                winreg::enums::KEY_READ | winreg::enums::KEY_WRITE,
+            )
+            .map(|(key, _)| Self(key))
+            .map_err(|e| format!("registro non scrivibile: {e}"))
+    }
+}
+
+#[cfg(windows)]
+impl AumidStore for RegistryStore {
+    fn get(&self, name: &str) -> Option<String> {
+        self.0.get_value::<String, _>(name).ok()
+    }
+
+    fn set(&mut self, name: &str, value: &str) -> Result<(), String> {
+        self.0
+            .set_value(name, &value.to_owned())
+            .map_err(|e| format!("registro non scrivibile ({name}): {e}"))
+    }
 }
 
 /// Linux e BSD: bus di sessione (variabile o socket in `XDG_RUNTIME_DIR`) e indizio di una
@@ -216,15 +370,17 @@ mod tests {
             None,
             Some(machine.path().to_path_buf()),
         ];
-        // Niente installazione: ripiego.
-        assert_eq!(windows_app_id(&roots), None);
-        assert_eq!(windows_app_id(&[]), None);
+        // Niente installazione né registrazione: ripiego.
+        assert_eq!(windows_app_id(false, &roots), None);
+        assert_eq!(windows_app_id(false, &[]), None);
+        // Registrato nel registro (zip portatile): basta quello.
+        assert_eq!(windows_app_id(true, &[]), Some(APP_IDENTIFIER));
         // Una cartella con il nome del collegamento non conta.
         std::fs::create_dir_all(programs(machine.path()).join("SwapDeck.lnk")).unwrap();
-        assert_eq!(windows_app_id(&roots), None);
+        assert_eq!(windows_app_id(false, &roots), None);
         // Installazione per utente.
         std::fs::write(programs(user.path()).join("SwapDeck.lnk"), b"lnk").unwrap();
-        assert_eq!(windows_app_id(&roots), Some(APP_IDENTIFIER));
+        assert_eq!(windows_app_id(false, &roots), Some(APP_IDENTIFIER));
     }
 
     #[test]
@@ -232,9 +388,107 @@ mod tests {
         let machine = tempfile::tempdir().unwrap();
         std::fs::write(programs(machine.path()).join("SwapDeck.lnk"), b"lnk").unwrap();
         assert_eq!(
-            windows_app_id(&[None, Some(machine.path().to_path_buf())]),
+            windows_app_id(false, &[None, Some(machine.path().to_path_buf())]),
             Some(APP_IDENTIFIER)
         );
+    }
+
+    /// Registro finto: valori in memoria e scritture contate.
+    #[derive(Default)]
+    struct FakeStore {
+        values: std::collections::BTreeMap<String, String>,
+        writes: usize,
+        read_only: bool,
+    }
+
+    impl AumidStore for FakeStore {
+        fn get(&self, name: &str) -> Option<String> {
+            self.values.get(name).cloned()
+        }
+
+        fn set(&mut self, name: &str, value: &str) -> Result<(), String> {
+            if self.read_only {
+                return Err("accesso negato".to_owned());
+            }
+            self.writes += 1;
+            self.values.insert(name.to_owned(), value.to_owned());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn aumid_registration_is_idempotent() {
+        let icon = std::env::temp_dir().join(ICON_FILE);
+        let values = aumid_values(&icon).unwrap();
+        let mut store = FakeStore::default();
+        assert!(!aumid_registered(&store));
+        // Prima volta: nome e icona.
+        assert_eq!(ensure_aumid(&mut store, &values), Ok(true));
+        assert_eq!(store.writes, 2);
+        assert_eq!(store.values["DisplayName"], "SwapDeck");
+        assert_eq!(store.values["IconUri"], icon.to_str().unwrap());
+        assert!(aumid_registered(&store));
+        // Seconda volta: nessuna scrittura.
+        assert_eq!(ensure_aumid(&mut store, &values), Ok(false));
+        assert_eq!(store.writes, 2);
+        // Un valore diverso (icona spostata): si riscrive solo quello.
+        store.values.insert("IconUri".into(), "vecchia.png".into());
+        assert_eq!(ensure_aumid(&mut store, &values), Ok(true));
+        assert_eq!(store.writes, 3);
+        // Nome vuoto: non utilizzabile.
+        store.values.insert("DisplayName".into(), String::new());
+        assert!(!aumid_registered(&store));
+    }
+
+    #[test]
+    fn aumid_registration_with_read_only_registry() {
+        let values = aumid_values(&std::env::temp_dir().join(ICON_FILE)).unwrap();
+        let mut store = FakeStore {
+            read_only: true,
+            ..FakeStore::default()
+        };
+        assert!(ensure_aumid(&mut store, &values).is_err());
+        assert!(!aumid_registered(&store));
+        // Già registrato: nessuna scrittura, quindi nessun errore.
+        let mut done = FakeStore::default();
+        ensure_aumid(&mut done, &values).unwrap();
+        done.read_only = true;
+        assert_eq!(ensure_aumid(&mut done, &values), Ok(false));
+    }
+
+    #[test]
+    fn icon_written_only_when_missing_or_different() {
+        let dir = tempfile::tempdir().unwrap();
+        let icon = dir.path().join(ICON_FILE);
+        assert!(ensure_icon(&icon, b"png-1").unwrap());
+        assert!(!ensure_icon(&icon, b"png-1").unwrap());
+        assert!(ensure_icon(&icon, b"png-2").unwrap());
+        assert_eq!(std::fs::read(&icon).unwrap(), b"png-2");
+        // Una cartella al posto dell'icona: errore, niente panic.
+        let blocked = dir.path().join("blocked");
+        std::fs::create_dir_all(&blocked).unwrap();
+        assert!(ensure_icon(&blocked, b"png").is_err());
+        // Nessun file temporaneo rimasto.
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 2);
+    }
+
+    #[test]
+    fn registration_key_and_other_systems() {
+        assert!(AUMID_KEY.ends_with(&format!("\\{APP_IDENTIFIER}")));
+        assert!(AUMID_KEY.starts_with("Software\\Classes\\AppUserModelId\\"));
+        if !cfg!(windows) {
+            assert_eq!(register_app_id(), Ok(Registration::NotNeeded));
+        }
+    }
+
+    /// Il disinstallatore toglie la stessa chiave e la stessa icona.
+    #[test]
+    fn nsis_hook_matches_constants() {
+        let hook = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../apps/desktop/src-tauri/windows/hooks.nsh");
+        let text = std::fs::read_to_string(hook).unwrap();
+        assert!(text.contains(&format!("DeleteRegKey HKCU \"{AUMID_KEY}\"")));
+        assert!(text.contains(&format!("$APPDATA\\{}\\{ICON_FILE}", crate::paths::APP_DIR)));
     }
 
     fn env_of(pairs: &'static [(&'static str, &'static str)]) -> impl Fn(&str) -> Option<OsString> {

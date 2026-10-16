@@ -24,6 +24,10 @@ notify-rust = "4.17.0"
 ureq = { version = "3.4.2", default-features = false, features = ["rustls", "platform-verifier"] }
 zeroize = "1.9.1"
 
+[target."cfg(windows)".dependencies]
+# AUMID delle notifiche per utente (HKCU); già nel lockfile tramite gli strumenti di build.
+winreg = "0.56.0"
+
 [target."cfg(unix)".dependencies]
 rustix = { version = "1.1.5", features = ["process", "fs"] }
 

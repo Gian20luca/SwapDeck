@@ -29,7 +29,9 @@ use crate::paths::{AppPaths, create_private_dir};
 use crate::timeutil::{format_iso, now_unix};
 
 pub mod os_notify;
-pub use os_notify::{NotifyChannel, OsNotifier, OsOutcome, SystemNotifier};
+pub use os_notify::{
+    NotifyChannel, OsNotifier, OsOutcome, Registration, SystemNotifier, register_app_id,
+};
 
 /// Memoria del motore nella cartella dati.
 pub const MEMORY_FILE: &str = "engine-memory.json";
@@ -806,6 +808,9 @@ pub fn cli_main(args: &[String], stop: &AtomicBool) -> i32 {
             return exit_code::ERROR;
         }
     };
+    if flags.notify.to_os() {
+        log_app_id_registration(register_app_id());
+    }
     let mut opts = RunOptions::new(paths.data_dir.clone(), loaded.config.engine.clone());
     opts.interval_secs = loaded.config.poll_interval_seconds;
     opts.once = flags.once;
@@ -837,6 +842,17 @@ pub fn cli_main(args: &[String], stop: &AtomicBool) -> i32 {
         Err(e) => {
             eprintln!("motore fermato: {e}");
             exit_code::ERROR
+        }
+    }
+}
+
+/// Una riga di log sull'AUMID delle notifiche (app e `--headless`); un errore non ferma nulla.
+pub fn log_app_id_registration(result: Result<Registration, String>) {
+    match result {
+        Ok(Registration::Updated) => eprintln!("notifiche: app registrata come «SwapDeck»"),
+        Ok(Registration::Unchanged | Registration::NotNeeded) => {}
+        Err(e) => {
+            eprintln!("notifiche: registrazione dell'app non riuscita ({e}), si usa il ripiego")
         }
     }
 }
