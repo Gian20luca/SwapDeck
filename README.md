@@ -4,10 +4,10 @@ Interfaccia grafica per [`cswap`](https://pypi.org/project/claude-swap/) (claude
 
 Si installa in **una** di queste forme (a scelta):
 
-| Forma | Per chi | Cosa dà |
-|---|---|---|
-| App nell'area di notifica | chi vuole un widget sempre visibile | icona con anello dei consumi, dashboard, mini-widget flottante, notifiche, avvio al login |
-| Estensione VS Code | chi lavora tutto il giorno in VS Code | consumi nella barra di stato, cambio rapido, pannello con la stessa app a schede del desktop |
+| Forma                     | Per chi                               | Cosa dà                                                                                      |
+| ------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------- |
+| App nell'area di notifica | chi vuole un widget sempre visibile   | icona con anello dei consumi, dashboard, mini-widget flottante, notifiche, avvio al login    |
+| Estensione VS Code        | chi lavora tutto il giorno in VS Code | consumi nella barra di stato, cambio rapido, pannello con la stessa app a schede del desktop |
 
 Entrambe usano lo stesso motore (Rust) e la stessa config, e coprono i comandi di `cswap` (list, switch, add, remove, alias, swap, map, export/import, run...). Interfaccia in italiano e inglese.
 
@@ -22,11 +22,11 @@ Entrambe usano lo stesso motore (Rust) e la stessa config, e coprono i comandi d
 
 Scarica gli asset dalla pagina Releases del repo (serve essere loggati con un account abilitato).
 
-| Sistema | App | Estensione VS Code |
-|---|---|---|
-| Windows | installer `.exe` (NSIS, per utente) | `.vsix` `win32-x64` |
-| Linux | `.AppImage` (si aggiorna da sola) o `.deb` | `.vsix` della tua piattaforma |
-| macOS | `.dmg` (Apple Silicon o Intel) | `.vsix` `darwin-arm64` / `darwin-x64` |
+| Sistema | App                                        | Estensione VS Code                    |
+| ------- | ------------------------------------------ | ------------------------------------- |
+| Windows | installer `.exe` (NSIS, per utente)        | `.vsix` `win32-x64`                   |
+| Linux   | `.AppImage` (si aggiorna da sola) o `.deb` | `.vsix` della tua piattaforma         |
+| macOS   | `.dmg` (Apple Silicon o Intel)             | `.vsix` `darwin-arm64` / `darwin-x64` |
 
 Estensione: `code --install-extension swapdeck-vscode-<piattaforma>-<versione>.vsix`, oppure «Estensioni» → «...» → «Installa da VSIX...». Poi «Ricarica finestra».
 
@@ -57,20 +57,20 @@ Aggiornamenti automatici: spenti di default finché il repo è privato; si scari
 
 Cambia account al posto tuo. È **spento di default**.
 
-| Impostazione (`engine`) | Significato | Default |
-|---|---|---|
-| `enabled` | acceso: decide e cambia | `false` |
-| `dryRun` | **sola osservazione**: decide e registra, non cambia | `false` |
-| `primary` | account principale | nessuno |
-| `reserves` | riserve in ordine; vuoto = tutti gli altri | vuoto |
-| `excluded` | account mai scelti | vuoto |
-| `fiveHourThreshold` | soglia di uscita sulle 5 ore (%) | 95 |
-| `sevenDayThreshold` | soglia sui 7 giorni (`null` = solo blocco al 100%) | 98 |
-| `reserveCriterion` | `lowest-weekly`, `best`, `fixed-order` | `lowest-weekly` |
-| `returnToPrimary` | torna al principale dopo il suo reset | `true` |
-| `returnHysteresis` | punti sotto la soglia richiesti al principale per tornarci (isteresi) | 10 |
-| `minSwitchGapSecs` | pausa minima tra due cambi | 300 |
-| `pollIntervalSeconds` | intervallo di controllo | 60 |
+| Impostazione (`engine`) | Significato                                                           | Default         |
+| ----------------------- | --------------------------------------------------------------------- | --------------- |
+| `enabled`               | acceso: decide e cambia                                               | `false`         |
+| `dryRun`                | **sola osservazione**: decide e registra, non cambia                  | `false`         |
+| `primary`               | account principale                                                    | nessuno         |
+| `reserves`              | riserve in ordine; vuoto = tutti gli altri                            | vuoto           |
+| `excluded`              | account mai scelti                                                    | vuoto           |
+| `fiveHourThreshold`     | soglia di uscita sulle 5 ore (%)                                      | 95              |
+| `sevenDayThreshold`     | soglia sui 7 giorni (`null` = solo blocco al 100%)                    | 98              |
+| `reserveCriterion`      | `lowest-weekly`, `best`, `fixed-order`                                | `lowest-weekly` |
+| `returnToPrimary`       | torna al principale dopo il suo reset                                 | `true`          |
+| `returnHysteresis`      | punti sotto la soglia richiesti al principale per tornarci (isteresi) | 10              |
+| `minSwitchGapSecs`      | pausa minima tra due cambi                                            | 300             |
+| `pollIntervalSeconds`   | intervallo di controllo                                               | 60              |
 
 Se la riserva scelta è al limite si passa alla successiva. Le regole stanno nella sezione `engine` di `config.json` (si rileggono all'avvio) e si leggono/scrivono anche con `swapdeck-cli config get|set`.
 
@@ -94,26 +94,26 @@ Codici di uscita: 0 ok, 1 errore, 2 uso errato, 3 lock occupato (un altro motore
 
 ## Dove stanno config e dati
 
-| Sistema | Posizione |
-|---|---|
-| Windows | `%APPDATA%\swapdeck` |
-| Linux | `~/.config/swapdeck` e `~/.local/share/swapdeck` |
-| macOS | `~/Library/Application Support/swapdeck` |
+| Sistema | Posizione                                        |
+| ------- | ------------------------------------------------ |
+| Windows | `%APPDATA%\swapdeck`                             |
+| Linux   | `~/.config/swapdeck` e `~/.local/share/swapdeck` |
+| macOS   | `~/Library/Application Support/swapdeck`         |
 
 Contengono `config.json`, il lock del motore (`engine.lock`) e lo storico dei consumi. Con `SWAPDECK_HOME` (percorso assoluto) si usa un'altra radice, utile per le prove. Le credenziali restano quelle di `cswap`.
 
 ## Problemi comuni
 
-| Sintomo | Causa probabile e rimedio |
-|---|---|
-| Motore «sospeso» | c'è `cswap auto` o un guard attivo: ferma l'altro automatismo (guida sopra) |
-| «motore attivo in un'altra istanza» | un'altra finestra o l'app tiene il lock: è voluto |
-| Il motore non cambia mai | spento (`enabled: false`), in sola osservazione (`dryRun: true`) o `primary` mancante |
-| `cswap` non trovato | riapri l'app per l'installazione guidata, oppure imposta `swapdeck.cliPath` / il PATH |
-| Consumi non aggiornati, errori 429 | `cswap list` ha limiti di frequenza: l'intervallo minimo è 60 s |
-| Account con «re-login» | accedi di nuovo con `cswap` a quell'account |
-| `headless` esce con 3 | lock occupato: un altro motore è attivo, è corretto |
-| Estensione inattiva dopo l'installazione | «Ricarica finestra» |
+| Sintomo                                  | Causa probabile e rimedio                                                             |
+| ---------------------------------------- | ------------------------------------------------------------------------------------- |
+| Motore «sospeso»                         | c'è `cswap auto` o un guard attivo: ferma l'altro automatismo (guida sopra)           |
+| «motore attivo in un'altra istanza»      | un'altra finestra o l'app tiene il lock: è voluto                                     |
+| Il motore non cambia mai                 | spento (`enabled: false`), in sola osservazione (`dryRun: true`) o `primary` mancante |
+| `cswap` non trovato                      | riapri l'app per l'installazione guidata, oppure imposta `swapdeck.cliPath` / il PATH |
+| Consumi non aggiornati, errori 429       | `cswap list` ha limiti di frequenza: l'intervallo minimo è 60 s                       |
+| Account con «re-login»                   | accedi di nuovo con `cswap` a quell'account                                           |
+| `headless` esce con 3                    | lock occupato: un altro motore è attivo, è corretto                                   |
+| Estensione inattiva dopo l'installazione | «Ricarica finestra»                                                                   |
 
 ## Per chi sviluppa
 
