@@ -10,7 +10,7 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 | 3 packages/ui | chiuso | 99ac73c | 118 test unitari, 10 E2E, copertura 97,6% |
 | 4 App Tauri | chiuso | 1adc30c | 5 rilievi corretti, motore agganciato, prove con finto cswap |
 | 5 Gestione completa in UI | chiuso | 1b7b82d | 6 schede, comandi Tauri+CLI+VS Code, copertura 97,5% |
-| 6 Installazione cswap | in corso | | |
+| 6 Installazione cswap | chiuso | a83645a | 9 rilievi corretti, rollback automatico, procedura di primo avvio in app e VS Code |
 | 7 Estensione VS Code | chiuso | 5860707 | 7 rilievi corretti; .vsix installato nel VS Code reale, motore spento |
 | 8 Pacchetti e CI | chiuso | 2351569 | CI verde 3 OS; prove di rilascio verdi; firma separata dalla build; docs/RILASCIO.md |
 | 9 Verifica finale e documenti | in corso | 8cbcc66 | README e guida da cswap-guard fatti |
@@ -31,3 +31,4 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 - A fine lavoro: release in bozza su GitHub con installer e .vsix.
 - **Disco C: del PC quasi pieno** (99%, 4 GB liberi nella notte; liberati 3,4 GB eliminando la target condivisa e ridotto il debuginfo dev). Le build Tauri richiedono vari GB: conviene liberare spazio.
 - Modalità senza interfaccia ed estensione VS Code: binario console `swapdeck-cli` (decisione provvisoria della notte, vedi PIANO §2).
+- Incidenti della notte, senza effetti: (1) TUI di cswap aperta 60 s senza input nello step 0b; (2) avvio automatico SwapDeck registrato e subito rimosso in una prova dello step 8; (3) `cswap auto\` lanciato per errore di quoting nello step 6 e rifiutato da cswap. Nessuno switch reale: l'unico cambio della notte (03:53, 6 → 3) è di cswap-guard.
