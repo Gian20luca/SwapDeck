@@ -7,6 +7,10 @@ name: Release
 on:
   push:
     tags: ['v*']
+    # Temporaneo (step 8): registra il workflow per il dispatch finché non è su main.
+    # Un push su un ramo vale sempre come prova, solo Windows.
+    branches: [wip/8]
+    paths: ['.github/workflows/release.yml']
   workflow_dispatch:
     inputs:
       dry_run:
@@ -40,8 +44,8 @@ jobs:
     steps:
       - id: m
         env:
-          PLATFORMS: ${{ inputs.platforms || 'tutte' }}
-          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          PLATFORMS: ${{ inputs.platforms || (github.ref_type == 'tag' && 'tutte' || 'windows') }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || github.event_name == 'push' && github.ref_type != 'tag' }}
         run: |
           all='[
             {"family":"windows","os":"windows-latest","target":"x86_64-pc-windows-msvc","bundles":"nsis"},
@@ -206,7 +210,7 @@ jobs:
       run:
         shell: bash
     env:
-      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || github.event_name == 'push' && github.ref_type != 'tag' }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v5
