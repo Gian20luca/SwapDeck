@@ -150,7 +150,13 @@ fn list_and_status() {
 fn text_and_config_reads() {
     let f = Fake::std();
     assert!(f.client.aliases().unwrap().starts_with("Aliases:"));
-    assert_eq!(f.client.maps().unwrap(), "No directory mappings yet.");
+    assert!(
+        f.client
+            .maps()
+            .unwrap()
+            .starts_with("No directory mappings yet.")
+    );
+    assert!(f.client.mappings().unwrap().is_empty());
     assert_eq!(
         f.client.unclaimed().unwrap(),
         "No unclaimed credential entries"
@@ -428,6 +434,17 @@ fn map_config_export_import_unclaimed() {
             .message
             .starts_with(&format!("Mapped {work}"))
     );
+    let maps = f.client.mappings().unwrap();
+    assert_eq!(maps.len(), 1);
+    assert_eq!((maps[0].path.as_str(), maps[0].account), (work, Some(1)));
+    assert!(
+        f.client
+            .unmap(work)
+            .unwrap()
+            .message
+            .starts_with("Unmapped")
+    );
+    assert!(f.client.mappings().unwrap().is_empty());
     assert!(
         f.client
             .unmap(work)

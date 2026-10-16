@@ -2,9 +2,14 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { toCswapError } from './cli.js';
+import type { SetupProgress } from '@swapdeck/types';
 import type { HostMessage, ViewSettings, WebviewMessage } from './protocol.js';
 
-export type RequestHandler = (method: unknown, params: unknown) => Promise<unknown>;
+export type RequestHandler = (
+  method: unknown,
+  params: unknown,
+  progress?: (event: SetupProgress) => void,
+) => Promise<unknown>;
 
 export function makeNonce(): string {
   return randomBytes(18).toString('base64url');
@@ -119,7 +124,10 @@ export class DashboardPanel implements vscode.Disposable {
     }
     if (message.type !== 'request' || !Number.isSafeInteger(message.id)) return;
     try {
-      const result = await this.handle(message.method, message.params);
+      const id = message.id;
+      const result = await this.handle(message.method, message.params, (event) =>
+        this.post({ type: 'progress', id, event }),
+      );
       this.post({ type: 'response', id: message.id, ok: true, result });
     } catch (error) {
       this.post({ type: 'response', id: message.id, ok: false, error: toCswapError(error) });

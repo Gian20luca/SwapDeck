@@ -534,6 +534,206 @@ body {
   height: 6px;
 }
 
+/* Interfaccia a schede (step 5), a misura di 420×640 */
+.sd-shell {
+  display: grid;
+  min-width: 0;
+}
+.sd-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0 6px;
+  /* Strette (420 px con la barra di scorrimento): le schede vanno a capo, mai scroll orizzontale. */
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--sd-border);
+  background: var(--sd-surface);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.sd-tab {
+  appearance: none;
+  flex: 0 0 auto;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--sd-muted);
+  font: inherit;
+  padding: 9px 6px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sd-tab:hover {
+  color: var(--sd-text);
+}
+.sd-tab[aria-selected='true'] {
+  color: var(--sd-text);
+  font-weight: 600;
+  border-bottom-color: var(--sd-accent);
+}
+.sd-shell__panel {
+  min-width: 0;
+}
+.sd-page {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  max-width: 560px;
+  margin: 0 auto;
+  min-width: 0;
+}
+.sd-page h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.sd-section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.sd-section h3 {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+.sd-form {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.sd-form__field {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+.sd-form__field > label,
+.sd-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sd-text);
+}
+.sd-form__check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.sd-form__check .sd-hint {
+  flex-basis: 100%;
+  padding-left: 22px;
+}
+.sd-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.sd-row .sd-input {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.sd-row--end {
+  justify-content: flex-end;
+}
+.sd-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sd-muted);
+}
+.sd-field-error {
+  font-size: 12px;
+  color: var(--sd-danger);
+}
+.sd-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+.sd-steps {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  display: grid;
+  gap: 2px;
+}
+.sd-fieldset {
+  border: 1px solid var(--sd-border);
+  border-radius: 8px;
+  padding: 6px 10px 8px;
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.sd-fieldset legend {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 4px;
+}
+.sd-manage {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--sd-border);
+}
+.sd-card__manage {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+}
+.sd-card--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sd-card--row > .sd-card__title,
+.sd-card--row > .sd-card__name {
+  min-width: 0;
+}
+.sd-card--form {
+  display: grid;
+  gap: 6px;
+}
+.sd-path {
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+.sd-order {
+  list-style: decimal inside;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.sd-order__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.sd-event {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.sd-event__time {
+  color: var(--sd-muted);
+  font-variant-numeric: tabular-nums;
+}
+.sd-event__text {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+.sd-notice ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
 /* Primo avvio e aggiornamento di cswap */
 .sd-setup {
   background: var(--sd-surface);

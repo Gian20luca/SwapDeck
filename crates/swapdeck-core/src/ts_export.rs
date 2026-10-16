@@ -9,15 +9,15 @@ use std::path::{Path, PathBuf};
 
 use ts_rs::{Config, TS};
 
-use crate::config::AppConfig;
+use crate::config::{AppConfig, AppPreferences, PreferencesPatch};
 use crate::conflicts::Conflict;
 use crate::cswap::{
     ActionOutcome, AutoEvent, CommandSpec, ConfigGetResponse, ConfigListResponse, Confirmation,
-    CswapAction, CswapError, CswapVersion, ErrorEnvelope, ListResponse, StatusResponse,
-    SwitchResponse,
+    CswapAction, CswapError, CswapVersion, DirectoryMapping, ErrorEnvelope, ListResponse,
+    StatusResponse, SwitchResponse,
 };
-use crate::engine::{Decision, EngineMemory, EngineRules};
-use crate::history::HistoryRecord;
+use crate::engine::{Decision, EngineMemory, EngineRules, EngineState, EngineView};
+use crate::history::{HistoryEvents, HistoryQuery, HistoryRecord};
 use crate::lock::LockInfo;
 use crate::setup::{SetupDiagnosis, SetupOutcome, SetupProgress, UpdateInfo};
 
@@ -56,6 +56,13 @@ fn render(dir: &Path) -> BTreeMap<String, String> {
     Conflict::export_all(&cfg).unwrap();
     HistoryRecord::export_all(&cfg).unwrap();
     LockInfo::export_all(&cfg).unwrap();
+    DirectoryMapping::export_all(&cfg).unwrap();
+    AppPreferences::export_all(&cfg).unwrap();
+    PreferencesPatch::export_all(&cfg).unwrap();
+    EngineView::export_all(&cfg).unwrap();
+    EngineState::export_all(&cfg).unwrap();
+    HistoryQuery::export_all(&cfg).unwrap();
+    HistoryEvents::export_all(&cfg).unwrap();
 
     let mut files = BTreeMap::new();
     collect(dir, dir, &mut files);

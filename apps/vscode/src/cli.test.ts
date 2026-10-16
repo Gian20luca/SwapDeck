@@ -7,6 +7,8 @@ import {
   cliExecutable,
   createCliRunner,
   ensureExecutable,
+  eventLines,
+  lastLine,
   parseCliResult,
   resolveCliPath,
   toCswapError,
@@ -24,6 +26,16 @@ describe('cli', () => {
     );
     const abs = path.resolve('altro', 'swapdeck-cli');
     expect(resolveCliPath(` ${abs} `, ext, 'linux')).toBe(abs);
+  });
+
+  it('eventLines: righe spezzate tra i blocchi, solo oggetti con event', () => {
+    const seen: unknown[] = [];
+    const feed = eventLines((e) => seen.push(e));
+    feed('{"event":"a"}\n{"ev');
+    feed('ent":"b"}\nnon json\n{"x":1}\n{"event":"c"}');
+    expect(seen).toEqual([{ event: 'a' }, { event: 'b' }]);
+    expect(lastLine('{"event":"a"}\n{"ok":1}\n\n')).toBe('{"ok":1}');
+    expect(lastLine('')).toBe('');
   });
 
   it('parseCliResult: successo, errore JSON, uscita senza JSON', () => {
@@ -60,6 +72,20 @@ describe('createCliRunner', { timeout: PROCESS_TEST_TIMEOUT_MS }, () => {
     });
   });
 
+  it('eventi JSON per riga in streaming, esito dall’ultima riga', async () => {
+    const env = fake(
+      "const w = (o) => process.stdout.write(JSON.stringify(o) + '\\n'); w({ event: 'stepStarted', step: 'installCswap' }); w({ event: 'line', step: 'installCswap', text: 'è ok' }); w({ uvInstalled: true }); process.exit(0);",
+    );
+    const events: unknown[] = [];
+    await expect(
+      run(['setup', 'install'], { env, onEvent: (e) => events.push(e) }),
+    ).resolves.toEqual({ uvInstalled: true });
+    expect(events).toEqual([
+      { event: 'stepStarted', step: 'installCswap' },
+      { event: 'line', step: 'installCswap', text: 'è ok' },
+    ]);
+  });
+
   it("errore della CLI: rifiuta con l'errore del JSON", async () => {
     const env = fake(
       "process.stdout.write(JSON.stringify({ error: { kind: 'busy', message: 'occupato' } })); process.exit(1);",
@@ -70,7 +96,8 @@ describe('createCliRunner', { timeout: PROCESS_TEST_TIMEOUT_MS }, () => {
   });
 
   it('timeout: termina il processo e rifiuta con timeout', async () => {
-    const env = fake('setInterval(() => undefined, 1000);');
+    // Bloccato nel preload: Node non arriva mai a cercare lo script `state` (che non esiste).
+    const env = fake('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);');
     await expect(run(['state'], { env, timeoutMs: 300 })).rejects.toMatchObject({
       info: { kind: 'timeout' },
     });

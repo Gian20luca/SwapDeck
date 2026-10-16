@@ -1,12 +1,21 @@
 import type {
   ActionOutcome as RustOutcome,
+  AppPreferences,
   ConfigGetResponse,
   ConfigListResponse,
   Confirmation,
   CswapAction,
   CswapError,
+  DirectoryMapping,
+  EngineRules,
+  EngineState,
+  HistoryEvents,
   ListResponse,
+  SetupDiagnosis,
+  SetupOutcome,
+  SetupProgress,
   StatusResponse,
+  UpdateInfo,
 } from '@swapdeck/types';
 import {
   BackendError,
@@ -14,9 +23,18 @@ import {
   type Backend,
   type HistoryPoint,
   type HistoryQuery,
+  type PickOptions,
+  type SetupBackend,
   type Unsubscribe,
 } from '@swapdeck/ui';
-import type { HostMessage, RequestParams, ViewSettings, WebviewMessage } from '../protocol.js';
+import type {
+  HistoryParams,
+  HostMessage,
+  PickParams,
+  RequestParams,
+  ViewSettings,
+  WebviewMessage,
+} from '../protocol.js';
 
 export type PostFn = (message: WebviewMessage) => void;
 export type SubscribeFn = (handler: (message: HostMessage) => void) => Unsubscribe;
@@ -24,10 +42,12 @@ export type SubscribeFn = (handler: (message: HostMessage) => void) => Unsubscri
 interface Pending {
   resolve: (value: unknown) => void;
   reject: (error: BackendError) => void;
+  /** Avanzamento di installazione o aggiornamento di cswap. */
+  progress?: (event: SetupProgress) => void;
 }
 
 /** `Backend` del webview di VS Code: ogni chiamata è un messaggio all'extension host. */
-export class VsCodeBackend implements Backend {
+export class VsCodeBackend implements Backend, SetupBackend {
   /** Le conferme le impone l'extension host (`bridge.ts`) con i dialoghi modali di VS Code. */
   readonly hostConfirms = true;
   private nextId = 1;
@@ -68,6 +88,9 @@ export class VsCodeBackend implements Backend {
         else p.reject(new BackendError(message.error));
         return;
       }
+      case 'progress':
+        this.pending.get(message.id)?.progress?.(message.event);
+        return;
       case 'state':
         for (const l of this.stateListeners) l(message.list);
         return;
@@ -77,10 +100,14 @@ export class VsCodeBackend implements Backend {
     }
   }
 
-  private request<T>(req: RequestParams): Promise<T> {
+  private request<T>(req: RequestParams, progress?: (event: SetupProgress) => void): Promise<T> {
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (value: unknown) => void, reject });
+      this.pending.set(id, {
+        resolve: resolve as (value: unknown) => void,
+        reject,
+        ...(progress ? { progress } : {}),
+      });
       try {
         this.post({ type: 'request', id, ...req });
       } catch (error) {
@@ -108,10 +135,32 @@ export class VsCodeBackend implements Backend {
   }
 
   getHistory(query?: HistoryQuery): Promise<HistoryPoint[]> {
-    const params: { account?: number; sinceSeconds?: number } = {};
-    if (query?.account !== undefined) params.account = query.account;
-    if (query?.sinceSeconds !== undefined) params.sinceSeconds = query.sinceSeconds;
-    return this.request({ method: 'getHistory', params });
+    return this.request({ method: 'getHistory', params: historyParams(query) });
+  }
+
+  listMappings(): Promise<DirectoryMapping[]> {
+    return this.request({ method: 'listMappings', params: {} });
+  }
+
+  getEngineState(): Promise<EngineState> {
+    return this.request({ method: 'getEngineState', params: {} });
+  }
+
+  /** Salvate nella config: il motore avviato dall'estensione le rilegge al giro dopo. */
+  setEngineRules(rules: EngineRules): Promise<EngineState> {
+    return this.request({ method: 'setEngineRules', params: { rules } });
+  }
+
+  getPreferences(): Promise<AppPreferences> {
+    return this.request({ method: 'getPreferences', params: {} });
+  }
+
+  setPreferences(prefs: Partial<AppPreferences>): Promise<AppPreferences> {
+    return this.request({ method: 'setPreferences', params: { prefs } });
+  }
+
+  getHistoryEvents(query?: HistoryQuery): Promise<HistoryEvents> {
+    return this.request({ method: 'getHistoryEvents', params: historyParams(query) });
   }
 
   confirmationFor(action: CswapAction): Promise<Confirmation> {
@@ -126,6 +175,41 @@ export class VsCodeBackend implements Backend {
     return result;
   }
 
+  /** Selettori nativi di VS Code (`showOpenDialog`/`showSaveDialog` nell'host); `null` se annullati. */
+  pickOpenFile(options: PickOptions = {}): Promise<string | null> {
+    return this.request({ method: 'pickOpenFile', params: pickParams(options) });
+  }
+
+  pickSaveFile(options: PickOptions = {}): Promise<string | null> {
+    return this.request({ method: 'pickSaveFile', params: pickParams(options) });
+  }
+
+  pickFolder(options: PickOptions = {}): Promise<string | null> {
+    return this.request({ method: 'pickFolder', params: pickParams(options) });
+  }
+
+  diagnoseSetup(): Promise<SetupDiagnosis> {
+    return this.request({ method: 'diagnoseSetup', params: {} });
+  }
+
+  /** L'host chiede conferma con un dialogo modale; se annullata la promessa rifiuta con cancelled. */
+  installCswap(onProgress: (event: SetupProgress) => void): Promise<SetupOutcome> {
+    return this.request({ method: 'installCswap', params: {} }, onProgress);
+  }
+
+  /** L'host chiede conferma e ferma il proprio motore prima di aggiornare. */
+  upgradeCswap(onProgress: (event: SetupProgress) => void): Promise<SetupOutcome> {
+    return this.request({ method: 'upgradeCswap', params: {} }, onProgress);
+  }
+
+  checkCswapUpdate(options?: { force?: boolean }): Promise<UpdateInfo> {
+    return this.request({ method: 'checkCswapUpdate', params: { force: options?.force ?? false } });
+  }
+
+  async dismissCswapUpdate(version: string): Promise<void> {
+    await this.request({ method: 'dismissCswapUpdate', params: { version } });
+  }
+
   onStateChanged(listener: (state: ListResponse) => void): Unsubscribe {
     this.stateListeners.add(listener);
     return () => this.stateListeners.delete(listener);
@@ -136,4 +220,19 @@ export class VsCodeBackend implements Backend {
     this.viewListeners.add(listener);
     return () => this.viewListeners.delete(listener);
   }
+}
+
+function historyParams(query?: HistoryQuery): HistoryParams {
+  const params: HistoryParams = {};
+  if (query?.account !== undefined) params.account = query.account;
+  if (query?.sinceSeconds !== undefined) params.sinceSeconds = query.sinceSeconds;
+  return params;
+}
+
+function pickParams(options: PickOptions): PickParams {
+  return {
+    ...(options.title ? { title: options.title } : {}),
+    ...(options.defaultPath ? { defaultPath: options.defaultPath } : {}),
+    ...(options.filters ? { filters: options.filters } : {}),
+  };
 }

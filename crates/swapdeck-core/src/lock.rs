@@ -249,6 +249,12 @@ impl LockGuard {
         )
     }
 
+    /// Intervallo nuovo del motore: scritto nel file al battito successivo (la scadenza tra
+    /// host diversi è di tre intervalli).
+    pub fn set_interval(&mut self, interval_secs: u32) {
+        self.info.interval_secs = interval_secs;
+    }
+
     /// Aggiorna il battito. Errore `PermissionDenied` se il lock è passato ad altri.
     pub fn heartbeat(&mut self, now: i64) -> io::Result<()> {
         if !self.still_owned() {

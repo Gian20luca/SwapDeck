@@ -1,0 +1,4 @@
+Directory mappings:
+  c:\work\project-a → 3: user3@example.com [Example Org 3]
+  ~/work/project-b → 6: user6@example.com [personal]
+  ~/work/project-c → user9@example.com (account removed)

@@ -31,12 +31,39 @@
   },
   "bundle": {
     "active": false,
+    "targets": "all",
+    "publisher": "SwapDeck",
+    "category": "Utility",
+    "shortDescription": "Monitor e gestione degli account di cswap",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["Italian", "English"],
+        "displayLanguageSelector": false
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk3NkQ1REVGRTczODM0MzkKUldRNU5Eam43MTF0bHhUWW9nMjZ4Q0c2L1FkQ3k4WEFpRU5Janh6VDRhRGFBa2k5RTdMUFBiSjEK",
+      "endpoints": ["https://github.com/Gian20luca/SwapDeck/releases/latest/download/latest.json"],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

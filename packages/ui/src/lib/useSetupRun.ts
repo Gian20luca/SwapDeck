@@ -26,19 +26,26 @@ function toCswapError(error: unknown): CswapError {
 
 /**
  * Stato di un'installazione o di un aggiornamento: `start` azzera, passa gli eventi al reducer e
- * restituisce l'esito, oppure `null` con l'errore in `run.error`.
+ * restituisce l'esito, oppure `null` con l'errore in `run.error`, oppure `'cancelled'` se l'host ha
+ * annullato (conferma rifiutata).
  */
 export function useSetupRun() {
   const [run, dispatch] = useReducer(reducer, EMPTY_RUN);
   const start = useCallback(
     async (
       operation: (onProgress: (event: SetupProgress) => void) => Promise<SetupOutcome>,
-    ): Promise<SetupOutcome | null> => {
+    ): Promise<SetupOutcome | null | 'cancelled'> => {
       dispatch({ type: 'reset' });
       try {
         return await operation((event) => dispatch({ type: 'event', event }));
       } catch (error) {
-        dispatch({ type: 'error', error: toCswapError(error) });
+        const info = toCswapError(error);
+        // Annullata dall'host (conferma rifiutata in VS Code): nessun errore da mostrare.
+        if (info.kind === 'cancelled') {
+          dispatch({ type: 'reset' });
+          return 'cancelled';
+        }
+        dispatch({ type: 'error', error: info });
         return null;
       }
     },

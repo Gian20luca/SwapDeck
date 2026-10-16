@@ -1,0 +1,289 @@
+# Pacchetti di rilascio: app Tauri (Windows NSIS per utente, Linux AppImage e .deb, macOS .dmg
+# arm64 e x64), swapdeck-cli per ogni OS (anche dentro l'app), .vsix per piattaforma,
+# artefatti firmati dell'updater e latest.json. Con un tag `v*` crea una release IN BOZZA;
+# con `workflow_dispatch` e `dry_run` (default) carica solo gli artefatti.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Prova: carica solo gli artefatti, nessuna release'
+        type: boolean
+        default: true
+      platforms:
+        description: 'Piattaforme (solo per le prove: macOS costa 10 volte i minuti)'
+        type: choice
+        options: [tutte, windows, linux, macos]
+        default: tutte
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: '0'
+  CARGO_NET_RETRY: '10'
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      include: ${{ steps.m.outputs.include }}
+    steps:
+      - id: m
+        env:
+          PLATFORMS: ${{ inputs.platforms || (github.ref_type == 'tag' && 'tutte' || 'windows') }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || github.event_name == 'push' && github.ref_type != 'tag' }}
+        run: |
+          all='[
+            {"family":"windows","os":"windows-latest","target":"x86_64-pc-windows-msvc","bundles":"nsis"},
+            {"family":"linux","os":"ubuntu-22.04","target":"x86_64-unknown-linux-gnu","bundles":"appimage,deb"},
+            {"family":"macos","os":"macos-latest","target":"aarch64-apple-darwin","bundles":"app,dmg"},
+            {"family":"macos","os":"macos-latest","target":"x86_64-apple-darwin","bundles":"app,dmg"}
+          ]'
+          if [ "$DRY_RUN" != true ] && [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "::error::una release vera parte solo da un tag v*"
+            exit 1
+          fi
+          if [ "$PLATFORMS" != tutte ] && [ "$DRY_RUN" != true ]; then
+            echo "::error::una release vera richiede tutte le piattaforme"
+            exit 1
+          fi
+          echo "include=$(jq -c --arg p "$PLATFORMS" '[.[] | select($p == "tutte" or .family == $p)]' <<<"$all")" >> "$GITHUB_OUTPUT"
+
+  app:
+    name: app (${{ matrix.target }})
+    needs: matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.matrix.outputs.include) }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    outputs:
+      has_cli: ${{ steps.cli.outputs.has }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      TARGET: ${{ matrix.target }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - name: Dipendenze di sistema (webkit2gtk, AppImage)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev \
+            patchelf file libfuse2
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: release-${{ matrix.target }}
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: swapdeck-cli
+        id: cli
+        run: |
+          if [ ! -f apps/cli/Cargo.toml ]; then
+            echo "::warning::apps/cli assente: pacchetti senza swapdeck-cli e senza .vsix"
+            echo "has=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ext=""; case "$TARGET" in *windows*) ext=".exe" ;; esac
+          cargo build --release --locked -p swapdeck-cli --bin swapdeck-cli --target "$TARGET"
+          mkdir -p apps/desktop/src-tauri/binaries out/cli
+          cp "target/$TARGET/release/swapdeck-cli$ext" "apps/desktop/src-tauri/binaries/swapdeck-cli-$TARGET$ext"
+          cp "target/$TARGET/release/swapdeck-cli$ext" "out/cli/swapdeck-cli-$TARGET$ext"
+          echo "has=true" >> "$GITHUB_OUTPUT"
+
+      # Senza la chiave dell'updater: la compilazione (e `beforeBuildCommand`) non vede segreti;
+      # gli artefatti dell'updater si firmano dopo, in uno step a parte.
+      - name: App Tauri
+        env:
+          HAS_CLI: ${{ steps.cli.outputs.has }}
+        run: |
+          # Config di rilascio, con swapdeck-cli come binario esterno se c'è.
+          node -e '
+            const fs = require("fs");
+            const c = JSON.parse(fs.readFileSync("apps/desktop/src-tauri/tauri.release.conf.json", "utf8"));
+            if (process.env.HAS_CLI !== "true") delete c.bundle.externalBin;
+            fs.writeFileSync("apps/desktop/src-tauri/tauri.ci.conf.json", JSON.stringify(c));
+          '
+          pnpm --filter @swapdeck/desktop exec tauri build --ci --target "$TARGET" \
+            --bundles "${{ matrix.bundles }}" --config src-tauri/tauri.ci.conf.json
+
+      - name: Raccolta dei pacchetti
+        run: |
+          b="target/$TARGET/release/bundle"
+          arch="${TARGET%%-*}"; [ "$arch" = x86_64 ] && arch=x64
+          mkdir -p out
+          case "$TARGET" in
+            *windows*) cp "$b"/nsis/*-setup.exe out/ ;;
+            *linux*) cp "$b"/appimage/*.AppImage "$b"/deb/*.deb out/ ;;
+            *apple*)
+              cp "$b"/dmg/*.dmg out/
+              # Archivio dell'updater come quello di tauri-bundler: `SwapDeck.app/` alla radice,
+              # senza i file `._*` dei metadati macOS.
+              COPYFILE_DISABLE=1 tar -czf "out/SwapDeck_${arch}.app.tar.gz" -C "$b/macos" SwapDeck.app
+              ;;
+          esac
+
+      - name: Firma per l'updater
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(out/*-setup.exe out/*.AppImage out/*.app.tar.gz)
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "::error::atteso un solo pacchetto dell'updater, trovati ${#files[@]}"
+            exit 1
+          fi
+          v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          # `pnpm --filter` lavora in apps/desktop: percorso relativo da lì.
+          pnpm --filter @swapdeck/desktop exec tauri signer sign --app-version "$v" "../../${files[0]}" >/dev/null
+          test -s "${files[0]}.sig"
+          ls -la out out/cli 2>/dev/null || true
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: app-${{ matrix.target }}
+          path: out/
+          if-no-files-found: error
+          retention-days: 14
+
+  vsix:
+    name: vsix
+    needs: app
+    if: needs.app.outputs.has_cli == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: app-*
+          path: artifacts
+      - name: Pacchetti .vsix per piattaforma
+        run: |
+          set -euo pipefail
+          while read -r vs rust ext; do
+            cli="artifacts/app-$rust/cli/swapdeck-cli-$rust$ext"
+            # Manca solo nelle prove su una parte delle piattaforme (vedi job matrix).
+            if [ ! -f "$cli" ]; then echo "::warning::$vs: swapdeck-cli assente"; continue; fi
+            chmod +x "$cli"
+            node apps/vscode/scripts/package.mjs --target "$vs" --cli "$cli"
+          done <<'EOF'
+          win32-x64 x86_64-pc-windows-msvc .exe
+          linux-x64 x86_64-unknown-linux-gnu
+          darwin-arm64 aarch64-apple-darwin
+          darwin-x64 x86_64-apple-darwin
+          EOF
+          ls -la apps/vscode/dist/*.vsix
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vsix
+          path: apps/vscode/dist/*.vsix
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: publish
+    needs: [app, vsix]
+    if: always() && needs.app.result == 'success' && (needs.vsix.result == 'success' || needs.vsix.result == 'skipped')
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || github.event_name == 'push' && github.ref_type != 'tag' }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: artifacts
+      - name: Versione e tag
+        id: ver
+        run: |
+          v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          if [ "$DRY_RUN" != true ] && [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "::error::una release vera parte solo da un tag v*"
+            exit 1
+          fi
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$v" ]; then
+            echo "::error::il tag $GITHUB_REF_NAME non corrisponde alla versione $v di Cargo.toml"
+            exit 1
+          fi
+          vs="$(node -p 'require("./apps/vscode/package.json").version')"
+          if [ "$vs" != "$v" ]; then
+            echo "::error::apps/vscode/package.json ha la versione $vs, Cargo.toml $v"
+            exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "tag=v$v" >> "$GITHUB_OUTPUT"
+      - name: Asset e latest.json
+        run: |
+          mkdir -p assets
+          find artifacts -type f -exec cp {} assets/ \;
+          node scripts/latest-json.mjs --dir assets --version "${{ steps.ver.outputs.version }}" \
+            --base-url "https://github.com/$GITHUB_REPOSITORY/releases/download/${{ steps.ver.outputs.tag }}" \
+            --out assets/latest.json
+          ls -la assets
+      - name: Artefatti della prova
+        if: env.DRY_RUN == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-dry-run
+          path: assets/
+          retention-days: 7
+      - name: Release in bozza
+        if: env.DRY_RUN != 'true'
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            # Si ricarica solo una bozza: una release pubblicata non si tocca.
+            draft="$(gh release view "$TAG" --json isDraft --jq .isDraft)"
+            if [ "$draft" != true ]; then
+              echo "::error::la release $TAG è già pubblicata: asset non sostituiti"
+              exit 1
+            fi
+            gh release upload "$TAG" assets/* --clobber
+          else
+            gh release create "$TAG" assets/* --draft --target "$GITHUB_SHA" \
+              --title "SwapDeck ${{ steps.ver.outputs.version }}" \
+              --notes "Bozza generata dalla CI. macOS non firmato: al primo avvio clic destro e Apri."
+          fi

@@ -467,3 +467,87 @@ fn engine_steps_switch_only_with_the_lock() {
             .contains("in attesa del lock")
     );
 }
+
+#[test]
+fn engine_applies_new_rules_and_interval_without_restart() {
+    let dir = tempfile::tempdir().unwrap();
+    let off = EngineRules::default();
+    let opts = RunOptions::new(dir.path().to_path_buf(), off);
+    let stop = AtomicBool::new(false);
+    let mut out = Vec::new();
+    let mut port = at_limit();
+    let mut conflicts = FakeConflicts(Vec::new());
+    let mut clock = FakeClock(T0);
+    let mut engine = Engine::new(
+        &opts,
+        Runtime {
+            port: &mut port,
+            conflicts: &mut conflicts,
+            clock: &mut clock,
+            out: &mut out,
+            stop: &stop,
+        },
+    )
+    .unwrap();
+    let step = engine.step();
+    assert!(matches!(
+        step.decision,
+        Some(Decision::Suspended {
+            reason: SuspendReason::Disabled,
+            ..
+        })
+    ));
+    assert_eq!(step.switched_to, None);
+    engine.set_rules(&user_rules());
+    engine.set_interval(10_000);
+    assert!(engine.rules().enabled);
+    let step = engine.step();
+    assert_eq!(step.switched_to, Some(3), "regole nuove al giro dopo");
+    let text = std::fs::read_to_string(dir.path().join(lock::LOCK_FILE)).unwrap();
+    let info: LockInfo = serde_json::from_str(&text).unwrap();
+    assert_eq!(
+        info.interval_secs, MAX_POLL_INTERVAL_SECONDS,
+        "battito con l'intervallo nuovo"
+    );
+    drop(engine);
+    assert_eq!(port.switches, vec![3]);
+}
+
+#[test]
+fn run_rereads_rules_from_the_config_before_each_tick() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(config::CONFIG_FILE);
+    let saved = config::AppConfig {
+        engine: user_rules(),
+        ..config::AppConfig::default()
+    };
+    config::save(&path, &saved).unwrap();
+    let off = EngineRules::default();
+    let o = run_with(dir.path(), off.clone(), at_limit(), Vec::new(), |o| {
+        o.config_file = Some(path.clone());
+    });
+    assert_eq!(
+        o.port.switches,
+        [3],
+        "regole della config, non quelle di avvio"
+    );
+    assert!(
+        o.output.contains("regole del motore aggiornate"),
+        "{}",
+        o.output
+    );
+
+    std::fs::write(&path, "{ rotto").unwrap();
+    let o = run_with(dir.path(), off, at_limit(), Vec::new(), |o| {
+        o.config_file = Some(path.clone());
+        o.once = false;
+        o.max_ticks = Some(2);
+    });
+    assert!(o.port.switches.is_empty(), "restano le regole di prima");
+    assert_eq!(
+        o.output.matches("config non riletta").count(),
+        1,
+        "errore scritto una volta: {}",
+        o.output
+    );
+}

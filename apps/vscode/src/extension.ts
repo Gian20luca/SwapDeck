@@ -17,6 +17,7 @@ import { DEACTIVATE_GRACE_MS, EngineProcess, shouldRetryEngine } from './engine.
 import type { CliState } from './generated/index.js';
 import { UsageNotifier, type Notice } from './notifier.js';
 import { DashboardPanel } from './panel.js';
+import type { PickParams } from './protocol.js';
 import { Refresher } from './refresher.js';
 import {
   accountLabel,
@@ -140,6 +141,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     }
   };
 
+  /** Selettori nativi di VS Code per i percorsi di export, import e cartelle mappate. */
+  async function pickPath(
+    kind: 'openFile' | 'saveFile' | 'folder',
+    options: PickParams,
+  ): Promise<string | null> {
+    const common = {
+      ...(options.title ? { title: options.title } : {}),
+      ...(options.defaultPath ? { defaultUri: vscode.Uri.file(options.defaultPath) } : {}),
+      ...(options.filters
+        ? { filters: Object.fromEntries(options.filters.map((f) => [f.name, f.extensions])) }
+        : {}),
+    };
+    if (kind === 'saveFile') return (await vscode.window.showSaveDialog(common))?.fsPath ?? null;
+    const picked = await vscode.window.showOpenDialog({
+      ...common,
+      canSelectFiles: kind === 'openFile',
+      canSelectFolders: kind === 'folder',
+      canSelectMany: false,
+    });
+    return picked?.[0]?.fsPath ?? null;
+  }
+
   const panel = new DashboardPanel(
     context.extensionUri,
     createRequestHandler({
@@ -149,6 +172,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
       onOutcome: (outcome) => afterAction(outcome),
       confirm: (action, needed) =>
         askConfirmation(needed, t('SwapDeck: confirm "{0}"?', describeAction(action))),
+      pick: pickPath,
+      confirmSetup: async (kind) => {
+        const ok = t('Confirm');
+        const label =
+          kind === 'install'
+            ? t('SwapDeck: install uv (if missing) and claude-swap for the current user?')
+            : t('SwapDeck: upgrade claude-swap with "uv tool upgrade claude-swap"?');
+        return (await vscode.window.showWarningMessage(label, { modal: true }, ok)) === ok;
+      },
+      pauseEngine: async () => {
+        if (!engine.running) return () => undefined;
+        output.info('[motore] arresto per l’aggiornamento di cswap');
+        await engine.stop();
+        return () => syncEngine();
+      },
     }),
     () => {
       panelReady = true;

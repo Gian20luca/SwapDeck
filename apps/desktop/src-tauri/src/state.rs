@@ -4,7 +4,9 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Serialize;
-use swapdeck_core::cswap::{CswapError, ListResponse};
+use swapdeck_core::config::{AppConfig, ConfigError};
+use swapdeck_core::conflicts::Conflict;
+use swapdeck_core::cswap::{CswapError, CswapErrorKind, ListResponse};
 
 use crate::api::{CswapApi, Res};
 use crate::engine_loop::EngineView;
@@ -54,6 +56,15 @@ impl Snapshot {
     }
 }
 
+/// Errore della config per la UI: valori non validi = `invalidUsage`.
+pub fn config_error(e: ConfigError) -> CswapError {
+    let kind = match e {
+        ConfigError::Invalid(_) => CswapErrorKind::InvalidUsage,
+        _ => CswapErrorKind::Failed,
+    };
+    CswapError::new(kind, e.to_string())
+}
+
 pub fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -78,6 +89,8 @@ pub struct Shared {
     pub menu_signature: Mutex<String>,
     /// Ultimo salvataggio della posizione del mini-widget.
     pub mini_saved_at: Mutex<Option<Instant>>,
+    /// Conflitti dell'ultima lettura del motore (vuoti a motore spento).
+    pub conflicts: Mutex<Vec<Conflict>>,
 }
 
 impl Shared {
@@ -91,7 +104,22 @@ impl Shared {
             store,
             menu_signature: Mutex::new(String::new()),
             mini_saved_at: Mutex::new(None),
+            conflicts: Mutex::new(Vec::new()),
         }
+    }
+
+    /// Cambia preferenze o regole nella config (scrittura atomica, altri campi conservati) e le
+    /// applica subito alle impostazioni in memoria: il ciclo di lettura le usa dal giro dopo.
+    pub fn update_config(
+        &self,
+        change: impl FnOnce(&mut AppConfig) -> Result<(), ConfigError>,
+    ) -> Res<AppConfig> {
+        let current = lock(&self.settings).clone();
+        let saved = self.store.update(&current, change).map_err(config_error)?;
+        lock(&self.settings).apply_config(&saved);
+        lock(&self.saved).apply_config(&saved);
+        lock(&self.notifier).set_thresholds(&saved.notifications.thresholds);
+        Ok(saved)
     }
 
     pub fn save_settings(&self) -> Result<(), String> {

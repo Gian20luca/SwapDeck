@@ -1,33 +1,42 @@
 //! Impostazioni dell'app lette dalla config di SwapDeck (`config.json` di swapdeck-core):
-//! intervallo, soglie, lingua, più due chiavi dell'app desktop conservate in `extra`
-//! (`autostart`, `miniWidget`).
+//! intervallo, soglie, lingua, più le chiavi dell'app desktop conservate in `extra`
+//! (`autostart`, `miniWidget`; `updates.enabled` in sola lettura). Preferenze e regole del
+//! motore si cambiano dalla UI con [`SettingsStore::update`] (stessa scrittura atomica, altri
+//! campi conservati).
 
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use serde_json::{Value, json};
-use swapdeck_core::config::{self, AppConfig, Language};
+use swapdeck_core::config::{self, AppConfig, AppPreferences, ConfigError, Language, Theme};
 use swapdeck_core::engine::EngineRules;
 use swapdeck_core::paths::AppPaths;
 
+use crate::state::lock;
 use crate::text::Lang;
 
 /// Chiavi dell'app desktop dentro `config.json`.
 const KEY_AUTOSTART: &str = "autostart";
 const KEY_MINI: &str = "miniWidget";
+const KEY_UPDATES: &str = "updates";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     pub poll_interval: Duration,
     pub thresholds: Vec<f64>,
     pub lang: Lang,
+    pub theme: Theme,
     /// Avvio automatico al login: attivo di default.
     pub autostart: bool,
     /// La chiave `autostart` c'era nella config (altrimenti è il primo avvio).
     pub autostart_saved: bool,
     /// Ultima posizione del mini-widget, in pixel fisici.
     pub mini_position: Option<(i32, i32)>,
-    /// Regole del motore (sezione `engine`), lette all'avvio e mai riscritte dall'app.
+    /// Aggiornamenti dalle GitHub Releases (`updates.enabled`): spenti di default finché il
+    /// repo è privato. Letti all'avvio e mai riscritti dall'app.
+    pub updates_enabled: bool,
+    /// Regole del motore (sezione `engine`): il ciclo di lettura le rilegge a ogni giro.
     pub engine: EngineRules,
 }
 
@@ -46,16 +55,11 @@ fn mini_position(v: Option<&Value>) -> Option<(i32, i32)> {
 
 impl Settings {
     pub fn from_config(c: &AppConfig) -> Self {
-        Self {
-            poll_interval: Duration::from_secs(u64::from(
-                c.poll_interval_seconds
-                    .max(config::MIN_POLL_INTERVAL_SECONDS),
-            )),
-            thresholds: c.notifications.thresholds.clone(),
-            lang: match c.language {
-                Language::It => Lang::It,
-                Language::En => Lang::En,
-            },
+        let mut s = Self {
+            poll_interval: Duration::ZERO,
+            thresholds: Vec::new(),
+            lang: Lang::It,
+            theme: Theme::System,
             autostart: c
                 .extra
                 .get(KEY_AUTOSTART)
@@ -67,7 +71,56 @@ impl Settings {
                 .and_then(Value::as_bool)
                 .is_some(),
             mini_position: mini_position(c.extra.get(KEY_MINI)),
-            engine: c.engine.clone(),
+            updates_enabled: c
+                .extra
+                .get(KEY_UPDATES)
+                .and_then(|u| u.get("enabled"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            engine: EngineRules::default(),
+        };
+        s.apply_config(c);
+        s
+    }
+
+    /// Preferenze e regole dalla config appena salvata (le chiavi dell'app restano).
+    pub fn apply_config(&mut self, c: &AppConfig) {
+        self.poll_interval = Duration::from_secs(u64::from(
+            c.poll_interval_seconds
+                .max(config::MIN_POLL_INTERVAL_SECONDS),
+        ));
+        self.thresholds.clone_from(&c.notifications.thresholds);
+        self.lang = match c.language {
+            Language::It => Lang::It,
+            Language::En => Lang::En,
+        };
+        self.theme = c.theme;
+        self.engine.clone_from(&c.engine);
+    }
+
+    /// Config equivalente, per chi la modifica quando le impostazioni restano in memoria.
+    fn to_config(&self) -> AppConfig {
+        let mut c = AppConfig {
+            poll_interval_seconds: u32::try_from(self.poll_interval.as_secs()).unwrap_or(u32::MAX),
+            language: self.preferences().language,
+            theme: self.theme,
+            engine: self.engine.clone(),
+            ..AppConfig::default()
+        };
+        c.notifications.thresholds.clone_from(&self.thresholds);
+        self.patch(&mut c);
+        c
+    }
+
+    pub fn preferences(&self) -> AppPreferences {
+        AppPreferences {
+            poll_interval_seconds: u32::try_from(self.poll_interval.as_secs()).unwrap_or(u32::MAX),
+            notification_thresholds: self.thresholds.clone(),
+            language: match self.lang {
+                Lang::It => Language::It,
+                Lang::En => Language::En,
+            },
+            theme: self.theme,
         }
     }
 
@@ -91,15 +144,20 @@ impl Settings {
 #[derive(Debug, Default)]
 pub struct SettingsStore {
     paths: Option<AppPaths>,
+    /// Una scrittura alla volta: ognuna rilegge il file, cambia la sua parte e lo riscrive.
+    writing: Mutex<()>,
 }
 
 impl SettingsStore {
     pub fn in_memory() -> Self {
-        Self { paths: None }
+        Self::default()
     }
 
     pub fn at(paths: AppPaths) -> Self {
-        Self { paths: Some(paths) }
+        Self {
+            paths: Some(paths),
+            writing: Mutex::new(()),
+        }
     }
 
     /// `false` se le impostazioni restano solo in memoria (config non valida o home sconosciuta).
@@ -143,10 +201,30 @@ impl SettingsStore {
         let (Some(paths), Some(path)) = (&self.paths, self.file()) else {
             return Ok(());
         };
+        let _writing = lock(&self.writing);
         let mut current = config::load(&path).map_err(|e| e.to_string())?.config;
         settings.patch(&mut current);
         paths.ensure().map_err(|e| e.to_string())?;
         config::save(&path, &current).map_err(|e| e.to_string())
+    }
+
+    /// Cambia preferenze o regole: rilegge il file, applica `change` (che valida), lo riscrive
+    /// in modo atomico e restituisce la config salvata. Senza file (impostazioni solo in memoria)
+    /// la modifica vale per `current` e non si scrive nulla.
+    pub fn update(
+        &self,
+        current: &Settings,
+        change: impl FnOnce(&mut AppConfig) -> Result<(), ConfigError>,
+    ) -> Result<AppConfig, ConfigError> {
+        let _writing = lock(&self.writing);
+        let (Some(paths), Some(path)) = (&self.paths, self.file()) else {
+            let mut c = current.to_config();
+            change(&mut c)?;
+            c.validate()?;
+            return Ok(c);
+        };
+        paths.ensure()?;
+        config::update(&path, change)
     }
 }
 
@@ -161,6 +239,22 @@ mod tests {
         assert_eq!(s.thresholds, [80.0, 95.0]);
         assert!(s.autostart);
         assert_eq!(s.mini_position, None);
+        assert!(!s.updates_enabled, "aggiornamenti spenti di default");
+    }
+
+    #[test]
+    fn updates_are_read_but_never_written() {
+        let mut c = AppConfig::default();
+        c.extra
+            .insert(KEY_UPDATES.into(), json!({ "enabled": true }));
+        let s = Settings::from_config(&c);
+        assert!(s.updates_enabled);
+        let mut out = AppConfig::default();
+        s.patch(&mut out);
+        assert!(!out.extra.contains_key(KEY_UPDATES));
+        c.extra
+            .insert(KEY_UPDATES.into(), json!({ "enabled": "si" }));
+        assert!(!Settings::from_config(&c).updates_enabled);
     }
 
     #[test]
@@ -213,5 +307,60 @@ mod tests {
             mini_position(Some(&json!({"x": -5, "y": 2}))),
             Some((-5, 2))
         );
+    }
+
+    #[test]
+    fn update_saves_preferences_and_rules_keeping_other_keys() {
+        use swapdeck_core::config::PreferencesPatch;
+        let dir = tempfile::tempdir().unwrap();
+        let paths = AppPaths::from_root(dir.path());
+        paths.ensure().unwrap();
+        std::fs::write(
+            paths.config_file(),
+            r#"{"schemaVersion":1,"autostart":false,"miniWidget":{"x":1,"y":2},"futureKey":7}"#,
+        )
+        .unwrap();
+        let (store, mut s, _) = SettingsStore::at(paths.clone()).read();
+        let patch = PreferencesPatch {
+            poll_interval_seconds: Some(300),
+            theme: Some(Theme::Dark),
+            language: Some(Language::En),
+            ..PreferencesPatch::default()
+        };
+        let saved = store.update(&s, |c| c.apply_preferences(&patch)).unwrap();
+        s.apply_config(&saved);
+        assert_eq!(s.poll_interval, Duration::from_secs(300));
+        assert_eq!((s.theme, s.lang), (Theme::Dark, Lang::En));
+        assert!(!s.autostart, "chiavi dell'app invariate");
+        let rules = EngineRules {
+            enabled: true,
+            primary: Some(6),
+            ..EngineRules::default()
+        };
+        let saved = store
+            .update(&s, |c| c.set_engine_rules(rules.clone()))
+            .unwrap();
+        s.apply_config(&saved);
+        assert_eq!(s.engine, rules);
+        let text = std::fs::read_to_string(paths.config_file()).unwrap();
+        let v: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(v["autostart"], false);
+        assert_eq!(v["miniWidget"]["x"], 1);
+        assert_eq!(v["futureKey"], 7);
+        assert_eq!(v["pollIntervalSeconds"], 300);
+        assert_eq!(v["engine"]["primary"], 6);
+        // Valori non validi: errore e file invariato.
+        let bad = PreferencesPatch {
+            poll_interval_seconds: Some(5),
+            ..PreferencesPatch::default()
+        };
+        assert!(store.update(&s, |c| c.apply_preferences(&bad)).is_err());
+        assert_eq!(std::fs::read_to_string(paths.config_file()).unwrap(), text);
+        // Solo in memoria: la modifica vale, niente file.
+        let mem = SettingsStore::in_memory()
+            .update(&s, |c| c.apply_preferences(&patch))
+            .unwrap();
+        assert_eq!(mem.preferences(), s.preferences());
+        assert_eq!(mem.engine, rules);
     }
 }

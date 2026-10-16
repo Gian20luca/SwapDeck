@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process';
 import { constants, promises as fs } from 'node:fs';
 import * as path from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 import type { CswapError } from '@swapdeck/types';
 
 /** Codici di uscita dei comandi JSON (`apps/cli/src/lib.rs`). */
@@ -14,6 +15,8 @@ const STDERR_TAIL_BYTES = 4096;
 export const DEFAULT_TIMEOUT_MS = 60_000;
 /** Le azioni che scrivono hanno già un loro timeout in Rust (30 s, `upgrade` di più). */
 export const ACTION_TIMEOUT_MS = 6 * 60_000;
+/** Dopo il timeout: attesa dell'uscita del processo prima di `SIGKILL` (e poi del rifiuto). */
+export const KILL_GRACE_MS = 2_000;
 
 export function cliExecutable(platform: NodeJS.Platform): string {
   return platform === 'win32' ? 'swapdeck-cli.exe' : 'swapdeck-cli';
@@ -91,11 +94,43 @@ export function parseCliResult<T>(code: number | null, stdout: string, stderr = 
   throw new CliError({ kind: 'failed', message: `swapdeck-cli: uscita ${code ?? 'segnale'}` });
 }
 
+/** `setup install|upgrade`: script di uv e `uv tool` hanno 10 minuti ciascuno in Rust. */
+export const SETUP_TIMEOUT_MS = 30 * 60_000;
+
 export interface RunOptions {
   /** Testo su stdin (le azioni passano da qui: un token non deve finire negli argomenti). */
   stdin?: string;
   timeoutMs?: number;
   env?: NodeJS.ProcessEnv;
+  /**
+   * Comandi che scrivono un evento JSON per riga (`setup install|upgrade`): ogni riga con `event`
+   * arriva qui appena completa; l'esito è l'ultima riga.
+   */
+  onEvent?: (event: unknown) => void;
+}
+
+/** Spezza l'output in righe JSON e passa quelle con `event`. */
+export function eventLines(onEvent: (event: unknown) => void): (chunk: string) => void {
+  let pending = '';
+  return (chunk) => {
+    pending += chunk;
+    const lines = pending.split('\n');
+    pending = lines.pop() ?? '';
+    for (const line of lines) {
+      try {
+        const value: unknown = JSON.parse(line);
+        if (typeof (value as { event?: unknown } | null)?.event === 'string') onEvent(value);
+      } catch {
+        // Riga non JSON: si ignora, l'esito si legge dall'ultima riga.
+      }
+    }
+  };
+}
+
+/** Ultima riga non vuota (l'esito dei comandi con eventi). */
+export function lastLine(text: string): string {
+  const lines = text.split('\n').filter((l) => l.trim() !== '');
+  return lines[lines.length - 1] ?? '';
 }
 
 export type CliRunner = <T>(args: string[], options?: RunOptions) => Promise<T>;
@@ -112,26 +147,40 @@ export function createCliRunner(getPath: () => string): CliRunner {
         env: options.env ?? process.env,
       });
       const chunks: Buffer[] = [];
+      const onChunk = options.onEvent ? eventLines(options.onEvent) : undefined;
+      const decoder = new StringDecoder('utf8');
       let size = 0;
       let stderr = '';
       let settled = false;
+      let expired = false;
+      let killTimer: NodeJS.Timeout | undefined;
       const finish = (fn: () => void) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        clearTimeout(killTimer);
         fn();
       };
-      const timer = setTimeout(() => {
-        child.kill();
-        finish(() =>
-          reject(
-            new CliError({
-              kind: 'timeout',
-              message: `swapdeck-cli ${args[0] ?? ''}: nessuna risposta in tempo`,
-            }),
-          ),
+      const rejectTimeout = () =>
+        reject(
+          new CliError({
+            kind: 'timeout',
+            message: `swapdeck-cli ${args[0] ?? ''}: nessuna risposta in tempo`,
+          }),
         );
+      // Timeout: si termina il processo e si rifiuta quando è uscito (se non esce: `SIGKILL`,
+      // poi un'altra attesa), così chi chiama non lascia processi vivi alle spalle.
+      const timer = setTimeout(() => {
+        expired = true;
+        child.kill();
+        killTimer = setTimeout(() => {
+          child.kill('SIGKILL');
+          killTimer = setTimeout(() => finish(rejectTimeout), KILL_GRACE_MS);
+        }, KILL_GRACE_MS);
       }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+      child.on('exit', () => {
+        if (expired) finish(rejectTimeout);
+      });
       child.stdout.on('data', (chunk: Buffer) => {
         size += chunk.length;
         if (size > MAX_STDOUT_BYTES) {
@@ -144,6 +193,7 @@ export function createCliRunner(getPath: () => string): CliRunner {
           return;
         }
         chunks.push(chunk);
+        onChunk?.(decoder.write(chunk));
       });
       child.stderr.on('data', (chunk: Buffer) => {
         stderr = (stderr + chunk.toString('utf8')).slice(-STDERR_TAIL_BYTES);
@@ -158,7 +208,8 @@ export function createCliRunner(getPath: () => string): CliRunner {
       child.on('close', (code) => {
         finish(() => {
           try {
-            resolve(parseCliResult<T>(code, Buffer.concat(chunks).toString('utf8'), stderr));
+            const out = Buffer.concat(chunks).toString('utf8');
+            resolve(parseCliResult<T>(code, options.onEvent ? lastLine(out) : out, stderr));
           } catch (error) {
             reject(error);
           }

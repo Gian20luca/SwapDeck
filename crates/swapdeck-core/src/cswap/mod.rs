@@ -4,6 +4,7 @@ pub mod action;
 pub mod client;
 pub mod error;
 pub mod locate;
+pub mod mapping;
 pub mod model;
 pub mod process;
 pub mod secret;
@@ -16,5 +17,6 @@ pub use client::{
 };
 pub use error::{CswapError, CswapErrorKind, CswapVersion};
 pub use locate::{CSWAP_OVERRIDE_ENV, SearchEnv, locate_cswap, locate_uv};
+pub use mapping::{DirectoryMapping, parse_map_listing};
 pub use model::*;
 pub use secret::SecretToken;

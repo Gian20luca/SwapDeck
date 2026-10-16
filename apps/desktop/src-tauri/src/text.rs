@@ -173,6 +173,20 @@ pub fn switch_failed(lang: Lang, err: &CswapError) -> (String, String) {
     (title.into(), err.message.clone())
 }
 
+/// Aggiornamento scaricato e verificato: si installa all'uscita dall'app.
+pub fn update_ready(lang: Lang, version: &str) -> (String, String) {
+    match lang {
+        Lang::It => (
+            format!("SwapDeck {version} pronto"),
+            "L'aggiornamento verrà installato all'uscita dall'app.".into(),
+        ),
+        Lang::En => (
+            format!("SwapDeck {version} ready"),
+            "The update will be installed when you quit the app.".into(),
+        ),
+    }
+}
+
 /// Riga del tooltip con il motore sospeso (conflitto o regole da sistemare).
 pub fn engine_paused(lang: Lang, detail: &[String]) -> String {
     let head = match lang {

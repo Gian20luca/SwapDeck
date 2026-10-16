@@ -11,6 +11,12 @@ use crate::conflicts::Conflict;
 use crate::cswap::{Account, ListResponse, Usage, UsageStatus, UsageWindow};
 use crate::timeutil::parse_iso;
 
+/// Account al massimo in riserve ed esclusi (controllo prima del salvataggio).
+pub const MAX_RULE_ACCOUNTS: usize = 64;
+/// Conflitti ignorati al massimo, e lunghezza massima di un id.
+pub const MAX_IGNORED_CONFLICTS: usize = 100;
+pub const MAX_CONFLICT_ID_LEN: usize = 200;
+
 /// Criterio di scelta della riserva.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
@@ -78,11 +84,57 @@ impl Default for EngineRules {
 impl EngineRules {
     /// Problemi che impediscono al motore di agire (messaggi per l'utente).
     pub fn validate(&self) -> Vec<String> {
-        let mut out = Vec::new();
         let Some(primary) = self.primary else {
-            out.push("manca l'account principale".to_owned());
-            return out;
+            return vec!["manca l'account principale".to_owned()];
         };
+        let mut out = self.value_problems();
+        if self.reserves.contains(&primary) {
+            out.push("il principale non può essere anche una riserva".to_owned());
+        }
+        if self.excluded.contains(&primary) {
+            out.push("il principale non può essere escluso".to_owned());
+        }
+        out
+    }
+
+    /// Controllo prima di salvare le regole dall'interfaccia: valori nei limiti sempre, il
+    /// principale (e la sua coerenza con riserve ed esclusi) solo con il motore acceso o in
+    /// osservazione; in più numeri degli account, riserve ripetute e lunghezze degli elenchi.
+    pub fn validate_for_save(&self) -> Vec<String> {
+        let mut out = if self.primary.is_some() || self.enabled || self.dry_run {
+            self.validate()
+        } else {
+            self.value_problems()
+        };
+        let numbers = self
+            .primary
+            .iter()
+            .chain(&self.reserves)
+            .chain(&self.excluded);
+        if numbers.clone().any(|n| *n == 0) {
+            out.push("i numeri degli account partono da 1".to_owned());
+        }
+        if self.reserves.len() > MAX_RULE_ACCOUNTS || self.excluded.len() > MAX_RULE_ACCOUNTS {
+            out.push(format!("al massimo {MAX_RULE_ACCOUNTS} account per elenco"));
+        }
+        let mut seen = std::collections::HashSet::new();
+        if !self.reserves.iter().all(|n| seen.insert(*n)) {
+            out.push("riserve ripetute".to_owned());
+        }
+        if self.ignored_conflicts.len() > MAX_IGNORED_CONFLICTS
+            || self
+                .ignored_conflicts
+                .iter()
+                .any(|c| c.trim().is_empty() || c.len() > MAX_CONFLICT_ID_LEN)
+        {
+            out.push("conflitti ignorati non validi".to_owned());
+        }
+        out
+    }
+
+    /// Soglie e isteresi nei limiti (non dipendono dagli account).
+    fn value_problems(&self) -> Vec<String> {
+        let mut out = Vec::new();
         let pct_ok = |v: f64| v.is_finite() && v > 0.0 && v <= 100.0;
         if !pct_ok(self.five_hour_threshold) {
             out.push("soglia 5h fuori da 1–100".to_owned());
@@ -92,12 +144,6 @@ impl EngineRules {
         }
         if !(self.return_hysteresis.is_finite() && (0.0..=50.0).contains(&self.return_hysteresis)) {
             out.push("isteresi fuori da 0–50".to_owned());
-        }
-        if self.reserves.contains(&primary) {
-            out.push("il principale non può essere anche una riserva".to_owned());
-        }
-        if self.excluded.contains(&primary) {
-            out.push("il principale non può essere escluso".to_owned());
         }
         out
     }
@@ -285,25 +331,76 @@ pub fn blocking_conflicts<'a>(conflicts: &'a [Conflict], rules: &EngineRules) ->
         .collect()
 }
 
-/// Decide cosa fare. Pura: stessi argomenti, stessa decisione.
-pub fn decide(obs: Observation<'_>, rules: &EngineRules, mem: &EngineMemory, now: i64) -> Decision {
+/// Sospensione che non dipende dagli account: motore spento, conflitti, regole non valide
+/// (le prime verifiche di [`decide`], usate anche dove non c'è una lettura di cswap).
+pub fn suspension(rules: &EngineRules, conflicts: &[Conflict]) -> Option<Decision> {
     if !(rules.enabled || rules.dry_run) {
-        return Decision::suspended(SuspendReason::Disabled);
+        return Some(Decision::suspended(SuspendReason::Disabled));
     }
     // Prima i conflitti: un altro motore attivo conta più di regole incomplete.
-    let blocking = blocking_conflicts(obs.conflicts, rules);
+    let blocking = blocking_conflicts(conflicts, rules);
     if !blocking.is_empty() {
-        return Decision::Suspended {
+        return Some(Decision::Suspended {
             reason: SuspendReason::Conflict,
             detail: blocking.iter().map(|c| c.id.clone()).collect(),
-        };
+        });
     }
     let problems = rules.validate();
-    if !problems.is_empty() {
-        return Decision::Suspended {
-            reason: SuspendReason::InvalidRules,
-            detail: problems,
+    (!problems.is_empty()).then_some(Decision::Suspended {
+        reason: SuspendReason::InvalidRules,
+        detail: problems,
+    })
+}
+
+/// Stato del motore mostrato nell'interfaccia (dall'ultimo giro che ha deciso).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct EngineView {
+    /// Il lock è di questa istanza: storico e cambi sono suoi.
+    pub holder: bool,
+    pub enabled: bool,
+    pub dry_run: bool,
+    /// Motivo della sospensione (anche `disabled` con il motore spento).
+    pub suspended: Option<SuspendReason>,
+    /// Dettagli della sospensione (per esempio gli id dei conflitti).
+    pub detail: Vec<String>,
+}
+
+impl EngineView {
+    pub fn new(holder: bool, rules: &EngineRules, decision: Option<&Decision>) -> Self {
+        let (suspended, detail) = match decision {
+            Some(Decision::Suspended { reason, detail }) => (Some(*reason), detail.clone()),
+            _ => (None, Vec::new()),
         };
+        Self {
+            holder,
+            enabled: rules.enabled,
+            dry_run: rules.dry_run,
+            suspended,
+            detail,
+        }
+    }
+
+    /// Sospeso per un motivo che chiede attenzione (non il motore spento).
+    pub fn paused(&self) -> bool {
+        matches!(self.suspended, Some(r) if r != SuspendReason::Disabled)
+    }
+}
+
+/// Regole salvate, stato del motore e conflitti noti (pagina «Regole» dell'interfaccia).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct EngineState {
+    pub rules: EngineRules,
+    /// `null` se il motore non ha ancora fatto un giro.
+    pub view: Option<EngineView>,
+    pub conflicts: Vec<Conflict>,
+}
+
+/// Decide cosa fare. Pura: stessi argomenti, stessa decisione.
+pub fn decide(obs: Observation<'_>, rules: &EngineRules, mem: &EngineMemory, now: i64) -> Decision {
+    if let Some(suspended) = suspension(rules, obs.conflicts) {
+        return suspended;
     }
     let list = obs.list;
     let primary = rules.primary.unwrap_or_default();

@@ -17,6 +17,8 @@ export interface AccountCardProps {
   onToggleHistory?: (account: Account) => void;
   /** Contenuto dello storico, mostrato quando `historyOpen`. */
   history?: ReactNode;
+  /** Azioni di gestione (alias, slot, rimozione, ...), sotto i pulsanti della scheda. */
+  extra?: ReactNode;
 }
 
 /** Scheda di un account: identità, stato, barre 5h e 7d, ritmo, limiti per modello, età del dato, azioni. */
@@ -28,6 +30,7 @@ export function AccountCard({
   historyOpen = false,
   onToggleHistory,
   history,
+  extra,
 }: AccountCardProps) {
   const { t } = useI18n();
   const name = accountName(account, t);
@@ -157,6 +160,8 @@ export function AccountCard({
           </button>
         </span>
       </div>
+
+      {extra}
 
       {historyOpen && history && <div className="sd-card__history">{history}</div>}
     </li>

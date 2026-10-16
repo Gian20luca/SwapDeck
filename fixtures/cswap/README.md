@@ -39,4 +39,5 @@ Anonimizzazione: email → `userN@example.com` (N = numero di slot), UUID → `0
 | `list-usage-stale.json` | consumi vecchi (`unavailable` + `lastGoodUsage` + `usageError: timeout`), mai letti (`unavailable` senza `lastGood*`), `api_key`, `no_credentials` |
 | `list-rate-limited.json` | dopo un 429: `ok` con `usageAgeSeconds` oltre 300 (fiducia estesa fino al reset) e `unavailable` con `lastGoodUsage`, `usageError: http-429` e `usageRetryAt` (0.27) |
 | `list-token-expired.json` | token attivo scaduto (`token_expired`) e lineage morta (`relogin_required`, `loginExpiresAt` passata) |
+| `map.txt` | `map` con mappature (`switcher.py`, `list_mappings`): `<path> → <slot>: <email> [<organizzazione|personal>]`, account rimosso `<path> → <email> (account removed)` |
 | `auto-events.jsonl` | eventi di `cswap auto --json` (uno per riga) e busta d'errore finale |

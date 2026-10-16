@@ -3,7 +3,13 @@ import type {
   ConfigListResponse,
   Confirmation,
   CswapAction,
+  AppPreferences,
   CswapError,
+  DirectoryMapping,
+  EngineRules,
+  EngineState,
+  EngineView,
+  HistoryEvents,
   ListResponse,
   SetupDiagnosis,
   SetupOutcome,
@@ -57,6 +63,33 @@ export class BackendError extends Error {
 }
 
 /**
+ * Formati del Rust (`swapdeck-core`, generati in `@swapdeck/types`): cartelle mappate, stato del
+ * motore, preferenze e eventi dello storico.
+ */
+export type { AppPreferences, DirectoryMapping, EngineState, HistoryEvents };
+/** Stato del motore all'ultimo giro (`EngineView` del Rust). */
+export type EngineViewInfo = EngineView;
+
+/** Impostazioni dell'host desktop (avvio al login, versione). */
+export interface HostSettings {
+  autostart: boolean;
+  /** `false` nelle build di sviluppo: il sistema non viene modificato. */
+  autostartManaged: boolean;
+  version: string;
+}
+
+export interface FileFilter {
+  name: string;
+  extensions: string[];
+}
+
+export interface PickOptions {
+  title?: string;
+  defaultPath?: string;
+  filters?: FileFilter[];
+}
+
+/**
  * Interfaccia tra la UI e chi la ospita. Due implementazioni reali: `invoke` di Tauri (step 4) e
  * `postMessage` del webview di VS Code (step 7); `FakeBackend` (`@swapdeck/ui/fake`) per sviluppo e test.
  * Tutti i metodi sono asincroni e in caso di errore rifiutano con `BackendError`.
@@ -84,6 +117,32 @@ export interface Backend {
   runAction(action: CswapAction): Promise<ActionOutcome>;
   /** Evento di aggiornamento dello stato: il motore o un'azione hanno prodotto una nuova lista. */
   onStateChanged(listener: (state: ListResponse) => void): Unsubscribe;
+
+  /*
+   * Gestione completa (step 5). Tutti i metodi sono facoltativi: un host che non li ha
+   * (per esempio l'estensione VS Code) ottiene dalla UI un avviso di funzione non disponibile,
+   * oppure il solo campo di testo al posto del selettore di file.
+   */
+
+  /** Cartelle mappate (`cswap map`, che non ha `--json`: l'host ne interpreta il testo). */
+  listMappings?(): Promise<DirectoryMapping[]>;
+  /** Regole del motore, stato e conflitti. */
+  getEngineState?(): Promise<EngineState>;
+  /** Salva le regole (validate dal Rust) e restituisce lo stato aggiornato. */
+  setEngineRules?(rules: EngineRules): Promise<EngineState>;
+  /** Intervallo, soglie delle notifiche, lingua e tema salvati nella config. */
+  getPreferences?(): Promise<AppPreferences>;
+  /** Salva solo i campi presenti. */
+  setPreferences?(prefs: Partial<AppPreferences>): Promise<AppPreferences>;
+  /** Impostazioni dell'host: avvio al login (solo app desktop). */
+  getAppSettings?(): Promise<HostSettings>;
+  setAutostart?(enabled: boolean): Promise<HostSettings>;
+  /** Cambi di account e decisioni del motore. */
+  getHistoryEvents?(query?: HistoryQuery): Promise<HistoryEvents>;
+  /** Selettori nativi: percorso scelto, `null` se annullato. */
+  pickOpenFile?(options?: PickOptions): Promise<string | null>;
+  pickSaveFile?(options?: PickOptions): Promise<string | null>;
+  pickFolder?(options?: PickOptions): Promise<string | null>;
 }
 
 /**

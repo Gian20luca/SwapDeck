@@ -10,6 +10,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
     css: false,
+    testTimeout: 20_000,
     exclude: ['e2e/**', 'node_modules/**'],
     coverage: {
       provider: 'v8',

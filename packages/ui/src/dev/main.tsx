@@ -3,11 +3,9 @@ import { createRoot } from 'react-dom/client';
 import type { CswapAction } from '@swapdeck/types';
 import { BackendProvider } from '../backend/context.js';
 import { ConfirmDialog } from '../components/ConfirmDialog.js';
-import { CswapUpdateNotice } from '../components/CswapUpdateNotice.js';
-import { Dashboard } from '../components/Dashboard.js';
 import { MiniWidget } from '../components/MiniWidget.js';
+import { SwapDeckApp } from '../components/SwapDeckApp.js';
 import { LanguageSelect, ThemeSelect } from '../components/PreferenceControls.js';
-import { SetupWizard } from '../components/SetupWizard.js';
 import { I18nProvider, useI18n } from '../i18n/index.js';
 import '../styles/index.css';
 import { ThemeProvider } from '../theme/index.js';
@@ -81,9 +79,28 @@ function Preview() {
   const scenarioId = useId();
   const setupId = useId();
   const [setupDemo, setSetupDemo] = useState('ok');
-  const [ready, setReady] = useState(false);
   const backend = useMemo(
-    () => new FakeBackend({ scenario, latencyMs: 250, setup: SETUP_DEMOS[setupDemo] ?? {} }),
+    () =>
+      new FakeBackend({
+        scenario,
+        latencyMs: 250,
+        unclaimed: ['legacy-1f3a', 'legacy-9c2b'],
+        mappings: [
+          { path: String.raw`C:\Progetti\cliente-a`, account: 1, email: 'user1@example.com' },
+          { path: String.raw`C:\Progetti\cliente-b`, account: 3, email: 'user3@example.com' },
+        ],
+        conflicts: [
+          {
+            id: 'task:cswap-guard',
+            kind: 'scheduledTask',
+            label: 'Attività pianificata cswap-guard',
+            certain: true,
+          },
+          { id: 'process:tui', kind: 'process', label: 'cswap tui in esecuzione', certain: false },
+        ],
+        rules: { enabled: true, primary: 6, reserves: [1, 3] },
+        setup: SETUP_DEMOS[setupDemo] ?? {},
+      }),
     [scenario, setupDemo],
   );
 
@@ -137,10 +154,7 @@ function Preview() {
               id={setupId}
               className="sd-input sd-input--inline"
               value={setupDemo}
-              onChange={(event) => {
-                setReady(false);
-                setSetupDemo(event.target.value);
-              }}
+              onChange={(event) => setSetupDemo(event.target.value)}
             >
               {Object.keys(SETUP_DEMOS).map((name) => (
                 <option key={name} value={name}>
@@ -153,17 +167,8 @@ function Preview() {
           {view === 'mini' && preferences}
         </div>
       </div>
-      {!ready ? (
-        <div className="sd-app">
-          <SetupWizard key={setupDemo + scenario} onReady={() => setReady(true)} />
-        </div>
-      ) : view === 'full' ? (
-        <>
-          <div className="sd-app" style={{ paddingBottom: 0 }}>
-            <CswapUpdateNotice key={setupDemo} />
-          </div>
-          <Dashboard toolbarExtra={preferences} />
-        </>
+      {view === 'full' ? (
+        <SwapDeckApp key={setupDemo + scenario} toolbarExtra={preferences} />
       ) : (
         <div style={{ width: 280, margin: '12px auto', border: '1px solid var(--sd-border)' }}>
           <MiniWidget />

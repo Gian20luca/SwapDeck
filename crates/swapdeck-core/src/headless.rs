@@ -89,6 +89,9 @@ pub struct RunOptions {
     pub retention_days: u32,
     /// Limite di giri (test); `None` = fino a `stop`.
     pub max_ticks: Option<u64>,
+    /// Config riletta prima di ogni giro di [`run`]: regole e intervallo cambiati dalla UI
+    /// valgono senza riavvio. `None` = regole fisse.
+    pub config_file: Option<PathBuf>,
 }
 
 impl RunOptions {
@@ -101,6 +104,7 @@ impl RunOptions {
             dry_run: false,
             retention_days: DEFAULT_RETENTION_DAYS,
             max_ticks: None,
+            config_file: None,
         }
     }
 }
@@ -199,6 +203,8 @@ struct Runner<'o, 'r> {
     switches: u32,
     /// Attesa del lock già segnalata.
     busy_logged: bool,
+    /// Errore di rilettura della config già segnalato.
+    reload_failed: bool,
 }
 
 impl Runner<'_, '_> {
@@ -408,6 +414,7 @@ impl<'o, 'r> Runner<'o, 'r> {
             last_warnings: Vec::new(),
             switches: 0,
             busy_logged: false,
+            reload_failed: false,
         })
     }
 
@@ -451,6 +458,42 @@ impl<'o, 'r> Runner<'o, 'r> {
     fn release(&mut self) {
         if let Some(h) = self.holder.take() {
             h.guard.release();
+        }
+    }
+
+    fn set_rules(&mut self, rules: &EngineRules) {
+        self.rules = rules.clone();
+        self.rules.dry_run |= self.opts.dry_run;
+    }
+
+    fn set_interval(&mut self, secs: u32) {
+        self.interval = secs.clamp(MIN_POLL_INTERVAL_SECONDS, MAX_POLL_INTERVAL_SECONDS);
+        if let Some(h) = self.holder.as_mut() {
+            h.guard.set_interval(self.interval);
+        }
+    }
+
+    /// Rilegge regole e intervallo. Una config non leggibile non ferma il motore: restano le
+    /// regole di prima (l'errore si scrive una volta sola).
+    fn reload(&mut self, path: &Path, now: i64) {
+        match config::load(path) {
+            Ok(loaded) => {
+                self.reload_failed = false;
+                let before = (self.rules.clone(), self.interval);
+                self.set_rules(&loaded.config.engine);
+                self.set_interval(loaded.config.poll_interval_seconds);
+                if before != (self.rules.clone(), self.interval) {
+                    self.log(now, "regole del motore aggiornate dalla config");
+                }
+            }
+            Err(e) if !self.reload_failed => {
+                self.reload_failed = true;
+                self.log(
+                    now,
+                    &format!("config non riletta, restano le regole di prima: {e}"),
+                );
+            }
+            Err(_) => {}
         }
     }
 }
@@ -498,6 +541,21 @@ impl<'o, 'r> Engine<'o, 'r> {
     pub fn release(mut self) {
         self.runner.release();
     }
+
+    /// Regole nuove dal giro successivo, senza riavvio (il `dry_run` delle opzioni resta).
+    pub fn set_rules(&mut self, rules: &EngineRules) {
+        self.runner.set_rules(rules);
+    }
+
+    /// Intervallo nuovo (riportato in 60–3600 s): vale per il battito e la scadenza del lock.
+    pub fn set_interval(&mut self, secs: u32) {
+        self.runner.set_interval(secs);
+    }
+
+    /// Regole in uso (con il `dry_run` delle opzioni).
+    pub fn rules(&self) -> &EngineRules {
+        &self.runner.rules
+    }
 }
 
 impl Drop for Engine<'_, '_> {
@@ -512,6 +570,9 @@ pub fn run(opts: &RunOptions, rt: Runtime<'_>) -> io::Result<RunOutcome> {
     let mut ticks = 0u64;
     loop {
         let now = r.rt.clock.now();
+        if let Some(path) = &opts.config_file {
+            r.reload(path, now);
+        }
         if let Some(info) = r.claim(now)? {
             if opts.once {
                 return Ok(RunOutcome::LockBusy(info));
@@ -603,6 +664,7 @@ pub fn cli_main(args: &[String], stop: &AtomicBool) -> i32 {
     opts.interval_secs = loaded.config.poll_interval_seconds;
     opts.once = flags.once;
     opts.dry_run = flags.dry_run;
+    opts.config_file = Some(paths.config_file());
     let mut stdout = io::stdout();
     let result = run(
         &opts,

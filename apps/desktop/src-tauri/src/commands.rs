@@ -3,12 +3,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use swapdeck_core::config::{AppPreferences, PreferencesPatch};
 use swapdeck_core::cswap::{
     ConfigGetResponse, ConfigListResponse, Confirmation, CswapAction, CswapError, CswapErrorKind,
-    ListResponse, StatusResponse,
+    DirectoryMapping, ListResponse, StatusResponse,
 };
-use swapdeck_core::history::{DEFAULT_RETENTION_DAYS, History, HistoryRecord};
+use swapdeck_core::engine::{EngineRules, EngineState};
+use swapdeck_core::history::{
+    DEFAULT_RETENTION_DAYS, History, HistoryEvents, HistoryQuery, HistoryRecord,
+};
 use swapdeck_core::timeutil::{now_unix, parse_iso};
 use tauri::{AppHandle, State};
 
@@ -70,14 +75,6 @@ pub async fn get_config_value(
 ) -> Res<ConfigGetResponse> {
     let api = Arc::clone(&shared.api);
     blocking(move || api.config_get(&key)).await
-}
-
-/// Filtro dello storico (`HistoryQuery` della UI).
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HistoryQuery {
-    pub account: Option<u32>,
-    pub since_seconds: Option<i64>,
 }
 
 /// Punto dello storico (`HistoryPoint` della UI).
@@ -230,6 +227,104 @@ pub fn set_autostart(
     Ok(get_app_settings(shared))
 }
 
+/// Argomento JSON della UI: un valore non valido è `invalidUsage` come gli altri errori.
+fn parse_arg<T: DeserializeOwned>(what: &str, value: serde_json::Value) -> Res<T> {
+    serde_json::from_value(value).map_err(|e| {
+        CswapError::new(
+            CswapErrorKind::InvalidUsage,
+            format!("{what} non valide: {e}"),
+        )
+    })
+}
+
+/// Attesa massima della lettura chiesta dopo il salvataggio delle regole: con il motore acceso
+/// la prima lettura delle attività pianificate può durare di più (la vista arriva poi con
+/// `state-changed`).
+const RULES_APPLY_WAIT: Duration = Duration::from_secs(10);
+
+/// Cartelle mappate (`cswap map`).
+#[tauri::command]
+pub async fn list_mappings(shared: State<'_, Arc<Shared>>) -> Res<Vec<DirectoryMapping>> {
+    let api = Arc::clone(&shared.api);
+    blocking(move || api.mappings()).await
+}
+
+/// Regole in uso, vista del motore all'ultimo giro e conflitti dell'ultima lettura.
+pub fn engine_state(shared: &Shared) -> EngineState {
+    EngineState {
+        rules: lock(&shared.settings).engine.clone(),
+        view: lock(&shared.snapshot).engine.clone(),
+        conflicts: lock(&shared.conflicts).clone(),
+    }
+}
+
+#[tauri::command]
+pub fn get_engine_state(shared: State<'_, Arc<Shared>>) -> EngineState {
+    engine_state(&shared)
+}
+
+/// Valida e salva le regole (altri campi della config conservati); il motore le usa dal giro
+/// chiesto subito dopo, senza riavvio. Restituisce lo stato aggiornato.
+#[tauri::command]
+pub async fn set_engine_rules(
+    app: AppHandle,
+    shared: State<'_, Arc<Shared>>,
+    rules: serde_json::Value,
+) -> Res<EngineState> {
+    let rules: EngineRules = parse_arg("regole", rules)?;
+    let shared = Arc::clone(&shared);
+    let poller = app::poller(&app);
+    blocking(move || {
+        shared.update_config(|c| c.set_engine_rules(rules))?;
+        // Un errore di lettura non annulla il salvataggio: la vista resta quella di prima.
+        let _ = poller.refresh_wait(RULES_APPLY_WAIT);
+        Ok(engine_state(&shared))
+    })
+    .await
+}
+
+#[tauri::command]
+pub fn get_preferences(shared: State<'_, Arc<Shared>>) -> AppPreferences {
+    lock(&shared.settings).preferences()
+}
+
+/// Salva solo i campi presenti (validati come `AppConfig::validate`); il nuovo intervallo vale
+/// dalla lettura chiesta subito dopo.
+#[tauri::command]
+pub async fn set_preferences(
+    app: AppHandle,
+    shared: State<'_, Arc<Shared>>,
+    prefs: serde_json::Value,
+) -> Res<AppPreferences> {
+    let patch: PreferencesPatch = parse_arg("preferenze", prefs)?;
+    let shared = Arc::clone(&shared);
+    let saved = blocking(move || shared.update_config(|c| c.apply_preferences(&patch))).await?;
+    app::poller(&app).refresh();
+    Ok(saved.preferences())
+}
+
+/// Cambi di account e decisioni del motore dallo storico (intervallo limitato alla
+/// conservazione, al massimo `MAX_EVENTS` per tipo).
+#[tauri::command]
+pub async fn get_history_events(
+    data: State<'_, app::DataDir>,
+    query: Option<serde_json::Value>,
+) -> Res<HistoryEvents> {
+    let q: HistoryQuery = match query {
+        Some(v) => parse_arg("filtro dello storico", v)?,
+        None => HistoryQuery::default(),
+    };
+    let Some(dir) = data.0.clone() else {
+        return Ok(HistoryEvents::default());
+    };
+    blocking(move || {
+        History::new(&dir)
+            .events(&q, now_unix())
+            .map_err(|e| CswapError::new(CswapErrorKind::Failed, format!("storico: {e}")))
+    })
+    .await
+}
+
 /// Ultimo stato (lo stesso dell'evento `state-changed`), per chi apre una finestra dopo l'invio.
 #[tauri::command]
 pub fn get_snapshot(shared: State<'_, Arc<Shared>>) -> Snapshot {
@@ -349,5 +444,46 @@ mod tests {
         assert_eq!(history_points(&records, None, 1).len(), 5);
         assert_eq!(five_hour_expected(0, Some("non una data")), None);
         assert_eq!(five_hour_expected(20_000, Some(&format_iso(18_000))), None);
+    }
+
+    #[test]
+    fn arguments_are_validated_and_rules_reach_the_settings() {
+        let err =
+            parse_arg::<PreferencesPatch>("preferenze", serde_json::json!({"x": 1})).unwrap_err();
+        assert_eq!(err.kind, CswapErrorKind::InvalidUsage);
+        let err =
+            parse_arg::<HistoryQuery>("filtro", serde_json::json!({"account": "a"})).unwrap_err();
+        assert_eq!(err.kind, CswapErrorKind::InvalidUsage);
+        let s = shared();
+        let rules = EngineRules {
+            primary: Some(6),
+            reserves: vec![1, 3],
+            ..EngineRules::default()
+        };
+        s.update_config(|c| c.set_engine_rules(rules.clone()))
+            .unwrap();
+        let state = engine_state(&s);
+        assert_eq!(state.rules, rules, "regole in memoria per il giro dopo");
+        assert!(state.view.is_none() && state.conflicts.is_empty());
+        let invalid = EngineRules {
+            enabled: true,
+            ..EngineRules::default()
+        };
+        let err = s
+            .update_config(|c| c.set_engine_rules(invalid))
+            .unwrap_err();
+        assert_eq!(err.kind, CswapErrorKind::InvalidUsage);
+        assert_eq!(
+            engine_state(&s).rules,
+            rules,
+            "regole invariate dopo l'errore"
+        );
+        let prefs = PreferencesPatch {
+            notification_thresholds: Some(vec![50.0, 90.0]),
+            ..PreferencesPatch::default()
+        };
+        let saved = s.update_config(|c| c.apply_preferences(&prefs)).unwrap();
+        assert_eq!(saved.notifications.thresholds, [50.0, 90.0]);
+        assert_eq!(lock(&s.settings).thresholds, [50.0, 90.0]);
     }
 }

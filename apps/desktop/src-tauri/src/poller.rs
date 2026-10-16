@@ -96,6 +96,7 @@ pub struct Loop {
 pub type Reading = (Res<ListResponse>, Option<Duration>);
 
 impl Loop {
+    #[cfg(test)]
     pub fn run(self, mut read: impl FnMut() -> Res<ListResponse>) {
         self.run_paced(move || (read(), None));
     }

@@ -3,6 +3,7 @@
 export { clampPercent } from './lib/clamp.js';
 
 export { Dashboard, type DashboardProps } from './components/Dashboard.js';
+export { SwapDeckApp, type SwapDeckAppProps, type TabId } from './components/SwapDeckApp.js';
 export { MiniWidget } from './components/MiniWidget.js';
 export { AccountCard, type AccountCardProps } from './components/AccountCard.js';
 export { UsageBar, type UsageBarProps } from './components/UsageBar.js';
@@ -32,15 +33,24 @@ export {
   BackendError,
   hasSetup,
   type ActionOutcome,
+  type AppPreferences,
   type Backend,
+  type DirectoryMapping,
+  type EngineState,
+  type EngineViewInfo,
+  type FileFilter,
+  type HistoryEvents,
   type SetupBackend,
   type HistoryPoint,
   type HistoryQuery,
+  type HostSettings,
+  type PickOptions,
   type Unsubscribe,
 } from './backend/types.js';
 export { actions } from './backend/actions.js';
 export { BackendProvider, useBackend } from './backend/context.js';
 export { useAccounts, type AccountsState } from './backend/useAccounts.js';
+export { useActionRunner, type ActionCopy } from './backend/useActionRunner.js';
 
 export {
   I18nProvider,

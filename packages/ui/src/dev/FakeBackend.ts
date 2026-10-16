@@ -3,7 +3,9 @@ import type {
   ConfigGetResponse,
   ConfigListResponse,
   Confirmation,
+  Conflict,
   CswapAction,
+  EngineRules,
   ListResponse,
   SetupDiagnosis,
   SetupOutcome,
@@ -16,16 +18,25 @@ import type {
 import {
   BackendError,
   type ActionOutcome,
+  type AppPreferences,
   type Backend,
+  type DirectoryMapping,
+  type EngineState,
+  type EngineViewInfo,
+  type HistoryEvents,
   type HistoryPoint,
   type HistoryQuery,
+  type HostSettings,
+  type PickOptions,
   type SetupBackend,
   type Unsubscribe,
 } from '../backend/types.js';
+import { CONFIG_KEYS } from '../lib/cswapConfig.js';
+import { validateRules } from '../lib/engineRules.js';
 import configList from '../../../../fixtures/cswap/config-list.json';
 import { loadScenario, type ScenarioName } from './fixtures.js';
+import { generateEvents, generateHistory } from './history.js';
 import { FakeSetup, type FakeSetupOptions } from './fakeSetup.js';
-import { generateHistory } from './history.js';
 
 export interface FakeBackendOptions {
   scenario?: ScenarioName;
@@ -33,9 +44,38 @@ export interface FakeBackendOptions {
   latencyMs?: number;
   /** Orologio iniettabile per i test. */
   now?: () => number;
+  /** Credenziali parcheggiate di `unclaimed` (default: nessuna). */
+  unclaimed?: string[];
+  /** Cartelle già mappate (default: nessuna). */
+  mappings?: DirectoryMapping[];
+  /** Altri motori rilevati (default: nessuno). */
+  conflicts?: Conflict[];
+  /** Regole iniziali del motore (default: quelle del Rust, motore spento). */
+  rules?: Partial<EngineRules>;
+  /** Percorsi restituiti dai selettori nativi; `null` = annullato. */
+  picks?: { openFile?: string | null; saveFile?: string | null; folder?: string | null };
+  /** Simula un host che conferma da sé (come VS Code): la UI non deve mostrare il suo dialogo. */
+  hostConfirms?: boolean;
   /** Stato simulato di cswap e uv per la procedura di primo avvio e l'aggiornamento. */
   setup?: FakeSetupOptions;
 }
+
+/** Regole di default del motore (specchio di `EngineRules::default` del Rust). */
+export const DEFAULT_RULES: EngineRules = {
+  enabled: false,
+  dryRun: false,
+  primary: null,
+  reserves: [],
+  excluded: [],
+  fiveHourThreshold: 95,
+  sevenDayThreshold: 98,
+  reserveCriterion: 'lowest-weekly',
+  returnToPrimary: true,
+  returnHysteresis: 10,
+  minSwitchGapSecs: 300,
+  maxUsageAgeSecs: 900,
+  ignoredConflicts: [],
+};
 
 /** Soglia oltre cui un account conta come «al limite» per `best` e `next-available`. */
 const LIMIT_PCT = 95;
@@ -65,7 +105,19 @@ function usable(account: Account): boolean {
  * e genera uno storico sintetico di 7 giorni. Non parla con cswap né con il disco.
  */
 export class FakeBackend implements Backend, SetupBackend {
+  readonly hostConfirms?: boolean;
   private list: ListResponse;
+  private mappings: DirectoryMapping[];
+  private rules: EngineRules;
+  private readonly conflicts: Conflict[];
+  private prefs: AppPreferences = {
+    pollIntervalSeconds: 60,
+    notificationThresholds: [80, 95],
+    language: 'it',
+    theme: 'system',
+  };
+  private host: HostSettings = { autostart: true, autostartManaged: true, version: '0.0.0-fake' };
+  private readonly picks: NonNullable<FakeBackendOptions['picks']>;
   private readonly listeners = new Set<(state: ListResponse) => void>();
   private readonly latencyMs: number;
   private readonly now: () => number;
@@ -82,6 +134,13 @@ export class FakeBackend implements Backend, SetupBackend {
     this.now = options.now ?? Date.now;
     this.list = loadScenario(options.scenario ?? 'default', this.now());
     this.config = structuredClone(configList) as unknown as ConfigListResponse;
+    if (options.unclaimed && options.unclaimed.length > 0)
+      this.list.unclaimedCredentials = [...options.unclaimed];
+    this.mappings = structuredClone(options.mappings ?? []);
+    this.conflicts = structuredClone(options.conflicts ?? []);
+    this.rules = { ...structuredClone(DEFAULT_RULES), ...structuredClone(options.rules ?? {}) };
+    this.picks = options.picks ?? {};
+    if (options.hostConfirms !== undefined) this.hostConfirms = options.hostConfirms;
     this.setup = new FakeSetup(
       options.setup ?? {},
       () => this.list.accounts.length,
@@ -142,6 +201,105 @@ export class FakeBackend implements Backend, SetupBackend {
     return query.account === undefined ? points : points.filter((p) => p.account === query.account);
   }
 
+  async getHistoryEvents(query: HistoryQuery = {}): Promise<HistoryEvents> {
+    await this.delay();
+    return generateEvents(this.list, this.now(), query.sinceSeconds);
+  }
+
+  async listMappings(): Promise<DirectoryMapping[]> {
+    await this.delay();
+    return structuredClone(this.mappings);
+  }
+
+  private engineState(): EngineState {
+    const rules = structuredClone(this.rules);
+    const ignored = rules.ignoredConflicts.map((c) => c.toLowerCase());
+    const blocking = this.conflicts.filter(
+      (c) => c.certain && !ignored.includes(c.id.toLowerCase()),
+    );
+    const problems = Object.keys(validateRules(rules));
+    let view: EngineViewInfo;
+    if (!rules.enabled) {
+      view = {
+        holder: true,
+        enabled: false,
+        dryRun: rules.dryRun,
+        suspended: 'disabled',
+        detail: [],
+      };
+    } else if (problems.length > 0) {
+      view = {
+        holder: true,
+        enabled: true,
+        dryRun: rules.dryRun,
+        suspended: 'invalidRules',
+        detail: problems,
+      };
+    } else if (blocking.length > 0) {
+      view = {
+        holder: true,
+        enabled: true,
+        dryRun: rules.dryRun,
+        suspended: 'conflict',
+        detail: blocking.map((c) => c.id),
+      };
+    } else {
+      view = { holder: true, enabled: true, dryRun: rules.dryRun, suspended: null, detail: [] };
+    }
+    return { rules, view, conflicts: structuredClone(this.conflicts) };
+  }
+
+  async getEngineState(): Promise<EngineState> {
+    await this.delay();
+    return this.engineState();
+  }
+
+  async setEngineRules(rules: EngineRules): Promise<EngineState> {
+    await this.delay();
+    const problems = Object.keys(validateRules(rules));
+    if (problems.length > 0) fail(`Regole non valide: ${problems.join(', ')}`, 'ConfigError');
+    this.rules = structuredClone(rules);
+    return this.engineState();
+  }
+
+  async getPreferences(): Promise<AppPreferences> {
+    await this.delay();
+    return structuredClone(this.prefs);
+  }
+
+  async setPreferences(prefs: Partial<AppPreferences>): Promise<AppPreferences> {
+    await this.delay();
+    this.prefs = { ...this.prefs, ...structuredClone(prefs) };
+    return structuredClone(this.prefs);
+  }
+
+  async getAppSettings(): Promise<HostSettings> {
+    await this.delay();
+    return { ...this.host };
+  }
+
+  async setAutostart(enabled: boolean): Promise<HostSettings> {
+    await this.delay();
+    this.host = { ...this.host, autostart: enabled };
+    return { ...this.host };
+  }
+
+  async pickOpenFile(_options?: PickOptions): Promise<string | null> {
+    return this.picks.openFile === undefined
+      ? String.raw`C:\Temp\swapdeck-import.json`
+      : this.picks.openFile;
+  }
+
+  async pickSaveFile(_options?: PickOptions): Promise<string | null> {
+    return this.picks.saveFile === undefined
+      ? String.raw`C:\Temp\swapdeck-export.json`
+      : this.picks.saveFile;
+  }
+
+  async pickFolder(_options?: PickOptions): Promise<string | null> {
+    return this.picks.folder === undefined ? String.raw`C:\Progetti\demo` : this.picks.folder;
+  }
+
   /** Specchio semplificato di `CswapAction::confirmation` del Rust (nel backend reale decide il Rust). */
   async confirmationFor(action: CswapAction): Promise<Confirmation> {
     switch (action.kind) {
@@ -164,7 +322,8 @@ export class FakeBackend implements Backend, SetupBackend {
   }
 
   async runAction(action: CswapAction): Promise<ActionOutcome> {
-    this.actionLog.push(action);
+    // Il token di `addToken` non finisce mai nel registro delle azioni.
+    this.actionLog.push(action.kind === 'addToken' ? { ...action, token: '***' } : action);
     await this.delay();
     switch (action.kind) {
       case 'switch':
@@ -229,6 +388,77 @@ export class FakeBackend implements Backend, SetupBackend {
         setting.isSet = true;
         return {};
       }
+      case 'map': {
+        const account =
+          this.find(action.account) ??
+          fail(`Account-${action.account} does not exist`, 'AccountNotFoundError');
+        this.mappings = this.mappings.filter((m) => m.path !== action.path);
+        this.mappings.push({ path: action.path, account: account.number, email: account.email });
+        return { message: `Mapped ${action.path} → Account-${account.number} (${account.email})` };
+      }
+      case 'unmap': {
+        const before = this.mappings.length;
+        this.mappings = this.mappings.filter((m) => m.path !== action.path);
+        return {
+          message:
+            before === this.mappings.length
+              ? `No mapping for ${action.path}`
+              : `Unmapped ${action.path}`,
+        };
+      }
+      case 'configUnset': {
+        const setting = this.config.settings.find((s) => s.key === action.key);
+        if (!setting) fail(`unknown setting '${action.key}'`, 'ConfigError');
+        const fallback = CONFIG_KEYS[action.key]?.default;
+        setting.value =
+          fallback === undefined || fallback === ''
+            ? null
+            : fallback === 'true' || fallback === 'false'
+              ? fallback === 'true'
+              : Number.isNaN(Number(fallback))
+                ? fallback
+                : Number(fallback);
+        setting.isSet = false;
+        return {};
+      }
+      case 'unclaimedPurge': {
+        const ids = this.list.unclaimedCredentials ?? [];
+        if (!ids.includes(action.id))
+          fail(`No unclaimed credential entry '${action.id}'`, 'ConfigError');
+        const rest = ids.filter((id) => id !== action.id);
+        if (rest.length > 0) this.list.unclaimedCredentials = rest;
+        else delete this.list.unclaimedCredentials;
+        this.emit();
+        return { message: `Purged ${action.id}` };
+      }
+      case 'addToken': {
+        const taken = new Set(this.list.accounts.map((a) => a.number));
+        let slot = action.slot ?? 1;
+        if (action.slot === undefined) while (taken.has(slot)) slot += 1;
+        else if (taken.has(slot) && !action.overwrite)
+          fail(`Slot ${slot} already occupied`, 'ConfigError');
+        this.list.accounts = this.list.accounts.filter((a) => a.number !== slot);
+        this.list.accounts.push({
+          number: slot,
+          email: action.email ?? `setup-token-${slot}@token.local`,
+          organizationName: '',
+          organizationUuid: '',
+          isOrganization: false,
+          active: false,
+          usageStatus: 'api_key',
+          usage: null,
+        });
+        this.list.accounts.sort((x, y) => x.number - y.number);
+        this.emit();
+        return { message: `Added Account-${slot}` };
+      }
+      case 'purge':
+        this.list.accounts = [];
+        this.list.activeAccountNumber = null;
+        delete this.list.unclaimedCredentials;
+        this.mappings = [];
+        this.emit();
+        return { message: 'Purged' };
       default:
         // Le altre azioni (add, export, run, ...) non hanno effetti simulati.
         return { message: 'Simulato dal FakeBackend' };

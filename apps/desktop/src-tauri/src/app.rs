@@ -16,7 +16,7 @@ use crate::autostart::{self, MINIMIZED_ARG, Startup};
 use crate::poller::Poller;
 use crate::settings::SettingsStore;
 use crate::state::{STATE_EVENT, Shared, Snapshot, lock, now_ms};
-use crate::{commands, engine_loop, setup_cmd, text, tray, windows};
+use crate::{commands, engine_loop, setup_cmd, text, tray, updater, windows};
 
 /// Cartella dati (storico e lock del motore); `None` se la home non è determinabile.
 pub struct DataDir(pub Option<PathBuf>);
@@ -155,7 +155,7 @@ pub fn run(api: Arc<dyn CswapApi>) {
     }
     let start_hidden = std::env::args().any(|a| a == MINIMIZED_ARG);
     let interval = settings.poll_interval;
-    let rules = settings.engine.clone();
+    let updates = settings.updates_enabled;
     let data_dir = AppPaths::from_env_or_system().map(|p| p.data_dir);
     let shared = Arc::new(Shared::new(api, store, settings));
 
@@ -165,6 +165,8 @@ pub fn run(api: Arc<dyn CswapApi>) {
             windows::show_main(app);
         }))
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(Arc::clone(&shared))
         .manage(DataDir(data_dir.clone()))
         .invoke_handler(tauri::generate_handler![
@@ -179,6 +181,12 @@ pub fn run(api: Arc<dyn CswapApi>) {
             commands::set_autostart,
             commands::show_main,
             commands::get_snapshot,
+            commands::list_mappings,
+            commands::get_engine_state,
+            commands::set_engine_rules,
+            commands::get_preferences,
+            commands::set_preferences,
+            commands::get_history_events,
             setup_cmd::diagnose_setup,
             setup_cmd::install_cswap,
             setup_cmd::upgrade_cswap,
@@ -190,21 +198,37 @@ pub fn run(api: Arc<dyn CswapApi>) {
             let handle = app.handle().clone();
             sync_autostart(&handle, &shared);
             tray::create(&handle)?;
+            if updates {
+                updater::spawn(&handle);
+            }
             let cb = handle.clone();
             let engine_cb = handle.clone();
             let api = Arc::clone(&shared.api);
             let dir = data_dir.clone();
+            let live = Arc::clone(&shared);
+            let found = Arc::clone(&shared);
             let (poller, thread) = Poller::spawn_with(
                 interval,
                 move |r| on_list(&cb, r),
                 move |lp| {
-                    engine_loop::run(lp, api, dir, rules, interval, move |view| {
-                        // Senza invio: l'esito della lettura segue subito e lo manda.
-                        update_snapshot(&engine_cb, |s| {
-                            s.set_engine(view);
-                            false
-                        });
-                    });
+                    engine_loop::run(
+                        lp,
+                        api,
+                        dir,
+                        // Regole e intervallo riletti a ogni giro (cambiano dalla UI).
+                        move || {
+                            let s = lock(&live.settings);
+                            (s.engine.clone(), s.poll_interval)
+                        },
+                        move |view| {
+                            // Senza invio: l'esito della lettura segue subito e lo manda.
+                            update_snapshot(&engine_cb, |s| {
+                                s.set_engine(view);
+                                false
+                            });
+                        },
+                        move |conflicts| *lock(&found.conflicts) = conflicts.to_vec(),
+                    );
                 },
             );
             app.manage(poller);
@@ -249,6 +273,8 @@ pub fn run(api: Arc<dyn CswapApi>) {
             if let Err(e) = app.state::<Arc<Shared>>().save_settings() {
                 eprintln!("config non salvata all'uscita: {e}");
             }
+            // Per ultimo, dopo l'arresto ordinato: su Windows avvia l'installer e termina.
+            updater::install_pending(app);
         }
         _ => {}
     });

@@ -383,3 +383,75 @@ fn no_oscillation_near_threshold() {
     assert_eq!(active, 6);
     assert_eq!(mem.primary_reset_at, None);
 }
+
+#[test]
+fn validate_for_save_requires_primary_only_when_running() {
+    let off = EngineRules::default();
+    assert!(
+        off.validate_for_save().is_empty(),
+        "spento senza principale"
+    );
+    let on = EngineRules {
+        enabled: true,
+        ..EngineRules::default()
+    };
+    assert_eq!(on.validate_for_save(), ["manca l'account principale"]);
+    let dry = EngineRules {
+        dry_run: true,
+        ..EngineRules::default()
+    };
+    assert!(!dry.validate_for_save().is_empty());
+    assert!(user_rules().validate_for_save().is_empty());
+    let bad_values = EngineRules {
+        five_hour_threshold: 0.0,
+        return_hysteresis: f64::NAN,
+        ..EngineRules::default()
+    };
+    assert_eq!(
+        bad_values.validate_for_save().len(),
+        2,
+        "valori controllati anche spento"
+    );
+    let incoherent = EngineRules {
+        primary: Some(6),
+        reserves: vec![6, 1, 1, 0],
+        ignored_conflicts: vec![" ".into()],
+        ..EngineRules::default()
+    };
+    let problems = incoherent.validate_for_save();
+    for expected in ["riserva", "partono da 1", "ripetute", "conflitti ignorati"] {
+        assert!(
+            problems.iter().any(|p| p.contains(expected)),
+            "{expected}: {problems:?}"
+        );
+    }
+    let too_many = EngineRules {
+        excluded: (1..=65).collect(),
+        ..EngineRules::default()
+    };
+    assert!(!too_many.validate_for_save().is_empty());
+}
+
+#[test]
+fn suspension_and_view() {
+    let rules = user_rules();
+    assert_eq!(suspension(&rules, &[]), None);
+    let off = suspension(&EngineRules::default(), &[]).unwrap();
+    let view = EngineView::new(false, &EngineRules::default(), Some(&off));
+    assert_eq!(view.suspended, Some(SuspendReason::Disabled));
+    assert!(!view.paused());
+    let guard = Conflict {
+        id: "task:cswap-guard".into(),
+        kind: ConflictKind::ScheduledTask,
+        label: "cswap-guard".into(),
+        certain: true,
+    };
+    let d = suspension(&rules, std::slice::from_ref(&guard)).unwrap();
+    let view = EngineView::new(true, &rules, Some(&d));
+    assert!(view.paused());
+    assert_eq!(view.detail, ["task:cswap-guard"]);
+    let json = serde_json::to_value(&view).unwrap();
+    assert_eq!(json["dryRun"], false);
+    assert_eq!(json["suspended"], "conflict");
+    assert_eq!(EngineView::new(true, &rules, None).suspended, None);
+}

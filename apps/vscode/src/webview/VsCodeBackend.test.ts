@@ -37,6 +37,26 @@ describe('VsCodeBackend', () => {
     await expect(b).resolves.toEqual({ v: 1 });
   });
 
+  it('metodi di gestione inoltrati con i loro parametri', () => {
+    const { backend, sent } = setup();
+    void backend.listMappings();
+    void backend.getEngineState();
+    void backend.setEngineRules({ enabled: false } as never);
+    void backend.getPreferences();
+    void backend.setPreferences({ theme: 'dark' });
+    void backend.getHistoryEvents({ account: 2 });
+    void backend.getHistoryEvents();
+    expect(sent.map((m) => (m.type === 'request' ? [m.method, m.params] : m.type))).toEqual([
+      ['listMappings', {}],
+      ['getEngineState', {}],
+      ['setEngineRules', { rules: { enabled: false } }],
+      ['getPreferences', {}],
+      ['setPreferences', { prefs: { theme: 'dark' } }],
+      ['getHistoryEvents', { account: 2 }],
+      ['getHistoryEvents', {}],
+    ]);
+  });
+
   it("dichiara che le conferme le chiede l'host", () => {
     expect(setup().backend.hostConfirms).toBe(true);
   });
@@ -102,6 +122,29 @@ describe('VsCodeBackend', () => {
     expect(isUnsubscribed()).toBe(true);
   });
 
+  it('i selettori nativi diventano richieste all’host', async () => {
+    const { backend, sent, reply } = setup();
+    const folder = backend.pickFolder({ title: 'Cartella' });
+    const open = backend.pickOpenFile({ filters: [{ name: 'JSON', extensions: ['json'] }] });
+    const save = backend.pickSaveFile();
+    expect(sent).toEqual([
+      { type: 'request', id: 1, method: 'pickFolder', params: { title: 'Cartella' } },
+      {
+        type: 'request',
+        id: 2,
+        method: 'pickOpenFile',
+        params: { filters: [{ name: 'JSON', extensions: ['json'] }] },
+      },
+      { type: 'request', id: 3, method: 'pickSaveFile', params: {} },
+    ]);
+    reply({ type: 'response', id: 1, ok: true, result: 'C:/x' });
+    reply({ type: 'response', id: 2, ok: true, result: null });
+    reply({ type: 'response', id: 3, ok: true, result: 'C:/y' });
+    await expect(folder).resolves.toBe('C:/x');
+    await expect(open).resolves.toBeNull();
+    await expect(save).resolves.toBe('C:/y');
+  });
+
   it('postMessage che lancia diventa BackendError', async () => {
     const backend = new VsCodeBackend(
       () => {
@@ -112,5 +155,38 @@ describe('VsCodeBackend', () => {
     await expect(backend.getStatus()).rejects.toMatchObject({
       info: { kind: 'failed', message: 'chiuso' },
     });
+  });
+});
+
+describe('VsCodeBackend: SetupBackend', () => {
+  it('inoltra le richieste di setup e l’avanzamento della stessa richiesta', async () => {
+    const { backend, sent, reply } = setup();
+    const events: unknown[] = [];
+    const run = backend.upgradeCswap((e) => events.push(e));
+    void backend.checkCswapUpdate({ force: true });
+    void backend.dismissCswapUpdate('0.28.0');
+    expect(sent).toEqual([
+      { type: 'request', id: 1, method: 'upgradeCswap', params: {} },
+      { type: 'request', id: 2, method: 'checkCswapUpdate', params: { force: true } },
+      { type: 'request', id: 3, method: 'dismissCswapUpdate', params: { version: '0.28.0' } },
+    ]);
+    reply({ type: 'progress', id: 1, event: { event: 'stepStarted', step: 'upgradeCswap' } });
+    reply({ type: 'progress', id: 2, event: { event: 'stepDone', step: 'upgradeCswap' } });
+    reply({ type: 'progress', id: 99, event: { event: 'stepDone', step: 'upgradeCswap' } });
+    reply({ type: 'response', id: 1, ok: true, result: { uvInstalled: false } });
+    await expect(run).resolves.toEqual({ uvInstalled: false });
+    expect(events).toEqual([{ event: 'stepStarted', step: 'upgradeCswap' }]);
+  });
+
+  it('install e diagnosi; l’annullamento dell’host arriva come cancelled', async () => {
+    const { backend, sent, reply } = setup();
+    void backend.diagnoseSetup();
+    const install = backend.installCswap(() => undefined);
+    expect(sent.map((m) => (m.type === 'request' ? m.method : m.type))).toEqual([
+      'diagnoseSetup',
+      'installCswap',
+    ]);
+    reply({ type: 'response', id: 2, ok: false, error: { kind: 'cancelled', message: 'no' } });
+    await expect(install).rejects.toBeInstanceOf(BackendError);
   });
 });

@@ -19,8 +19,10 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 swapdeck-core = { path = "../../../crates/swapdeck-core" }
 tauri = { version = "2.12.4", features = ["tray-icon"] }
+tauri-plugin-dialog = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2"
 auto-launch = "0.5"
 
 [target.'cfg(windows)'.dependencies]

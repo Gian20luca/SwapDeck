@@ -167,4 +167,161 @@ describe('createRequestHandler', () => {
       ['cswap-config', 'auto.threshold'],
     ]);
   });
+
+  it('gestione: comandi della CLI, scritture da stdin e parametri validati', async () => {
+    const { handle, calls } = setup();
+    const invalid = { info: { kind: 'invalidUsage' } };
+    await handle('listMappings', {});
+    await handle('getEngineState', {});
+    await handle('setEngineRules', { rules: { enabled: false, primary: 6 } });
+    await handle('getPreferences', {});
+    await handle('setPreferences', { prefs: { theme: 'dark' } });
+    await handle('getHistoryEvents', {});
+    await handle('getHistoryEvents', { sinceSeconds: 100, account: 3 });
+    expect(calls).toEqual([
+      { args: ['mappings'] },
+      { args: ['engine', 'state'] },
+      {
+        args: ['engine', 'rules', 'set', '-'],
+        options: { stdin: '{"enabled":false,"primary":6}' },
+      },
+      { args: ['preferences', 'get'] },
+      { args: ['preferences', 'set', '-'], options: { stdin: '{"theme":"dark"}' } },
+      { args: ['history', 'events'] },
+      { args: ['history', 'events', '--since', '100', '--account', '3'] },
+    ]);
+    for (const rules of [undefined, null, 'x', [1]]) {
+      await expect(handle('setEngineRules', { rules })).rejects.toMatchObject(invalid);
+    }
+    await expect(handle('setPreferences', { prefs: 1 })).rejects.toMatchObject(invalid);
+    await expect(handle('getHistoryEvents', { sinceSeconds: 1.5 })).rejects.toMatchObject(invalid);
+    expect(calls).toHaveLength(7);
+  });
+});
+
+describe('selettori di file e cartelle', () => {
+  function withPick(result: string | null = 'C:/scelto') {
+    const pick = vi.fn(async (_kind: string, _options: unknown) => result);
+    const handle = createRequestHandler({
+      cli: (async () => null) as CliRunner,
+      lastState: () => undefined,
+      refresh: async () => cliState(fixtureList()),
+      onOutcome: () => undefined,
+      confirm: async () => true,
+      pick,
+    });
+    return { handle, pick };
+  }
+
+  it('inoltra il tipo di selettore e solo le opzioni valide', async () => {
+    const { handle, pick } = withPick();
+    const filters = [{ name: 'JSON', extensions: ['json'] }];
+    await expect(handle('pickOpenFile', { title: 'T', filters, extra: 1 })).resolves.toBe(
+      'C:/scelto',
+    );
+    expect(pick).toHaveBeenLastCalledWith('openFile', { title: 'T', filters });
+    await handle('pickSaveFile', { defaultPath: 'a.json' });
+    expect(pick).toHaveBeenLastCalledWith('saveFile', { defaultPath: 'a.json' });
+    await handle('pickFolder', {});
+    expect(pick).toHaveBeenLastCalledWith('folder', {});
+  });
+
+  it('annullato: null; opzioni non valide: invalidUsage senza aprire nulla', async () => {
+    const { handle, pick } = withPick(null);
+    await expect(handle('pickFolder', {})).resolves.toBeNull();
+    const invalid = { info: { kind: 'invalidUsage' } };
+    pick.mockClear();
+    await expect(handle('pickOpenFile', { title: 1 })).rejects.toMatchObject(invalid);
+    await expect(handle('pickOpenFile', { filters: 'x' })).rejects.toMatchObject(invalid);
+    await expect(
+      handle('pickOpenFile', { filters: [{ name: 'x', extensions: ['a/b'] }] }),
+    ).rejects.toMatchObject(invalid);
+    await expect(handle('pickOpenFile', { filters: [null] })).rejects.toMatchObject(invalid);
+    await expect(
+      handle('pickOpenFile', { filters: Array(11).fill({ name: 'x', extensions: [] }) }),
+    ).rejects.toMatchObject(invalid);
+    expect(pick).not.toHaveBeenCalled();
+  });
+
+  it('senza il selettore dell’host: metodo non disponibile', async () => {
+    const { handle } = setup();
+    await expect(handle('pickFolder', {})).rejects.toMatchObject({
+      info: { kind: 'invalidUsage', message: 'selettore non disponibile' },
+    });
+  });
+});
+
+describe('setup di cswap', () => {
+  function withSetup(confirmed: boolean, engineRunning = true) {
+    const calls: Array<{ args: string[]; options?: RunOptions }> = [];
+    const cli = (async (args: string[], options?: RunOptions) => {
+      calls.push(options ? { args, options } : { args });
+      options?.onEvent?.({ event: 'stepStarted', step: 'upgradeCswap' });
+      return { args };
+    }) as CliRunner;
+    const order: string[] = [];
+    const confirmSetup = vi.fn(async () => confirmed);
+    const resume = vi.fn(() => order.push('resume'));
+    const pauseEngine = vi.fn(async () => {
+      order.push('pause');
+      return engineRunning ? resume : () => undefined;
+    });
+    const refresh = vi.fn(async () => cliState(fixtureList()));
+    const handle = createRequestHandler({
+      cli,
+      lastState: () => undefined,
+      refresh,
+      onOutcome: vi.fn(),
+      confirm: vi.fn(async () => true),
+      confirmSetup,
+      pauseEngine,
+    });
+    return { handle, calls, confirmSetup, pauseEngine, resume, refresh, order };
+  }
+
+  it('letture e chiusura dell’avviso con la versione validata', async () => {
+    const { handle, calls } = withSetup(true);
+    await handle('diagnoseSetup', {});
+    await handle('checkCswapUpdate', {});
+    await handle('checkCswapUpdate', { force: true });
+    await handle('dismissCswapUpdate', { version: '0.28.0rc1' });
+    expect(calls.map((c) => c.args)).toEqual([
+      ['setup', 'diagnose'],
+      ['setup', 'check-update'],
+      ['setup', 'check-update', '--force'],
+      ['setup', 'dismiss-update', '0.28.0rc1'],
+    ]);
+    for (const version of ['--force', '../x', 1, 'a'.repeat(80)]) {
+      await expect(handle('dismissCswapUpdate', { version })).rejects.toMatchObject({
+        info: { kind: 'invalidUsage' },
+      });
+    }
+  });
+
+  it('aggiornamento: conferma dell’host, motore fermato e riavviato, eventi inoltrati', async () => {
+    const { handle, calls, confirmSetup, order, refresh } = withSetup(true);
+    const events: unknown[] = [];
+    await handle('upgradeCswap', {}, (e) => events.push(e));
+    expect(confirmSetup).toHaveBeenCalledWith('upgrade');
+    expect(order).toEqual(['pause', 'resume']);
+    expect(calls[0]!.args).toEqual(['setup', 'upgrade']);
+    expect(events).toEqual([{ event: 'stepStarted', step: 'upgradeCswap' }]);
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('installazione: annullata dall’host non lancia nulla', async () => {
+    const { handle, calls, pauseEngine } = withSetup(false);
+    await expect(handle('installCswap', {})).rejects.toMatchObject({
+      info: { kind: 'cancelled' },
+    });
+    expect(calls).toEqual([]);
+    expect(pauseEngine).not.toHaveBeenCalled();
+  });
+
+  it('senza conferma dell’host i metodi che scrivono non sono disponibili', async () => {
+    const { handle } = setup();
+    await expect(handle('installCswap', {})).rejects.toMatchObject({
+      info: { kind: 'invalidUsage' },
+    });
+  });
 });

@@ -17,11 +17,15 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use serde_json::Value;
-use swapdeck_core::config::{self, AppConfig, CONFIG_SCHEMA_VERSION};
+use swapdeck_core::config::{
+    self, AppConfig, AppPreferences, CONFIG_SCHEMA_VERSION, ConfigError, PreferencesPatch,
+};
+use swapdeck_core::conflicts::{ConflictSource, SystemConflicts};
 use swapdeck_core::cswap::{
     ActionOutcome, AutoMessage, CswapAction, CswapClient, CswapError, CswapErrorKind,
 };
-use swapdeck_core::history::{History, HistoryRecord};
+use swapdeck_core::engine::{EngineRules, EngineState, EngineView};
+use swapdeck_core::history::{History, HistoryEvents, HistoryQuery, HistoryRecord};
 use swapdeck_core::lock;
 use swapdeck_core::paths::AppPaths;
 use swapdeck_core::setup::{Setup, SetupProgress};
@@ -44,9 +48,15 @@ pub const USAGE: &str = "uso: swapdeck-cli <comando>
   confirm - [--active N|none]  (azione JSON da stdin)
   action -                     (azione JSON da stdin)
   history [--from SECONDI] [--to SECONDI] [--account N]
+  history events [--since SECONDI] [--account N]
+  mappings
   config get
   config set <json|->
+  preferences get
+  preferences set <json|->
   engine status
+  engine state
+  engine rules set <json|->
   setup diagnose|install|upgrade      (install e upgrade: eventi JSON per riga, poi l'esito)
   setup check-update [--force]
   setup dismiss-update <VERSIONE>
@@ -116,7 +126,13 @@ fn dispatch(args: &[String]) -> Res<Value> {
         ["confirm" | "action", ..] => Err(usage_error(format!(
             "l'azione va passata da stdin (-)\n{USAGE}"
         ))),
+        ["history", "events", rest @ ..] => to_value(history_events(rest)?),
         ["history", rest @ ..] => to_value(history(rest)?),
+        ["mappings"] => to_value(client()?.mappings()?),
+        ["preferences", "get"] => to_value(preferences_get()?),
+        ["preferences", "set", input] => to_value(preferences_set(&read_input(input)?)?),
+        ["engine", "state"] => to_value(engine_state(&paths()?)?),
+        ["engine", "rules", "set", input] => to_value(engine_rules_set(&read_input(input)?)?),
         ["config", "get"] => to_value(config_get()?),
         ["config", "set", input] => to_value(config_set(&read_input(input)?)?),
         ["engine", "status"] => to_value(engine_status(&paths()?)),
@@ -373,6 +389,91 @@ fn history(rest: &[&str]) -> Res<Vec<HistoryRecord>> {
             _ => true,
         })
         .collect())
+}
+
+/// `history events`: cambi e decisioni del motore (`--since` limitato alla conservazione).
+fn history_events(rest: &[&str]) -> Res<HistoryEvents> {
+    let mut query = HistoryQuery::default();
+    let mut it = rest.iter();
+    while let Some(flag) = it.next() {
+        let value = it
+            .next()
+            .ok_or_else(|| usage_error(format!("{flag}: manca il valore")))?;
+        match *flag {
+            "--since" => query.since_seconds = Some(parse_i64(flag, value)?),
+            "--account" => query.account = Some(parse_u32(flag, value)?),
+            _ => {
+                return Err(usage_error(format!(
+                    "opzione sconosciuta: {flag}
+{USAGE}"
+                )));
+            }
+        }
+    }
+    History::new(&paths()?.data_dir)
+        .events(&query, now_unix())
+        .map_err(|e| failed(format!("storico non leggibile: {e}")))
+}
+
+/// Errore della config: valori non validi = uso sbagliato.
+fn config_error(e: ConfigError) -> CswapError {
+    match e {
+        ConfigError::Invalid(_) => usage_error(e.to_string()),
+        _ => failed(e.to_string()),
+    }
+}
+
+fn preferences_get() -> Res<AppPreferences> {
+    let loaded = config::load(&paths()?.config_file()).map_err(config_error)?;
+    Ok(loaded.config.preferences())
+}
+
+/// Salva solo i campi presenti (validati); gli altri campi della config restano.
+fn preferences_set(text: &str) -> Res<AppPreferences> {
+    let patch: PreferencesPatch =
+        serde_json::from_str(text).map_err(|e| json_error("preferenze", &e))?;
+    let saved = config::update(&paths()?.config_file(), |c| c.apply_preferences(&patch))
+        .map_err(config_error)?;
+    Ok(saved.preferences())
+}
+
+/// Regole della config, vista del motore in esecuzione (ultima decisione dello storico) e
+/// conflitti (letti solo se il motore è acceso o in osservazione: la lettura costa).
+fn engine_state(paths: &AppPaths) -> Res<EngineState> {
+    let rules = config::load(&paths.config_file())
+        .map_err(config_error)?
+        .config
+        .engine;
+    let running = engine_status(paths).running;
+    let view = if running {
+        let events = History::new(&paths.data_dir)
+            .events(&HistoryQuery::default(), now_unix())
+            .unwrap_or_default();
+        events
+            .decisions
+            .last()
+            .map(|d| EngineView::new(true, &rules, Some(&d.decision)))
+    } else {
+        None
+    };
+    let conflicts = if rules.enabled || rules.dry_run {
+        SystemConflicts::default().detect()
+    } else {
+        Vec::new()
+    };
+    Ok(EngineState {
+        rules,
+        view,
+        conflicts,
+    })
+}
+
+/// Valida e salva le regole; il motore in esecuzione (`headless`) le rilegge al giro dopo.
+fn engine_rules_set(text: &str) -> Res<EngineState> {
+    let rules: EngineRules = serde_json::from_str(text).map_err(|e| json_error("regole", &e))?;
+    let paths = paths()?;
+    config::update(&paths.config_file(), |c| c.set_engine_rules(rules)).map_err(config_error)?;
+    engine_state(&paths)
 }
 
 fn config_view(path: &Path) -> Res<ConfigView> {

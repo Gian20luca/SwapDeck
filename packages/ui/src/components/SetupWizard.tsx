@@ -79,11 +79,18 @@ function Wizard({
   async function execute(kind: 'install' | 'upgrade', diagnosis: SetupDiagnosis) {
     setConfirming(null);
     setPhase({ name: 'running', kind, diagnosis });
-    const outcome: SetupOutcome | null = await start((onProgress) =>
+    const outcome: SetupOutcome | null | 'cancelled' = await start((onProgress) =>
       kind === 'install' ? backend.installCswap(onProgress) : backend.upgradeCswap(onProgress),
     );
-    if (outcome) show(outcome.diagnosis);
+    if (outcome === 'cancelled') setPhase({ name: 'show', diagnosis });
+    else if (outcome) show(outcome.diagnosis);
     else setPhase({ name: 'failed', kind, diagnosis });
+  }
+
+  /** Conferma nella UI, o direttamente all'host se è lui a chiederla (VS Code). */
+  function ask(kind: 'install' | 'upgrade', diagnosis: SetupDiagnosis) {
+    if (backend.hostConfirms) void execute(kind, diagnosis);
+    else setConfirming(kind);
   }
 
   async function addCurrent(diagnosis: SetupDiagnosis) {
@@ -188,7 +195,7 @@ function Wizard({
             <button
               type="button"
               className="sd-btn sd-btn--primary"
-              onClick={() => setConfirming('install')}
+              onClick={() => ask('install', d)}
             >
               {t('setup.install')}
             </button>
@@ -215,7 +222,7 @@ function Wizard({
               <button
                 type="button"
                 className="sd-btn sd-btn--primary"
-                onClick={() => setConfirming('upgrade')}
+                onClick={() => ask('upgrade', d)}
               >
                 {t('update.upgrade')}
               </button>

@@ -114,6 +114,62 @@ impl Fake {
             })
     }
 
+    /// Mappature delle cartelle (`<stato>.maps.json`: percorso → account ed email).
+    fn maps_path(&self) -> PathBuf {
+        self.state_path().with_extension("maps.json")
+    }
+
+    fn maps(&self) -> serde_json::Map<String, Value> {
+        fs::read_to_string(self.maps_path())
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_default()
+    }
+
+    fn save_maps(&self, maps: &serde_json::Map<String, Value>) {
+        fs::write(
+            self.maps_path(),
+            serde_json::to_string_pretty(maps).unwrap(),
+        )
+        .unwrap();
+    }
+
+    /// `map` (elenco nel formato di cswap 0.27) e `map <n> [path]`.
+    fn map(&self, rest: &[&str]) -> u8 {
+        let mut maps = self.maps();
+        let Some(first) = rest.first() else {
+            if maps.is_empty() {
+                println!("No directory mappings yet.");
+                println!("Map one with: cswap map <NUM|EMAIL> [PATH]");
+                return 0;
+            }
+            println!("Directory mappings:");
+            let state = self.state();
+            for (path, entry) in &maps {
+                let email = entry["email"].as_str().unwrap_or_default();
+                let slot = Self::accounts(&state)
+                    .into_iter()
+                    .find(|a| a["email"].as_str() == Some(email))
+                    .and_then(|a| a["number"].as_u64());
+                match slot {
+                    Some(n) => println!("  {path} → {n}: {email} [personal]"),
+                    None => println!("  {path} → {email} (account removed)"),
+                }
+            }
+            return 0;
+        };
+        let n: u64 = first.parse().unwrap_or(0);
+        let Some(a) = Self::find(&self.state(), n) else {
+            return self.error(&format!("Account-{n} does not exist"));
+        };
+        let path = rest.get(1).copied().unwrap_or(".");
+        let email = a["email"].as_str().unwrap_or_default().to_owned();
+        println!("Mapped {path} → Account-{n} ({email})");
+        maps.insert(path.to_owned(), serde_json::json!({ "email": email }));
+        self.save_maps(&maps);
+        0
+    }
+
     fn save(&self, state: &Value) {
         fs::write(
             self.state_path(),
@@ -237,26 +293,16 @@ impl Fake {
             "alias" => self.alias(&rest),
             "swap" => self.swap(&rest),
             "move" => self.move_account(&rest),
-            "map" => {
-                if rest.is_empty() {
-                    println!("No directory mappings yet.");
-                    return 0;
-                }
-                let n: u64 = rest[0].parse().unwrap_or(0);
-                match Self::find(&self.state(), n) {
-                    Some(a) => {
-                        println!(
-                            "Mapped {} → Account-{n} ({})",
-                            rest.get(1).unwrap_or(&"."),
-                            a["email"].as_str().unwrap()
-                        );
-                        0
-                    }
-                    None => self.error(&format!("Account-{n} does not exist")),
-                }
-            }
+            "map" => self.map(&rest),
             "unmap" => {
-                println!("No mapping for {}", rest.first().unwrap_or(&"."));
+                let path = rest.first().copied().unwrap_or(".").to_owned();
+                let mut maps = self.maps();
+                if maps.remove(&path).is_some() {
+                    self.save_maps(&maps);
+                    println!("Unmapped {path}");
+                } else {
+                    println!("No mapping for {path}");
+                }
                 0
             }
             "config" => self.config(&rest),

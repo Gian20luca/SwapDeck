@@ -63,7 +63,9 @@ function Notice({
   async function upgrade() {
     setPhase('running');
     const outcome = await start((onProgress) => backend.upgradeCswap(onProgress));
-    if (outcome) {
+    if (outcome === 'cancelled') {
+      setPhase('idle');
+    } else if (outcome) {
       setVersion(outcome.diagnosis.cswap?.version ?? info?.latest ?? '');
       setPhase('done');
       onUpgraded?.(outcome);
@@ -110,7 +112,7 @@ function Notice({
             <button
               type="button"
               className="sd-btn sd-btn--small sd-btn--primary"
-              onClick={() => setPhase('confirm')}
+              onClick={() => (backend.hostConfirms ? void upgrade() : setPhase('confirm'))}
             >
               {phase === 'failed' ? t('common.retry') : t('update.upgrade')}
             </button>
