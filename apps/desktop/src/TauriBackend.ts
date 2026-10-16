@@ -6,6 +6,7 @@ import type {
   CswapError,
   ListResponse,
   StatusResponse,
+  SuspendReason,
   SwitchResponse,
 } from '@swapdeck/types';
 import {
@@ -28,6 +29,17 @@ export interface Snapshot {
   engineSuspended: boolean;
   /** `cswap auto` avviato dall'app è in esecuzione. */
   autoRunning: boolean;
+  /** Stato del motore all'ultimo giro che ha deciso (`EngineView` in `engine_loop.rs`). */
+  engine: EngineView | null;
+}
+
+export interface EngineView {
+  /** Il lock del motore è di questa app. */
+  holder: boolean;
+  enabled: boolean;
+  dryRun: boolean;
+  suspended: SuspendReason | null;
+  detail: string[];
 }
 
 /** Esito di `run_action` (`Outcome` del Rust). */
@@ -141,6 +153,11 @@ export class TauriBackend implements Backend {
       closed = true;
       off?.();
     };
+  }
+
+  /** Ultimo `Snapshot` del Rust (all'apertura, prima del prossimo evento). */
+  getSnapshot(): Promise<Snapshot> {
+    return this.call('get_snapshot');
   }
 
   getAppSettings(): Promise<AppSettings> {

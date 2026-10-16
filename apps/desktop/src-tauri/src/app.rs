@@ -1,8 +1,12 @@
 //! Avvio dell'app Tauri: plugin, stato, area di notifica, ciclo di lettura.
 
-use std::sync::Arc;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use swapdeck_core::cswap::ListResponse;
+use swapdeck_core::paths::AppPaths;
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
 use tauri_plugin_notification::NotificationExt as _;
 
@@ -12,7 +16,31 @@ use crate::autostart::{self, MINIMIZED_ARG, Startup};
 use crate::poller::Poller;
 use crate::settings::SettingsStore;
 use crate::state::{STATE_EVENT, Shared, Snapshot, lock, now_ms};
-use crate::{commands, text, tray, windows};
+use crate::{commands, engine_loop, text, tray, windows};
+
+/// Cartella dati (storico e lock del motore); `None` se la home non è determinabile.
+pub struct DataDir(pub Option<PathBuf>);
+
+/// Thread del ciclo di lettura, atteso all'uscita.
+struct PollerThread(Mutex<Option<JoinHandle<()>>>);
+
+/// Attesa massima della fine del ciclo all'uscita (un giro in corso può durare di più).
+const POLLER_EXIT_WAIT: Duration = Duration::from_secs(3);
+
+impl PollerThread {
+    fn join_within(&self, max: Duration) {
+        let Some(handle) = lock(&self.0).take() else {
+            return;
+        };
+        let deadline = Instant::now() + max;
+        while !handle.is_finished() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        if handle.is_finished() {
+            let _ = handle.join();
+        }
+    }
+}
 
 pub fn poller(app: &AppHandle) -> Poller {
     app.state::<Poller>().inner().clone()
@@ -127,6 +155,8 @@ pub fn run(api: Arc<dyn CswapApi>) {
     }
     let start_hidden = std::env::args().any(|a| a == MINIMIZED_ARG);
     let interval = settings.poll_interval;
+    let rules = settings.engine.clone();
+    let data_dir = AppPaths::from_env_or_system().map(|p| p.data_dir);
     let shared = Arc::new(Shared::new(api, store, settings));
 
     let app = tauri::Builder::default()
@@ -136,6 +166,7 @@ pub fn run(api: Arc<dyn CswapApi>) {
         }))
         .plugin(tauri_plugin_notification::init())
         .manage(Arc::clone(&shared))
+        .manage(DataDir(data_dir.clone()))
         .invoke_handler(tauri::generate_handler![
             commands::list_accounts,
             commands::get_status,
@@ -147,6 +178,7 @@ pub fn run(api: Arc<dyn CswapApi>) {
             commands::get_app_settings,
             commands::set_autostart,
             commands::show_main,
+            commands::get_snapshot,
         ])
         .on_window_event(windows::on_window_event)
         .setup(move |app| {
@@ -154,9 +186,24 @@ pub fn run(api: Arc<dyn CswapApi>) {
             sync_autostart(&handle, &shared);
             tray::create(&handle)?;
             let cb = handle.clone();
-            let (poller, _thread) =
-                Poller::spawn(Arc::clone(&shared.api), interval, move |r| on_list(&cb, r));
+            let engine_cb = handle.clone();
+            let api = Arc::clone(&shared.api);
+            let dir = data_dir.clone();
+            let (poller, thread) = Poller::spawn_with(
+                interval,
+                move |r| on_list(&cb, r),
+                move |lp| {
+                    engine_loop::run(lp, api, dir, rules, interval, move |view| {
+                        // Senza invio: l'esito della lettura segue subito e lo manda.
+                        update_snapshot(&engine_cb, |s| {
+                            s.set_engine(view);
+                            false
+                        });
+                    });
+                },
+            );
             app.manage(poller);
+            app.manage(PollerThread(Mutex::new(Some(thread))));
             let cb = handle.clone();
             let (watcher, _thread) =
                 AutoWatcher::spawn(Arc::clone(&shared.api), AUTO_WATCH_PERIOD, move |p| {
@@ -189,6 +236,10 @@ pub fn run(api: Arc<dyn CswapApi>) {
             app.state::<Arc<Shared>>().api.shutdown();
             if let Some(p) = app.try_state::<Poller>() {
                 p.stop();
+            }
+            // Il ciclo rilascia il lock del motore uscendo: lo si aspetta un poco.
+            if let Some(t) = app.try_state::<PollerThread>() {
+                t.join_within(POLLER_EXIT_WAIT);
             }
             if let Err(e) = app.state::<Arc<Shared>>().save_settings() {
                 eprintln!("config non salvata all'uscita: {e}");

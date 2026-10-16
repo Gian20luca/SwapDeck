@@ -80,13 +80,18 @@ Build di sviluppo: `pnpm --filter @swapdeck/desktop build`, poi `cargo build -p 
 
 | Percorso | Ruolo |
 |---|---|
-| `src/TauriBackend.ts` | `Backend` con `invoke` ed evento `state-changed` (`Snapshot`: lista, errore, motore sospeso); comandi dell'app (`getAppSettings`, `setAutostart`, `showMain`) |
+| `src/TauriBackend.ts` | `Backend` con `invoke` ed evento `state-changed` (`Snapshot`: lista, errore, `engine`, `engineSuspended`, `autoRunning`); comandi dell'app (`getSnapshot`, `getAppSettings`, `setAutostart`, `showMain`) |
+| `src/EngineStatus.tsx` | righe di stato sopra la dashboard: motore sospeso (motivo e conflitti), sola osservazione, `cswap auto` in esecuzione |
 | `src/main.tsx` | dashboard nella finestra `main`, `MiniWidget` trascinabile nella finestra `mini` (scelta dall'etichetta della finestra); `AutostartToggle.tsx` |
-| `src-tauri/src/api.rs` | interfaccia sottile `CswapApi`; `ClientApi` sopra `CswapClient` (ricerca pigra, una chiamata alla volta, `cswap auto`); finto per i test |
-| `src-tauri/src/poller.rs` | ciclo di lettura: un thread, `list` a ogni intervallo e a richiesta, richieste unite |
+| `src-tauri/src/api.rs` | interfaccia sottile `CswapApi`; `ClientApi` sopra `CswapClient` (ricerca pigra, una chiamata alla volta, `cswap auto` in un Job Object con `KILL_ON_JOB_CLOSE`, `auto_poll`, `shutdown` all'uscita); finto per i test |
+| `src-tauri/src/auto_watch.rs` | controllo di `cswap auto` ogni 2 s: eventi, cambi, fine o errore (stato nella UI e notifica) |
+| `src-tauri/src/engine_loop.rs` | motore nel ciclo di lettura (`headless::Engine`): con il lock storico, battito, decisione e cambio; senza solo osservazione; `EngineView` per la UI; conflitti letti solo a motore acceso |
+| `src-tauri/src/poller.rs` | ciclo di lettura: un thread, lettura (con il motore) a ogni intervallo e a richiesta, richieste unite; `run_paced` anticipa la lettura dopo |
 | `src-tauri/src/state.rs` | `Shared` (api, `Snapshot`, impostazioni, notifiche), evento `state-changed` |
-| `src-tauri/src/commands.rs` | comandi `invoke` (elenco in `build.rs`, permessi in `capabilities/`) |
+| `src-tauri/src/commands.rs` | comandi `invoke` (elenco in `build.rs`, permessi in `capabilities/`); `get_history` dai campioni dello storico (un punto per account per intervallo, atteso sulle 5 ore dal reset) |
 | `src-tauri/src/tray.rs`, `ring.rs` | icona ad anello disegnata a runtime, tooltip, menu con il cambio rapido |
 | `src-tauri/src/notify.rs`, `text.rs` | soglie e cambi di account (una volta per finestra di reset), testi it/en |
 | `src-tauri/src/windows.rs` | principale nascosta alla chiusura, mini-widget con posizione ricordata |
-| `src-tauri/src/settings.rs`, `terminal.rs`, `app.rs` | impostazioni da `config.json` (`autostart` e `miniWidget` in `extra`), terminale di `cswap run`, avvio e plugin |
+| `src-tauri/src/settings.rs`, `terminal.rs`, `app.rs` | impostazioni da `config.json` (`SWAPDECK_HOME` come `--headless`; regole `engine` in sola lettura; `autostart` e `miniWidget` in `extra`), terminale di `cswap run`, avvio, plugin e uscita ordinata |
+| `src-tauri/src/autostart.rs` | avvio al login con `auto-launch` e percorso tra virgolette; forzato solo al primo avvio (chiave `autostart` assente), poi vale il sistema |
+| `src-tauri/src/main.rs` | `--headless` (motore senza interfaccia, `swapdeck_core::headless::cli_main`) o app; `compile_error!` in rilascio senza `custom-protocol` |

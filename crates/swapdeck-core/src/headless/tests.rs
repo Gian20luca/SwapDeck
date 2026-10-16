@@ -410,3 +410,60 @@ fn parses_cli_flags() {
         exit_code::USAGE
     );
 }
+
+#[test]
+fn engine_steps_switch_only_with_the_lock() {
+    let dir = tempfile::tempdir().unwrap();
+    let opts = RunOptions::new(dir.path().to_path_buf(), user_rules());
+    let stop = AtomicBool::new(false);
+    let (mut out_a, mut out_b) = (Vec::new(), Vec::new());
+    let (mut port_a, mut port_b) = (at_limit(), at_limit());
+    let (mut conf_a, mut conf_b) = (FakeConflicts(Vec::new()), FakeConflicts(Vec::new()));
+    let (mut clock_a, mut clock_b) = (FakeClock(T0), FakeClock(T0));
+    let mut a = Engine::new(
+        &opts,
+        Runtime {
+            port: &mut port_a,
+            conflicts: &mut conf_a,
+            clock: &mut clock_a,
+            out: &mut out_a,
+            stop: &stop,
+        },
+    )
+    .unwrap();
+    let step = a.step();
+    assert!(step.holder);
+    assert_eq!(step.switched_to, Some(3));
+    assert!(step.list.is_ok());
+    let mut b = Engine::new(
+        &opts,
+        Runtime {
+            port: &mut port_b,
+            conflicts: &mut conf_b,
+            clock: &mut clock_b,
+            out: &mut out_b,
+            stop: &stop,
+        },
+    )
+    .unwrap();
+    // Senza lock: osserva e decide, ma non cambia.
+    let step = b.step();
+    assert!(!step.holder);
+    assert_eq!(step.switched_to, None);
+    assert!(step.decision.is_some());
+    a.release();
+    // Lock rilasciato: il secondo motore lo prende al giro dopo.
+    assert!(b.step().holder);
+    drop(b);
+    assert!(port_b.switches.len() <= 1);
+    assert_eq!(port_a.switches, vec![3]);
+    assert!(
+        !dir.path().join(lock::LOCK_FILE).exists(),
+        "lock rilasciato al drop"
+    );
+    assert!(
+        String::from_utf8(out_b)
+            .unwrap()
+            .contains("in attesa del lock")
+    );
+}

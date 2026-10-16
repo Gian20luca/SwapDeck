@@ -197,6 +197,8 @@ struct Runner<'o, 'r> {
     last_decision: Option<Decision>,
     last_warnings: Vec<String>,
     switches: u32,
+    /// Attesa del lock già segnalata.
+    busy_logged: bool,
 }
 
 impl Runner<'_, '_> {
@@ -254,7 +256,7 @@ impl Runner<'_, '_> {
         }
     }
 
-    fn tick(&mut self, now: i64) {
+    fn tick(&mut self, now: i64) -> Step {
         // Prima i conflitti (la lettura delle attività può durare a lungo), poi `list`:
         // la decisione usa consumi appena letti.
         let conflicts = self.rt.conflicts.detect();
@@ -263,7 +265,12 @@ impl Runner<'_, '_> {
             Ok(l) => l,
             Err(e) => {
                 self.log(now, &format!("cswap list non riuscito: {e}"));
-                return;
+                return Step {
+                    list: Err(e),
+                    decision: None,
+                    holder: self.holder.is_some(),
+                    switched_to: None,
+                };
             }
         };
         if let Some(h) = self.holder.as_mut() {
@@ -302,10 +309,19 @@ impl Runner<'_, '_> {
             }
             self.last_decision = Some(decision.clone());
         }
+        let mut switched_to = None;
         if self.rules.enabled && !self.rules.dry_run {
             if let (Some(to), Some(cause)) = (decision.target(), cause_of(&decision)) {
-                self.execute(now, &list, to, cause);
+                if self.execute(now, &list, to, cause) {
+                    switched_to = Some(to);
+                }
             }
+        }
+        Step {
+            list: Ok(list),
+            decision: Some(decision),
+            holder: self.holder.is_some(),
+            switched_to,
         }
     }
 
@@ -319,14 +335,15 @@ impl Runner<'_, '_> {
         }
     }
 
-    fn execute(&mut self, now: i64, list: &ListResponse, to: u32, cause: SwitchCause) {
+    /// `true` se il cambio è riuscito.
+    fn execute(&mut self, now: i64, list: &ListResponse, to: u32, cause: SwitchCause) -> bool {
         let Some(h) = self.holder.as_mut() else {
-            return;
+            return false;
         };
         if !h.guard.still_owned() {
             self.holder = None;
             self.log(now, "lock perso prima del cambio: nessuna azione");
-            return;
+            return false;
         }
         let from = list.active_account_number;
         let (switched, message) = match self.rt.port.switch_to(to) {
@@ -362,6 +379,7 @@ impl Runner<'_, '_> {
         if let Err(e) = mem_result.and(hist_result) {
             self.log(now, &format!("stato del motore non salvato: {e}"));
         }
+        switched
     }
 }
 
@@ -372,55 +390,136 @@ fn cause_of(d: &Decision) -> Option<SwitchCause> {
     }
 }
 
+impl<'o, 'r> Runner<'o, 'r> {
+    fn new(opts: &'o RunOptions, rt: Runtime<'r>) -> io::Result<Self> {
+        create_private_dir(&opts.data_dir)?;
+        let mut rules = opts.rules.clone();
+        rules.dry_run |= opts.dry_run;
+        let interval = opts
+            .interval_secs
+            .clamp(MIN_POLL_INTERVAL_SECONDS, MAX_POLL_INTERVAL_SECONDS);
+        Ok(Self {
+            opts,
+            rules,
+            interval,
+            rt,
+            holder: None,
+            last_decision: None,
+            last_warnings: Vec::new(),
+            switches: 0,
+            busy_logged: false,
+        })
+    }
+
+    /// Battito del lock se è nostro, altrimenti tentativo di prenderlo.
+    /// `Some(info)` se è tenuto da un'altra istanza.
+    fn claim(&mut self, now: i64) -> io::Result<Option<Option<LockInfo>>> {
+        if self.holder.is_some() {
+            self.beat(now);
+        } else if let Some(info) = self.try_lock(now)? {
+            return Ok(Some(info));
+        }
+        self.busy_logged = false;
+        Ok(None)
+    }
+
+    fn note_busy(&mut self, now: i64, info: Option<&LockInfo>) {
+        if self.busy_logged {
+            return;
+        }
+        self.busy_logged = true;
+        let who = info.map_or_else(
+            || "un'altra istanza".to_owned(),
+            |i| format!("PID {} su {}", i.pid, i.host),
+        );
+        self.log(
+            now,
+            &format!("motore già attivo ({who}): in attesa del lock"),
+        );
+    }
+
+    /// Dopo il giro: errori di rotazione e secondo battito (il giro può durare molto:
+    /// prima lettura delle attività, cswap lento).
+    fn finish(&mut self, now: i64) {
+        self.report_prune_error(now);
+        if self.holder.is_some() {
+            let after = self.rt.clock.now();
+            self.beat(after);
+        }
+    }
+
+    fn release(&mut self) {
+        if let Some(h) = self.holder.take() {
+            h.guard.release();
+        }
+    }
+}
+
+/// Esito di un giro del motore.
+#[derive(Debug)]
+pub struct Step {
+    pub list: Result<ListResponse, CswapError>,
+    /// Decisione del giro; `None` se la lettura non è riuscita.
+    pub decision: Option<Decision>,
+    /// Il lock è di questa istanza: storico, memoria e cambi sono suoi.
+    pub holder: bool,
+    /// Account su cui il motore ha cambiato in questo giro.
+    pub switched_to: Option<u32>,
+}
+
+/// Motore a giri singoli per chi ha già un suo ciclo (l'app desktop): a ogni [`Engine::step`]
+/// lock (presa o battito), lettura, storico, decisione e, se il lock è suo, il cambio.
+/// Senza lock solo osservazione. Il lock si rilascia con [`Engine::release`] o al drop.
+pub struct Engine<'o, 'r> {
+    runner: Runner<'o, 'r>,
+}
+
+impl<'o, 'r> Engine<'o, 'r> {
+    pub fn new(opts: &'o RunOptions, rt: Runtime<'r>) -> io::Result<Self> {
+        Ok(Self {
+            runner: Runner::new(opts, rt)?,
+        })
+    }
+
+    pub fn step(&mut self) -> Step {
+        let r = &mut self.runner;
+        let now = r.rt.clock.now();
+        match r.claim(now) {
+            Ok(None) => {}
+            Ok(Some(info)) => r.note_busy(now, info.as_ref()),
+            // Cartella dati non scrivibile: si continua in sola osservazione.
+            Err(e) => r.log(now, &format!("lock del motore non disponibile: {e}")),
+        }
+        let step = r.tick(now);
+        r.finish(now);
+        step
+    }
+
+    pub fn release(mut self) {
+        self.runner.release();
+    }
+}
+
+impl Drop for Engine<'_, '_> {
+    fn drop(&mut self) {
+        self.runner.release();
+    }
+}
+
 /// Ciclo del motore senza interfaccia. Rilascia il lock all'uscita.
 pub fn run(opts: &RunOptions, rt: Runtime<'_>) -> io::Result<RunOutcome> {
-    create_private_dir(&opts.data_dir)?;
-    let mut rules = opts.rules.clone();
-    rules.dry_run |= opts.dry_run;
-    let interval = opts
-        .interval_secs
-        .clamp(MIN_POLL_INTERVAL_SECONDS, MAX_POLL_INTERVAL_SECONDS);
-    let mut r = Runner {
-        opts,
-        rules,
-        interval,
-        rt,
-        holder: None,
-        last_decision: None,
-        last_warnings: Vec::new(),
-        switches: 0,
-    };
+    let mut r = Runner::new(opts, rt)?;
     let mut ticks = 0u64;
-    let mut busy_logged = false;
     loop {
         let now = r.rt.clock.now();
-        if r.holder.is_some() {
-            r.beat(now);
-        } else if let Some(info) = r.try_lock(now)? {
+        if let Some(info) = r.claim(now)? {
             if opts.once {
                 return Ok(RunOutcome::LockBusy(info));
             }
-            if !busy_logged {
-                busy_logged = true;
-                let who = info.map_or_else(
-                    || "un'altra istanza".to_owned(),
-                    |i| format!("PID {} su {}", i.pid, i.host),
-                );
-                r.log(
-                    now,
-                    &format!("motore già attivo ({who}): in attesa del lock"),
-                );
-            }
-        } else {
-            busy_logged = false;
+            r.note_busy(now, info.as_ref());
         }
         r.tick(now);
-        r.report_prune_error(now);
-        // Secondo battito: il giro può durare molto (prima lettura delle attività, cswap lento).
-        if r.holder.is_some() {
-            let after = r.rt.clock.now();
-            r.beat(after);
-        }
+        r.finish(now);
         ticks += 1;
         let done = opts.once
             || r.rt.stop.load(Ordering::SeqCst)
@@ -428,15 +527,13 @@ pub fn run(opts: &RunOptions, rt: Runtime<'_>) -> io::Result<RunOutcome> {
         if done {
             break;
         }
-        r.rt.clock.sleep(interval, r.rt.stop);
+        r.rt.clock.sleep(r.interval, r.rt.stop);
         if r.rt.stop.load(Ordering::SeqCst) {
             break;
         }
     }
     let switches = r.switches;
-    if let Some(h) = r.holder.take() {
-        h.guard.release();
-    }
+    r.release();
     Ok(RunOutcome::Finished { ticks, switches })
 }
 

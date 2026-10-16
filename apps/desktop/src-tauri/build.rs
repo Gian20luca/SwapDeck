@@ -13,6 +13,7 @@ fn main() {
             "get_app_settings",
             "set_autostart",
             "show_main",
+            "get_snapshot",
         ]),
     ))
     .expect("build di Tauri non riuscita");

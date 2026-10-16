@@ -173,6 +173,18 @@ pub fn switch_failed(lang: Lang, err: &CswapError) -> (String, String) {
     (title.into(), err.message.clone())
 }
 
+/// Riga del tooltip con il motore sospeso (conflitto o regole da sistemare).
+pub fn engine_paused(lang: Lang, detail: &[String]) -> String {
+    let head = match lang {
+        Lang::It => "Motore sospeso",
+        Lang::En => "Engine suspended",
+    };
+    if detail.is_empty() {
+        head.to_owned()
+    } else {
+        format!("{head}: {}", detail.join(", "))
+    }
+}
 /// `cswap auto` avviato dall'app è terminato da solo.
 pub fn auto_ended(lang: Lang, code: Option<i32>, err: Option<&CswapError>) -> (String, String) {
     let title = match (lang, err.is_some()) {
@@ -249,5 +261,10 @@ mod tests {
         let (t, b) = auto_ended(Lang::En, Some(0), None);
         assert_eq!(t, "Automatic switching ended");
         assert!(b.contains("code 0"));
+        assert_eq!(engine_paused(Lang::It, &[]), "Motore sospeso");
+        assert_eq!(
+            engine_paused(Lang::En, &["cswap-guard".into()]),
+            "Engine suspended: cswap-guard"
+        );
     }
 }

@@ -1,14 +1,13 @@
 //! Ciclo di lettura: `cswap list --json` a ogni intervallo della config e a richiesta.
 //! Un solo thread fa le letture, quindi due richieste vicine non lanciano due processi.
 
-use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use swapdeck_core::cswap::{CswapError, CswapErrorKind, ListResponse};
 
-use crate::api::{CswapApi, Res};
+use crate::api::Res;
 
 /// Attesa massima di una lettura a richiesta (il client ha già il suo timeout di 30 s).
 pub const REFRESH_WAIT: Duration = Duration::from_secs(45);
@@ -26,16 +25,32 @@ pub struct Poller {
 
 impl Poller {
     /// Avvia il ciclo: la prima lettura parte subito, poi una ogni `interval`.
-    /// `on_result` riceve ogni esito, nel thread del ciclo.
+    /// `on_result` riceve ogni esito, nel thread del ciclo. Solo lettura, senza motore (test).
+    #[cfg(test)]
     pub fn spawn(
-        api: Arc<dyn CswapApi>,
+        api: std::sync::Arc<dyn crate::api::CswapApi>,
         interval: Duration,
         on_result: impl Fn(&Res<ListResponse>) + Send + 'static,
     ) -> (Self, JoinHandle<()>) {
+        Self::spawn_with(interval, on_result, move |lp| lp.run(|| api.list()))
+    }
+
+    /// Come [`Poller::spawn`], con la lettura preparata da `body` nel thread del ciclo
+    /// (il motore vive nel thread e prende in prestito le sue dipendenze).
+    pub fn spawn_with(
+        interval: Duration,
+        on_result: impl Fn(&Res<ListResponse>) + Send + 'static,
+        body: impl FnOnce(Loop) + Send + 'static,
+    ) -> (Self, JoinHandle<()>) {
         let (tx, rx) = mpsc::channel();
+        let lp = Loop {
+            interval,
+            rx,
+            on_result: Box::new(on_result),
+        };
         let handle = std::thread::Builder::new()
             .name("swapdeck-poller".into())
-            .spawn(move || run(api.as_ref(), interval, &rx, on_result))
+            .spawn(move || body(lp))
             .expect("thread del ciclo di lettura");
         (Self { tx }, handle)
     }
@@ -68,11 +83,34 @@ fn stopped() -> CswapError {
     CswapError::new(CswapErrorKind::Cancelled, "ciclo di lettura fermato")
 }
 
+type OnResult = Box<dyn Fn(&Res<ListResponse>) + Send>;
+
+/// Ciclo pronto a partire: [`Loop::run`] gira finché il [`Poller`] non viene fermato.
+pub struct Loop {
+    interval: Duration,
+    rx: Receiver<Msg>,
+    on_result: OnResult,
+}
+
+/// Una lettura: esito e, se serve, attesa diversa dall'intervallo prima della prossima.
+pub type Reading = (Res<ListResponse>, Option<Duration>);
+
+impl Loop {
+    pub fn run(self, mut read: impl FnMut() -> Res<ListResponse>) {
+        self.run_paced(move || (read(), None));
+    }
+
+    /// Come [`Loop::run`], con la lettura che può anticipare la successiva.
+    pub fn run_paced(self, mut read: impl FnMut() -> Reading) {
+        run(&mut read, self.interval, &self.rx, &*self.on_result);
+    }
+}
+
 fn run(
-    api: &dyn CswapApi,
+    read: &mut dyn FnMut() -> Reading,
     interval: Duration,
     rx: &Receiver<Msg>,
-    on_result: impl Fn(&Res<ListResponse>),
+    on_result: &dyn Fn(&Res<ListResponse>),
 ) {
     let mut waiting: Vec<Sender<Res<ListResponse>>> = Vec::new();
     let mut next = Instant::now();
@@ -90,12 +128,12 @@ fn run(
                 Msg::Stop => return,
             }
         }
-        let result = api.list();
+        let (result, next_wait) = read();
         on_result(&result);
         for reply in waiting.drain(..) {
             let _ = reply.send(result.clone());
         }
-        next = Instant::now() + interval;
+        next = Instant::now() + next_wait.unwrap_or(interval);
     }
 }
 
@@ -103,6 +141,7 @@ fn run(
 mod tests {
     use super::*;
     use crate::api::mock::MockApi;
+    use std::sync::Arc;
     use std::sync::Mutex;
 
     #[test]
@@ -154,6 +193,36 @@ mod tests {
         assert_eq!(
             poller.refresh_wait(REFRESH_WAIT).unwrap_err().kind,
             CswapErrorKind::Cancelled
+        );
+    }
+
+    #[test]
+    fn paced_reading_brings_the_next_one_forward() {
+        let reads = Arc::new(Mutex::new(0usize));
+        let counter = Arc::clone(&reads);
+        let (poller, handle) = Poller::spawn_with(
+            Duration::from_secs(3600),
+            |_| {},
+            move |lp| {
+                lp.run_paced(|| {
+                    let mut n = counter.lock().unwrap();
+                    *n += 1;
+                    let next = (*n == 1).then_some(Duration::ZERO);
+                    (Ok(crate::api::mock::fixture_list()), next)
+                });
+            },
+        );
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while *reads.lock().unwrap() < 2 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        std::thread::sleep(Duration::from_millis(100));
+        poller.stop();
+        handle.join().unwrap();
+        assert_eq!(
+            *reads.lock().unwrap(),
+            2,
+            "seconda lettura subito, poi l'intervallo"
         );
     }
 }

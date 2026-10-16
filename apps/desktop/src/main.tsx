@@ -14,6 +14,7 @@ import '@swapdeck/ui/styles.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { AutostartToggle } from './AutostartToggle.js';
+import { EngineStatus } from './EngineStatus.js';
 import { TauriBackend } from './TauriBackend.js';
 import './desktop.css';
 
@@ -40,15 +41,18 @@ function Mini() {
 
 function Main() {
   return (
-    <Dashboard
-      toolbarExtra={
-        <span className="sd-toolbar__group">
-          <LanguageSelect />
-          <ThemeSelect />
-          <AutostartToggle backend={backend} />
-        </span>
-      }
-    />
+    <>
+      <EngineStatus backend={backend} />
+      <Dashboard
+        toolbarExtra={
+          <span className="sd-toolbar__group">
+            <LanguageSelect />
+            <ThemeSelect />
+            <AutostartToggle backend={backend} />
+          </span>
+        }
+      />
+    </>
   );
 }
 

@@ -7,6 +7,7 @@ use serde::Serialize;
 use swapdeck_core::cswap::{CswapError, ListResponse};
 
 use crate::api::{CswapApi, Res};
+use crate::engine_loop::EngineView;
 use crate::notify::Notifier;
 use crate::settings::{Settings, SettingsStore};
 
@@ -27,6 +28,8 @@ pub struct Snapshot {
     pub engine_suspended: bool,
     /// `cswap auto` avviato dall'app è in esecuzione.
     pub auto_running: bool,
+    /// Stato del motore dall'ultimo giro che ha deciso.
+    pub engine: Option<EngineView>,
 }
 
 impl Snapshot {
@@ -39,6 +42,11 @@ impl Snapshot {
             Err(e) => self.error = Some(e.clone()),
         }
         self.updated_at_ms = now_ms;
+    }
+
+    pub fn set_engine(&mut self, view: EngineView) {
+        self.engine_suspended = view.paused();
+        self.engine = Some(view);
     }
 
     pub fn active(&self) -> Option<u32> {

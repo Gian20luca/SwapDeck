@@ -18,3 +18,9 @@ html[data-window='mini'] body {
   height: 100%;
   box-sizing: border-box;
 }
+/* Stato del motore e di cswap auto sopra la dashboard. */
+.sd-desktop-engine {
+  display: grid;
+  gap: 4px;
+  padding: 8px 12px 0;
+}

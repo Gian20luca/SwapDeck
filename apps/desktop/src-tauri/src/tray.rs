@@ -146,11 +146,17 @@ pub fn update(app: &AppHandle, snap: &Snapshot) {
     let lang = lock(&app.state::<Arc<Shared>>().settings).lang;
     let pct = snap.list.as_ref().and_then(text::active_five_hour);
     let _ = tray.set_icon(Some(image(pct, snap.engine_suspended)));
-    let _ = tray.set_tooltip(Some(text::tooltip(
-        lang,
-        snap.list.as_ref(),
-        snap.error.as_ref(),
-    )));
+    let mut tip = text::tooltip(lang, snap.list.as_ref(), snap.error.as_ref());
+    if snap.engine_suspended {
+        let detail = snap
+            .engine
+            .as_ref()
+            .map(|e| e.detail.as_slice())
+            .unwrap_or(&[]);
+        tip.push('\n');
+        tip.push_str(&text::engine_paused(lang, detail));
+    }
+    let _ = tray.set_tooltip(Some(tip));
     #[cfg(target_os = "macos")]
     let _ = tray.set_title(Some(
         pct.map(|p| format!("{}%", p.round() as i64))

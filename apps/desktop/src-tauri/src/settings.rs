@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use swapdeck_core::config::{self, AppConfig, Language};
+use swapdeck_core::engine::EngineRules;
 use swapdeck_core::paths::AppPaths;
 
 use crate::text::Lang;
@@ -26,6 +27,8 @@ pub struct Settings {
     pub autostart_saved: bool,
     /// Ultima posizione del mini-widget, in pixel fisici.
     pub mini_position: Option<(i32, i32)>,
+    /// Regole del motore (sezione `engine`), lette all'avvio e mai riscritte dall'app.
+    pub engine: EngineRules,
 }
 
 impl Default for Settings {
@@ -64,6 +67,7 @@ impl Settings {
                 .and_then(Value::as_bool)
                 .is_some(),
             mini_position: mini_position(c.extra.get(KEY_MINI)),
+            engine: c.engine.clone(),
         }
     }
 
@@ -107,9 +111,9 @@ impl SettingsStore {
         self.paths.as_ref().map(AppPaths::config_file)
     }
 
-    /// Impostazioni dal sistema (`AppPaths::from_system`), con gli avvisi da registrare.
+    /// Impostazioni dal sistema (`SWAPDECK_HOME` o cartelle standard, come `--headless`), con gli avvisi da registrare.
     pub fn load() -> (Self, Settings, Vec<String>) {
-        match AppPaths::from_system() {
+        match AppPaths::from_env_or_system() {
             Some(paths) => Self::at(paths).read(),
             None => (
                 Self::in_memory(),
