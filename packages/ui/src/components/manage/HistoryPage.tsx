@@ -6,7 +6,9 @@ import { useI18n, type MessageKey, type Translate } from '../../i18n/index.js';
 import { accountName } from '../../lib/account.js';
 import { mergeEvents, type EventRow } from '../../lib/historyEvents.js';
 import { useLoad } from '../../lib/useLoad.js';
+import { AccountSummary } from '../AccountSummary.js';
 import { HistoryPanel } from '../HistoryPanel.js';
+import { useNow } from '../../lib/useNow.js';
 import { LoadGate, Section } from './common.js';
 import { Tooltip } from '../Tooltip.js';
 
@@ -69,6 +71,7 @@ export function decisionText(decision: Decision, t: Translate): string {
 export function HistoryPage({ target }: { target?: { account: number; key: number } | null }) {
   const { t } = useI18n();
   const { state } = useAccounts();
+  const now = useNow();
   const [hours, setHours] = useState<number>(168);
   const [openAccounts, setOpenAccounts] = useState<Set<number> | null>(null);
   const accounts: Account[] = state.status === 'ready' ? state.data.accounts : [];
@@ -141,7 +144,7 @@ export function HistoryPage({ target }: { target?: { account: number; key: numbe
             return (
               <li key={account.number} className="sd-card">
                 <div className="sd-toolbar">
-                  <span className="sd-card__name">{name}</span>
+                  <AccountSummary account={account} now={now} />
                   <Tooltip text={t('history.toggle.tip')}>
                     <button
                       type="button"

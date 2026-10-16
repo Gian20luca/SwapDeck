@@ -58,11 +58,6 @@ export const enFlow: Record<keyof typeof itFlow, string> = {
   'flow.include': 'Include {name}',
   'flow.include.tip':
     'On: the engine may use this account. Off: it never picks it and, if it is active, leaves it alone.',
-  'flow.useNow': 'Use now',
-  'flow.useNow.label': 'Use {name} now',
-  'flow.useNow.tip':
-    'Switches to this account right away, without waiting for the engine thresholds.',
-  'flow.useNow.done': '{name} is now active.',
   'flow.active': 'active',
   'flow.missing': 'not in cswap',
   'flow.missingWarn':
@@ -137,4 +132,5 @@ export const enFlow: Record<keyof typeof itFlow, string> = {
   'detail.danger': 'Removal',
   'detail.remove.tip':
     'Removes the account from cswap, after confirmation. Getting it back needs a new login.',
+  'detail.title': 'Edit {name}',
 };

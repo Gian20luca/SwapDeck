@@ -7,9 +7,8 @@ import type {
   ScoreWeights,
 } from '@swapdeck/types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { actions } from '../../backend/actions.js';
 import { useBackend } from '../../backend/context.js';
-import { useActionRunner, type Notice } from '../../backend/useActionRunner.js';
+import type { Notice } from '../../backend/useActionRunner.js';
 import { errorMessage, useAccounts } from '../../backend/useAccounts.js';
 import type { EngineState } from '../../backend/types.js';
 import { useI18n, type MessageKey } from '../../i18n/index.js';
@@ -123,7 +122,6 @@ function initialDraft(rules: EngineRules, accounts: readonly Account[]): RulesDr
 function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: EditorProps) {
   const { t } = useI18n();
   const backend = useBackend();
-  const runner = useActionRunner();
   const rulesNow = data.engine.rules;
   const [base, setBase] = useState<RulesDraft>(() => initialDraft(rulesNow, accounts));
   const [draft, setDraft] = useState<RulesDraft>(base);
@@ -152,7 +150,7 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
   const hasErrors = Object.keys(errors).length > 0;
   const rows = useMemo(() => flowRows(draft, accounts), [draft, accounts]);
   const missing = accountsKnown ? missingAccounts(draft.order, accounts) : [];
-  const busy = saving || runner.busy;
+  const busy = saving;
 
   const nameOf = (n: number) => {
     const found = accounts.find((a) => a.number === n);
@@ -411,18 +409,12 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
               )
             }
             onToggle={(n, included) => setDraft((d) => setIncluded(d, accounts, n, included))}
-            onUseNow={(n) =>
-              void runner.run(actions.switchTo(n), {
-                success: t('flow.useNow.done', { name: nameOf(n) }),
-              })
-            }
           />
           {errors.order && (
             <span className="sd-field-error" role="alert">
               {t(errors.order)}
             </span>
           )}
-          <NoticeView notice={runner.notice} />
         </Section>
 
         <Section title={t('rules.thresholds')}>
@@ -556,7 +548,6 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
           </Tooltip>
         </div>
       </form>
-      {runner.dialog}
     </div>
   );
 }

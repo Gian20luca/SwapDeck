@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { useI18n } from '../../i18n/index.js';
-import { displayUsage, switchBlockedReason } from '../../lib/account.js';
+import { displayUsage } from '../../lib/account.js';
 import type { FlowRow } from '../../lib/engineRules.js';
 import { displayPct } from '../../lib/format.js';
 import { Tooltip } from '../Tooltip.js';
@@ -15,7 +15,6 @@ export interface FlowListProps {
    */
   onMove: (number: number, to: number) => void;
   onToggle: (number: number, included: boolean) => void;
-  onUseNow: (number: number) => void;
 }
 
 function pct(value: number | null | undefined): string {
@@ -25,9 +24,9 @@ function pct(value: number | null | undefined): string {
 /**
  * Lista ordinata delle utenze di una mappa: maniglia ⋮⋮ per il trascinamento col mouse (sulla sola
  * maniglia) e da tastiera (Spazio prende e lascia, frecce spostano, Esc annulla), con gli annunci
- * per gli screen reader in una regione `aria-live`; interruttore includi/escludi e «Usa ora».
+ * per gli screen reader in una regione `aria-live`; interruttore includi/escludi.
  */
-export function FlowList({ rows, nameOf, disabled, onMove, onToggle, onUseNow }: FlowListProps) {
+export function FlowList({ rows, nameOf, disabled, onMove, onToggle }: FlowListProps) {
   const { t } = useI18n();
   const helpId = useId();
   const items = useRef(new Map<number, HTMLLIElement>());
@@ -124,7 +123,6 @@ export function FlowList({ rows, nameOf, disabled, onMove, onToggle, onUseNow }:
         {rows.map((row, index) => {
           const name = nameOf(row.number);
           const usage = row.account ? displayUsage(row.account)?.usage : undefined;
-          const blocked = row.account ? switchBlockedReason(row.account) : 'flow.missing';
           const isGrabbed = grabbed?.number === row.number || dragging === row.number;
           return (
             <li
@@ -182,17 +180,6 @@ export function FlowList({ rows, nameOf, disabled, onMove, onToggle, onUseNow }:
                   disabled={disabled}
                   onChange={(event) => onToggle(row.number, event.target.checked)}
                 />
-              </Tooltip>
-              <Tooltip text={blocked ? t(blocked) : t('flow.useNow.tip')}>
-                <button
-                  type="button"
-                  className="sd-btn sd-btn--small"
-                  aria-label={t('flow.useNow.label', { name })}
-                  disabled={disabled || blocked !== null}
-                  onClick={() => onUseNow(row.number)}
-                >
-                  {t('flow.useNow')}
-                </button>
               </Tooltip>
             </li>
           );

@@ -80,7 +80,7 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
   const onQuick = (strategy: QuickStrategy) => void runSwitch(actions.switchBy(strategy));
   const onSwitch = (account: Account) => void runSwitch(actions.switchTo(account.number));
 
-  const cardFor = (account: Account, withManage: boolean) => (
+  const cardFor = (account: Account) => (
     <AccountCard
       key={account.number}
       account={account}
@@ -93,7 +93,7 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
             onOpenHistory: (a: Account) => navigate({ tab: 'history', account: a.number }),
           }
         : {})}
-      {...(withManage ? { extra: <AccountActions account={account} onManage={setDetail} /> } : {})}
+      {...(manage ? { extra: <AccountActions account={account} onManage={setDetail} /> } : {})}
     />
   );
 
@@ -119,7 +119,6 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
         <AccountDetailPage
           account={account}
           accounts={accounts}
-          card={account ? cardFor(account, false) : null}
           onBack={(text) => {
             setDetail(null);
             setNotice(text ? { tone: 'info', text } : null);
@@ -212,7 +211,7 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
             </div>
           )}
           <ul className="sd-list" aria-label={t('dashboard.title')}>
-            {accounts.map((account) => cardFor(account, manage))}
+            {accounts.map((account) => cardFor(account))}
           </ul>
         </>
       )}

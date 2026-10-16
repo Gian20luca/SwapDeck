@@ -128,7 +128,7 @@ describe('Dashboard: contenuto delle schede', () => {
     ).toBeInTheDocument();
     const button = within(relogin).getByRole('button', { name: /Passa a questo account/ });
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute('title', 'Serve un nuovo login in Claude Code');
+    expect(button).toHaveAccessibleDescription('Serve un nuovo login in Claude Code');
   });
 
   it('il pulsante dell’account attivo è disabilitato', async () => {

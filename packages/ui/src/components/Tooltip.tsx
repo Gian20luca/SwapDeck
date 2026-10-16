@@ -16,6 +16,67 @@ import {
 const InsideTooltip = createContext(false);
 
 const MARGIN = 8;
+const GAP = 6;
+const OBSTACLES =
+  'button, input, select, textarea, a[href], summary, [role="tab"], [role="switch"], [tabindex="0"]';
+
+export interface Box {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+function overlap(a: Box, b: Box): number {
+  const w = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
+  const h = Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
+  return w > 0 && h > 0 ? w * h : 0;
+}
+
+/**
+ * Posizione della bolla: sotto, sopra, a destra o a sinistra dell'elemento, dentro la finestra.
+ * Vince il primo lato che non copre altri controlli (`obstacles`); se nessuno è libero, quello che
+ * ne copre meno. Pura, per i test.
+ */
+export function placeTip(
+  anchor: Box,
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+  obstacles: readonly Box[],
+): { left: number; top: number } {
+  const clampX = (x: number) => Math.max(MARGIN, Math.min(x, viewport.width - size.width - MARGIN));
+  const clampY = (y: number) =>
+    Math.max(MARGIN, Math.min(y, viewport.height - size.height - MARGIN));
+  const cx = anchor.left + anchor.width / 2 - size.width / 2;
+  const cy = anchor.top + anchor.height / 2 - size.height / 2;
+  const sides = [
+    { left: clampX(cx), top: anchor.top + anchor.height + GAP },
+    { left: clampX(cx), top: anchor.top - size.height - GAP },
+    { left: anchor.left + anchor.width + GAP, top: clampY(cy) },
+    { left: anchor.left - size.width - GAP, top: clampY(cy) },
+  ];
+  let best = { left: clampX(cx), top: clampY(anchor.top + anchor.height + GAP) };
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const p of sides) {
+    const fits =
+      p.left >= MARGIN - 0.5 &&
+      p.top >= MARGIN - 0.5 &&
+      p.left + size.width <= viewport.width - MARGIN + 0.5 &&
+      p.top + size.height <= viewport.height - MARGIN + 0.5;
+    if (!fits) continue;
+    const box = { ...p, ...size };
+    const score = obstacles.reduce((sum, o) => sum + overlap(box, o), 0) + overlap(box, anchor);
+    if (score < bestScore) {
+      best = p;
+      bestScore = score;
+      if (score === 0) break;
+    }
+  }
+  return best;
+}
+
+/** Un solo tooltip aperto alla volta: aprirne uno chiude il precedente. */
+let closeOpen: (() => void) | null = null;
 
 function focusVisible(el: EventTarget): boolean {
   try {
@@ -36,8 +97,9 @@ export interface TooltipProps {
 }
 
 /**
- * Tooltip accessibile: si apre al passaggio del mouse (con un breve ritardo) e subito al focus da tastiera, si
- * chiude con Esc, all'uscita e alla perdita del focus. Il testo resta nel DOM (`role="tooltip"`,
+ * Tooltip accessibile: si apre al passaggio del mouse (con un breve ritardo) e subito al focus da tastiera; si
+ * chiude con Esc, all'uscita, alla perdita del focus, al clic, allo scorrimento e quando se ne apre
+ * un altro. Si mette sul lato che non copre altri controlli (`placeTip`). Il testo resta nel DOM (`role="tooltip"`,
  * nascosto) così `aria-describedby` lo legge anche quando non si vede. La bolla è `position:
  * fixed`, tenuta dentro la finestra: niente scroll orizzontale nemmeno a 420 px. Annidato in un
  * altro tooltip mostra solo l'elemento.
@@ -57,26 +119,50 @@ export function Tooltip({ text, children, block = false }: TooltipProps) {
   };
   useEffect(() => clear, []);
 
+  // Aperto: Esc, un clic altrove o lo scorrimento lo chiudono; aprirne un altro pure.
   useEffect(() => {
     if (!open) return;
+    const close = () => setOpen(false);
+    if (closeOpen) closeOpen();
+    closeOpen = close;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') close();
     };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', close, true);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      if (closeOpen === close) closeOpen = null;
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', close, true);
+      window.removeEventListener('scroll', close, true);
+    };
   }, [open]);
 
   useLayoutEffect(() => {
     if (!open || !wrap.current || !bubble.current) return;
-    const anchor = wrap.current.getBoundingClientRect();
+    const own = wrap.current;
+    const anchor = own.getBoundingClientRect();
     const box = bubble.current.getBoundingClientRect();
-    const vw = document.documentElement.clientWidth || window.innerWidth;
-    const vh = document.documentElement.clientHeight || window.innerHeight;
-    let left = anchor.left + anchor.width / 2 - box.width / 2;
-    left = Math.max(MARGIN, Math.min(left, vw - box.width - MARGIN));
-    let top = anchor.bottom + 6;
-    if (top + box.height > vh - MARGIN) top = Math.max(MARGIN, anchor.top - box.height - 6);
-    setStyle({ left, top });
+    const viewport = {
+      width: document.documentElement.clientWidth || window.innerWidth,
+      height: document.documentElement.clientHeight || window.innerHeight,
+    };
+    const obstacles: Box[] = [];
+    for (const el of document.querySelectorAll(OBSTACLES)) {
+      if (own.contains(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < viewport.height)
+        obstacles.push({ left: r.left, top: r.top, width: r.width, height: r.height });
+    }
+    setStyle(
+      placeTip(
+        { left: anchor.left, top: anchor.top, width: anchor.width, height: anchor.height },
+        { width: box.width, height: box.height },
+        viewport,
+        obstacles,
+      ),
+    );
   }, [open]);
 
   if (nested || !isValidElement(children) || text.trim() === '') return children;

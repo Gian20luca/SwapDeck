@@ -32,6 +32,32 @@ export interface UsageBarProps {
 
 type Translate = ReturnType<typeof useI18n>['t'];
 
+/** «Reset tra 54m · oggi 14:41» (conto alla rovescia, poi data e ora), come sotto le barre. */
+export function resetLabel(
+  resetsAt: string | null | undefined,
+  now: number,
+  t: Translate,
+  locale: string,
+): string {
+  const words = {
+    today: t('date.today'),
+    tomorrow: t('date.tomorrow'),
+    yesterday: t('date.yesterday'),
+  };
+  // Reset già avvenuto: il valore letto è della finestra precedente, niente conto alla rovescia.
+  const past = pastReset(resetsAt, now, locale, words);
+  if (past)
+    return past.today
+      ? t('usage.resetPassedAt', { time: past.time })
+      : t('usage.resetPassed', { when: past.when });
+  const countdown = countdownTo(resetsAt, now);
+  if (countdown === null) return t('usage.noReset');
+  const when = formatWhen(resetsAt, now, locale, words);
+  return when
+    ? t('usage.resetsAtWhen', { time: countdown, when })
+    : t('usage.resetsIn', { time: countdown });
+}
+
 /** Testo del tooltip della soglia del motore, secondo come il motore la usa. */
 export function engineTip(mark: EngineMark, t: Translate): string {
   const pct = mark.pct;
@@ -114,18 +140,9 @@ export function UsageBar({
     tomorrow: t('date.tomorrow'),
     yesterday: t('date.yesterday'),
   };
-  const resetWhen = formatWhen(resetsAt, now, locale, words);
   // Reset già avvenuto: il valore letto è della finestra precedente, niente conto alla rovescia.
   const past = pastReset(resetsAt, now, locale, words);
-  const resetText = past
-    ? past.today
-      ? t('usage.resetPassedAt', { time: past.time })
-      : t('usage.resetPassed', { when: past.when })
-    : countdown === null
-      ? t('usage.noReset')
-      : resetWhen
-        ? t('usage.resetsAtWhen', { time: countdown, when: resetWhen })
-        : t('usage.resetsIn', { time: countdown });
+  const resetText = resetLabel(resetsAt, now, t, locale);
   const exhaustMs = exhaustionAt ? Date.parse(exhaustionAt) : Number.NaN;
   const resetMs = resetsAt ? Date.parse(resetsAt) : Number.NaN;
   const exhaustWhen =

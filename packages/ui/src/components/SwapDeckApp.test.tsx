@@ -163,9 +163,14 @@ describe('SwapDeckApp: pagina di dettaglio dell’utenza', () => {
 
   it('apre solo quell’utenza, col focus su «Indietro»; «Indietro» torna all’elenco snello', async () => {
     const { user, page } = await openDetail('alias3');
-    expect(screen.getByRole('heading', { name: 'alias3' })).toBeInTheDocument();
-    expect(within(page).getAllByRole('listitem')).toHaveLength(1);
-    expect(within(page).getByText(/5 ore/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Modifica alias3' })).toBeInTheDocument();
+    // Solo la modifica: niente scheda dell'account, barre o percentuali.
+    expect(within(page).queryByRole('listitem')).toBeNull();
+    expect(within(page).queryByRole('progressbar')).toBeNull();
+    expect(within(page).queryByText(/5 ore|5h/)).toBeNull();
+    expect(
+      within(page).queryByRole('button', { name: /Passa a questo account|storico/i }),
+    ).toBeNull();
     const back = screen.getByRole('button', { name: /Indietro/ });
     expect(back).toHaveFocus();
     await user.click(back);
@@ -173,15 +178,6 @@ describe('SwapDeckApp: pagina di dettaglio dell’utenza', () => {
     expect(screen.getByRole('list', { name: 'Account' })).toBeInTheDocument();
     // Nell'elenco nessun pannello di gestione aperto sotto le schede.
     expect(screen.queryByLabelText('Alias')).toBeNull();
-  });
-
-  it('«Storico» porta alla scheda Storico con l’account aperto', async () => {
-    const { user } = await openDetail('alias3');
-    await user.click(screen.getByRole('button', { name: 'Apri lo storico di alias3' }));
-    expect(screen.getByRole('tab', { name: 'Storico' })).toHaveAttribute('aria-selected', 'true');
-    expect(
-      await screen.findByRole('button', { name: 'Nascondi lo storico di alias3' }),
-    ).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('rimuovi con conferma: si torna all’elenco con l’esito', async () => {

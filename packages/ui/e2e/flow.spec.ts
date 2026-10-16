@@ -74,7 +74,9 @@ test('dettaglio dell’utenza e ritorno all’elenco', async ({ page }) => {
   await page.getByRole('button', { name: 'Gestisci l’account alias3' }).click();
   const detail = page.getByRole('region', { name: 'Gestione di alias3' });
   await expect(detail).toBeVisible();
-  await expect(detail.getByRole('heading', { name: 'alias3' })).toBeVisible();
+  await expect(detail.getByRole('heading', { name: 'Modifica alias3' })).toBeVisible();
+  await expect(detail.getByRole('progressbar')).toHaveCount(0);
+  await expect(detail.getByRole('button', { name: /Passa a questo account/ })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /Indietro/ })).toBeFocused();
   await noHorizontalScroll(page);
   // Senza fullPage: dopo lo screenshot a pagina intera il clic cadrebbe fuori posto.
@@ -95,13 +97,33 @@ test('pagina Notifiche a 420×640 senza scroll orizzontale', async ({ page }) =>
   await page.screenshot({ path: `${SHOTS}/notifiche-420x640.png`, fullPage: true });
 });
 
-test('tooltip al passaggio del mouse, dentro la finestra', async ({ page }) => {
+test('tooltip: non copre i controlli vicini e sparisce all’uscita del mouse', async ({ page }) => {
   await open(page);
-  await rules(page);
-  await page.getByRole('button', { name: 'Usa ora alias1' }).hover();
-  const tip = page.getByRole('tooltip').filter({ hasText: 'Passa subito a questa utenza' });
+  await page.getByRole('button', { name: 'Gestisci l’account alias3' }).click();
+  const back = page.getByRole('button', { name: /Indietro/ });
+  await back.hover();
+  const tip = page.getByRole('tooltip').filter({ hasText: 'Torna all’elenco degli account.' });
   await expect(tip).toBeVisible();
   const box = (await tip.boundingBox())!;
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(420);
+  const covered = await page.evaluate(
+    ({ x, y, width, height }) =>
+      [...document.querySelectorAll('button, input, select, [role="switch"]')]
+        .filter((el) => !el.closest('.sd-tip')?.querySelector('[role="tooltip"]:not([hidden])'))
+        .map((el) => ({ el, r: el.getBoundingClientRect() }))
+        .filter(
+          ({ r }) =>
+            r.width > 0 && r.left < x + width && r.right > x && r.top < y + height && r.bottom > y,
+        )
+        .map(({ el }) => el.textContent ?? ''),
+    box,
+  );
+  expect(covered).toEqual([]);
+  await page.mouse.move(400, 630);
+  await expect(tip).toBeHidden();
+  await back.hover();
+  await expect(tip).toBeVisible();
+  await page.getByRole('textbox', { name: 'Alias', exact: true }).click();
+  await expect(tip).toBeHidden();
 });

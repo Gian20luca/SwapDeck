@@ -57,10 +57,6 @@ export const itFlow = {
   'flow.include': 'Includi {name}',
   'flow.include.tip':
     'Acceso: il motore può usare questa utenza. Spento: non la sceglie mai e, se è attiva, non la tocca.',
-  'flow.useNow': 'Usa ora',
-  'flow.useNow.label': 'Usa ora {name}',
-  'flow.useNow.tip': 'Passa subito a questa utenza, senza aspettare le soglie del motore.',
-  'flow.useNow.done': 'Ora è attiva {name}.',
   'flow.active': 'attiva',
   'flow.missing': 'non esiste in cswap',
   'flow.missingWarn': 'La mappa cita utenze che non esistono in cswap: {list}. Il motore le salta.',
@@ -133,4 +129,5 @@ export const itFlow = {
   'detail.danger': 'Rimozione',
   'detail.remove.tip':
     'Toglie l’utenza da cswap, dopo una conferma. Per riaverla serve un nuovo login.',
+  'detail.title': 'Modifica {name}',
 } as const;

@@ -106,14 +106,13 @@ describe('RulesPage: flusso a lista', () => {
     expect(save.mock.calls[0]![0]).toMatchObject({ order: [6, 1, 2, 3, 5], excluded: [2, 5] });
   });
 
-  it('«Usa ora» passa subito all’utenza, senza conferma', async () => {
-    const { backend, user } = await setup({ rules: { primary: 6, reserves: [1, 3] } });
-    await user.click(screen.getByRole('button', { name: 'Usa ora alias1' }));
-    await waitFor(() =>
-      expect(backend.actionLog).toContainEqual({ kind: 'switch', target: 1, force: false }),
-    );
-    expect(screen.queryByRole('alertdialog')).toBeNull();
-    expect(await screen.findByText('Ora è attiva alias1.')).toBeInTheDocument();
+  it('nessun «Usa ora» nelle righe: solo maniglia, nome, % e interruttore', async () => {
+    await setup({ rules: { primary: 6, reserves: [1, 3] } });
+    const row = screen.getByTestId('flow-row-1');
+    expect(within(row).getAllByRole('button')).toHaveLength(1);
+    expect(within(row).getByRole('switch')).toBeInTheDocument();
+    expect(within(row).getByText(/5h .* · 7d /)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Usa ora/ })).toBeNull();
   });
 
   it('«Adesso andrebbe a» dal candidato del motore', async () => {

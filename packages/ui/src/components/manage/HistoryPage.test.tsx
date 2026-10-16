@@ -138,3 +138,16 @@ describe('decisionText', () => {
     );
   });
 });
+
+describe('HistoryPage: intestazione compatta', () => {
+  it('nome, badge e «5h · 7d» con i reset nel tooltip, senza la scheda completa', async () => {
+    renderWith(<HistoryPage />, new FakeBackend());
+    const summary = await screen.findByTestId('summary-6');
+    expect(within(summary).getByText('alias6')).toBeInTheDocument();
+    expect(within(summary).getByText('Attivo')).toBeInTheDocument();
+    const five = within(summary).getByText(/^5h [0-9]+%$/);
+    expect(five).toHaveAccessibleDescription(/Reset tra/);
+    expect(within(summary).getByText(/^7d [0-9]+%$/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Passa a questo account/ })).toBeNull();
+  });
+});

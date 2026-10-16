@@ -5,7 +5,7 @@ import { FakeBackend } from '../dev/FakeBackend.js';
 import { renderWith } from '../dev/testUtils.js';
 import { MiniWidget } from './MiniWidget.js';
 import { SwapDeckApp } from './SwapDeckApp.js';
-import { Tooltip } from './Tooltip.js';
+import { placeTip, Tooltip } from './Tooltip.js';
 
 vi.mock('uplot', () => ({
   default: class {
@@ -72,6 +72,31 @@ describe('Tooltip', () => {
       new FakeBackend(),
     );
     expect(document.querySelectorAll('[role="tooltip"]')).toHaveLength(1);
+  });
+});
+
+describe('placeTip', () => {
+  const view = { width: 420, height: 640 };
+  const size = { width: 200, height: 40 };
+  it('sotto se libero; sopra se sotto c’è un controllo; mai fuori dalla finestra', () => {
+    const anchor = { left: 20, top: 100, width: 80, height: 26 };
+    expect(placeTip(anchor, size, view, [])).toEqual({ left: 8, top: 132 });
+    const below = { left: 20, top: 140, width: 120, height: 26 };
+    const p = placeTip(anchor, size, view, [below]);
+    expect(p.top).toBe(54);
+    // In fondo alla finestra non c'è spazio sotto: sopra.
+    const low = { left: 300, top: 600, width: 80, height: 26 };
+    const q = placeTip(low, size, view, []);
+    expect(q.top + size.height).toBeLessThanOrEqual(600);
+    expect(q.left + size.width).toBeLessThanOrEqual(view.width - 8);
+  });
+
+  it('di lato se sopra e sotto ci sono controlli', () => {
+    const anchor = { left: 20, top: 300, width: 60, height: 26 };
+    const above = { left: 0, top: 240, width: 420, height: 50 };
+    const below = { left: 0, top: 336, width: 420, height: 50 };
+    const p = placeTip(anchor, { width: 150, height: 30 }, view, [above, below]);
+    expect(p.left).toBe(86);
   });
 });
 

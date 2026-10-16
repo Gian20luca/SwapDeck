@@ -1,5 +1,5 @@
 import type { Account } from '@swapdeck/types';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { actions } from '../../backend/actions.js';
 import { useActionRunner } from '../../backend/useActionRunner.js';
 import { useI18n } from '../../i18n/index.js';
@@ -13,19 +13,19 @@ export interface AccountDetailPageProps {
   account: Account | undefined;
   /** Tutti gli account, per lo scambio e gli slot occupati. */
   accounts: Account[];
-  /** Scheda dell'account (percentuali, reset, Storico, cambio) resa da chi chiama. */
-  card: ReactNode;
   /** Torna all'elenco; `notice` è l'esito da mostrare lì (per esempio dopo la rimozione). */
   onBack: (notice?: string) => void;
   /** L'utenza ha cambiato slot (sposta o scambia): la pagina la segue. */
   onNumberChange: (number: number) => void;
 }
 
-/** Pagina di una sola utenza (F19): alias, attiva/disattiva, slot, terminale, rimozione, con «Indietro». */
+/**
+ * Pagina di modifica di una sola utenza (F19): alias, attiva/disattiva, terminale, slot e rimozione,
+ * con «Indietro». Niente scheda né percentuali: basta il nome nel titolo.
+ */
 export function AccountDetailPage({
   account,
   accounts,
-  card,
   onBack,
   onNumberChange,
 }: AccountDetailPageProps) {
@@ -74,9 +74,8 @@ export function AccountDetailPage({
     <div className="sd-page" role="region" aria-label={t('manage.group', { name })}>
       <div className="sd-detail__head">
         {backButton}
-        <h2>{name}</h2>
+        <h2>{t('detail.title', { name })}</h2>
       </div>
-      <ul className="sd-list">{card}</ul>
 
       <Section title={t('detail.name')}>
         <div className="sd-form">
