@@ -162,7 +162,11 @@ mod tests {
     use crate::settings::{Settings, SettingsStore};
 
     fn shared() -> Shared {
-        Shared::new(Arc::new(MockApi::new()), SettingsStore, Settings::default())
+        Shared::new(
+            Arc::new(MockApi::new()),
+            SettingsStore::in_memory(),
+            Settings::default(),
+        )
     }
 
     #[test]

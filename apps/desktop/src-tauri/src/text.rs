@@ -10,21 +10,6 @@ pub enum Lang {
     En,
 }
 
-impl Lang {
-    /// Lingua da un tag BCP 47 (`it-IT`, `en-US`): inglese solo se richiesto, altrimenti italiano.
-    pub fn from_tag(tag: Option<&str>) -> Self {
-        match tag {
-            Some(t) if t.to_ascii_lowercase().starts_with("en") => Self::En,
-            _ => Self::It,
-        }
-    }
-
-    /// Lingua del sistema.
-    pub fn system() -> Self {
-        Self::from_tag(sys_locale::get_locale().as_deref())
-    }
-}
-
 pub struct Labels {
     pub open: &'static str,
     pub mini: &'static str,
@@ -193,14 +178,6 @@ mod tests {
     use super::*;
     use crate::api::mock::fixture_list;
     use swapdeck_core::cswap::CswapErrorKind;
-
-    #[test]
-    fn language_from_tag() {
-        assert_eq!(Lang::from_tag(Some("en-US")), Lang::En);
-        assert_eq!(Lang::from_tag(Some("it-IT")), Lang::It);
-        assert_eq!(Lang::from_tag(Some("de-DE")), Lang::It);
-        assert_eq!(Lang::from_tag(None), Lang::It);
-    }
 
     #[test]
     fn tooltip_shows_active_account_and_error() {

@@ -121,6 +121,11 @@ pub fn run(api: Arc<dyn CswapApi>) {
             if !start_hidden {
                 windows::show_main(&handle);
             }
+            // Solo per le prove di sviluppo (screenshot senza cliccare il menu).
+            #[cfg(debug_assertions)]
+            if std::env::var_os("SWAPDECK_DEV_OPEN_MINI").is_some() {
+                windows::toggle_mini(&handle);
+            }
             Ok(())
         })
         .build(tauri::generate_context!())

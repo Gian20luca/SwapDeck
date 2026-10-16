@@ -6,8 +6,6 @@ use std::collections::HashMap;
 
 use swapdeck_core::cswap::{Account, ListResponse, UsageWindow};
 
-/// Soglie di default (piano, F2).
-pub const DEFAULT_THRESHOLDS: [f64; 2] = [80.0, 95.0];
 /// Calo della % che indica una finestra nuova anche senza `resetsAt`.
 const RESET_DROP_PCT: f64 = 10.0;
 
@@ -210,7 +208,7 @@ mod tests {
 
     #[test]
     fn each_threshold_once_per_window() {
-        let mut n = Notifier::new(&DEFAULT_THRESHOLDS);
+        let mut n = Notifier::new(&[80.0, 95.0]);
         assert!(n.observe(&list_with(6, 50.0, R1)).is_empty());
         assert_eq!(thresholds(&n.observe(&list_with(6, 81.0, R1))), [80.0]);
         assert!(n.observe(&list_with(6, 85.0, R1_JITTER)).is_empty());
@@ -224,7 +222,7 @@ mod tests {
 
     #[test]
     fn jump_over_two_thresholds_notifies_only_the_highest() {
-        let mut n = Notifier::new(&DEFAULT_THRESHOLDS);
+        let mut n = Notifier::new(&[80.0, 95.0]);
         let first = n.observe(&list_with(6, 96.0, R1));
         assert_eq!(thresholds(&first), [95.0]);
         assert!(n.observe(&list_with(6, 97.0, R1)).is_empty());

@@ -29,5 +29,5 @@ fn main() {
         }
         std::process::exit(swapdeck_core::headless::cli_main(&args[1..], &stop));
     }
-    app::run(Arc::new(api::MissingClient));
+    app::run(Arc::new(api::ClientApi::new()));
 }

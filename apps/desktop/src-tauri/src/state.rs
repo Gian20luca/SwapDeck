@@ -60,6 +60,8 @@ pub struct Shared {
     pub api: Arc<dyn CswapApi>,
     pub snapshot: Mutex<Snapshot>,
     pub settings: Mutex<Settings>,
+    /// Ultime impostazioni scritte (o lette): si riscrive solo se cambiano.
+    saved: Mutex<Settings>,
     pub store: SettingsStore,
     pub notifier: Mutex<Notifier>,
     /// Firma dell'ultimo menu costruito: si ricostruisce solo se cambia.
@@ -74,6 +76,7 @@ impl Shared {
             api,
             snapshot: Mutex::new(Snapshot::default()),
             notifier: Mutex::new(Notifier::new(&settings.thresholds)),
+            saved: Mutex::new(settings.clone()),
             settings: Mutex::new(settings),
             store,
             menu_signature: Mutex::new(String::new()),
@@ -83,7 +86,13 @@ impl Shared {
 
     pub fn save_settings(&self) -> Result<(), String> {
         let settings = lock(&self.settings).clone();
-        self.store.save(&settings)
+        let mut saved = lock(&self.saved);
+        if *saved == settings {
+            return Ok(());
+        }
+        self.store.save(&settings)?;
+        *saved = settings;
+        Ok(())
     }
 }
 

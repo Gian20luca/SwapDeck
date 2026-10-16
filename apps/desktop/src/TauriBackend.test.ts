@@ -80,6 +80,10 @@ describe('TauriBackend', () => {
       args: { action: { kind: 'switch', target: 3 } },
     });
     const plain = setup({ run_action: { message: 'alias impostato' } });
+    const warned = setup({ run_action: { message: 'cambiato', warning: 'non verificato' } });
+    await expect(warned.backend.runAction({ kind: 'switch', target: 2 })).resolves.toEqual({
+      message: 'cambiato — non verificato',
+    });
     await expect(plain.backend.runAction({ kind: 'enable', account: 2 })).resolves.toEqual({
       message: 'alias impostato',
     });

@@ -18,11 +18,13 @@ ctrlc = "3.5.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 swapdeck-core = { path = "../../../crates/swapdeck-core" }
-sys-locale = "0.3.2"
 tauri = { version = "2.12.4", features = ["tray-icon"] }
 tauri-plugin-autostart = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-single-instance = "2"
+
+[dev-dependencies]
+tempfile = "3.27.0"
 
 [features]
 # Incorpora la pagina compilata (`apps/desktop/dist`) invece di usare il server di Vite.

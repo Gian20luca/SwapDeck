@@ -33,6 +33,8 @@ interface RustOutcome {
   message: string;
   list?: ListResponse;
   switch?: SwitchResponse;
+  /** Azione riuscita ma non verificata. */
+  warning?: string;
 }
 
 /** Impostazioni dell'app (`AppSettingsView` del Rust). */
@@ -106,7 +108,8 @@ export class TauriBackend implements Backend {
 
   async runAction(action: CswapAction): Promise<ActionOutcome> {
     const outcome = await this.call<RustOutcome>('run_action', { action });
-    const result: ActionOutcome = { message: outcome.message };
+    const message = [outcome.message, outcome.warning].filter(Boolean).join(' — ');
+    const result: ActionOutcome = { message };
     if (outcome.switch) result.switch = outcome.switch;
     return result;
   }

@@ -82,11 +82,11 @@ Build di sviluppo: `pnpm --filter @swapdeck/desktop build`, poi `cargo build -p 
 |---|---|
 | `src/TauriBackend.ts` | `Backend` con `invoke` ed evento `state-changed` (`Snapshot`: lista, errore, motore sospeso); comandi dell'app (`getAppSettings`, `setAutostart`, `showMain`) |
 | `src/main.tsx` | dashboard nella finestra `main`, `MiniWidget` trascinabile nella finestra `mini` (scelta dall'etichetta della finestra); `AutostartToggle.tsx` |
-| `src-tauri/src/api.rs` | interfaccia sottile `CswapApi` (list, status, config, execute) e finto per i test |
+| `src-tauri/src/api.rs` | interfaccia sottile `CswapApi`; `ClientApi` sopra `CswapClient` (ricerca pigra, una chiamata alla volta, `cswap auto`); finto per i test |
 | `src-tauri/src/poller.rs` | ciclo di lettura: un thread, `list` a ogni intervallo e a richiesta, richieste unite |
 | `src-tauri/src/state.rs` | `Shared` (api, `Snapshot`, impostazioni, notifiche), evento `state-changed` |
 | `src-tauri/src/commands.rs` | comandi `invoke` (elenco in `build.rs`, permessi in `capabilities/`) |
 | `src-tauri/src/tray.rs`, `ring.rs` | icona ad anello disegnata a runtime, tooltip, menu con il cambio rapido |
 | `src-tauri/src/notify.rs`, `text.rs` | soglie e cambi di account (una volta per finestra di reset), testi it/en |
 | `src-tauri/src/windows.rs` | principale nascosta alla chiusura, mini-widget con posizione ricordata |
-| `src-tauri/src/settings.rs`, `terminal.rs`, `app.rs` | impostazioni dalla config, terminale di `cswap run`, avvio e plugin |
+| `src-tauri/src/settings.rs`, `terminal.rs`, `app.rs` | impostazioni da `config.json` (`autostart` e `miniWidget` in `extra`), terminale di `cswap run`, avvio e plugin |
