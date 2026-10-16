@@ -209,3 +209,52 @@ describe('UsageBar: data e ora del reset', () => {
     expect(screen.queryByText(/Al ritmo attuale finisce/)).toBeNull();
   });
 });
+
+describe('UsageBar: reset già avvenuto', () => {
+  // Ore locali, come le mostra la barra: 14:13 del 16, reset alle 00:20 dello stesso giorno.
+  const at1413 = new Date(2026, 9, 16, 14, 13).getTime();
+  const today0020 = new Date(2026, 9, 16, 0, 20).toISOString();
+  const yesterday2350 = new Date(2026, 9, 15, 23, 50).toISOString();
+
+  it('di oggi: «Reset avvenuto alle …» e barra in stile dato vecchio, valore conservato', () => {
+    const { container } = render(
+      <UsageBar label="5 ore" accountName="a" pct={88} resetsAt={today0020} now={at1413} />,
+    );
+    expect(screen.getByText('Reset avvenuto alle 00:20 · dati da aggiornare')).toBeInTheDocument();
+    expect(screen.queryByText(/Reset tra/)).toBeNull();
+    expect(container.querySelector('.sd-bar')).toHaveAttribute('data-expired', 'true');
+    expect(screen.getByText('88%')).toBeInTheDocument();
+  });
+
+  it('di ieri, anche compatta e in inglese; niente riga di esaurimento', () => {
+    const { container } = renderWith(
+      <UsageBar
+        label="7 days"
+        accountName="a"
+        pct={40}
+        resetsAt={yesterday2350}
+        exhaustionAt={new Date(2026, 9, 15, 20, 0).toISOString()}
+        now={at1413}
+        compact
+      />,
+      new FakeBackend(),
+      'en',
+    );
+    expect(screen.getByText('Reset yesterday 23:50 · data needs a refresh')).toBeInTheDocument();
+    expect(container.querySelector('.sd-bar__exhaust')).toBeNull();
+  });
+
+  it('reset futuro: conto alla rovescia, senza stile di dato vecchio', () => {
+    const { container } = render(
+      <UsageBar
+        label="5 ore"
+        accountName="a"
+        pct={10}
+        resetsAt={new Date(2026, 9, 16, 15, 0).toISOString()}
+        now={at1413}
+      />,
+    );
+    expect(screen.getByText('Reset tra 47m · oggi 15:00')).toBeInTheDocument();
+    expect(container.querySelector('.sd-bar')).not.toHaveAttribute('data-expired');
+  });
+});

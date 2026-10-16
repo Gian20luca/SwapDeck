@@ -194,6 +194,18 @@ body {
 .sd-bar[data-level='unknown'] .sd-bar__fill {
   background: var(--sd-border);
 }
+/* Reset già avvenuto: valore della finestra precedente, barra smorzata e righe come dato vecchio. */
+.sd-bar[data-expired] .sd-bar__fill {
+  opacity: 0.45;
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 3px,
+    rgba(127, 127, 127, 0.5) 3px 6px
+  );
+}
+.sd-bar[data-expired] .sd-bar__foot {
+  color: var(--sd-warn);
+}
 .sd-bar__rail {
   position: relative;
 }

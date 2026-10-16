@@ -1,6 +1,13 @@
 import { useId } from 'react';
 import type { EngineMark } from '../lib/engineMarks.js';
-import { countdownTo, displayPct, formatWhen, levelFor, type Thresholds } from '../lib/format.js';
+import {
+  countdownTo,
+  displayPct,
+  formatWhen,
+  levelFor,
+  pastReset,
+  type Thresholds,
+} from '../lib/format.js';
 import { useI18n } from '../i18n/index.js';
 
 export interface UsageBarProps {
@@ -100,10 +107,19 @@ export function UsageBar({
   const shown = known ? displayPct(pct) : null;
   const level = levelFor(pct, thresholds);
   const countdown = countdownTo(resetsAt, now);
-  const words = { today: t('date.today'), tomorrow: t('date.tomorrow') };
+  const words = {
+    today: t('date.today'),
+    tomorrow: t('date.tomorrow'),
+    yesterday: t('date.yesterday'),
+  };
   const resetWhen = formatWhen(resetsAt, now, locale, words);
-  const resetText =
-    countdown === null
+  // Reset già avvenuto: il valore letto è della finestra precedente, niente conto alla rovescia.
+  const past = pastReset(resetsAt, now, locale, words);
+  const resetText = past
+    ? past.today
+      ? t('usage.resetPassedAt', { time: past.time })
+      : t('usage.resetPassed', { when: past.when })
+    : countdown === null
       ? t('usage.noReset')
       : resetWhen
         ? t('usage.resetsAtWhen', { time: countdown, when: resetWhen })
@@ -111,14 +127,19 @@ export function UsageBar({
   const exhaustMs = exhaustionAt ? Date.parse(exhaustionAt) : Number.NaN;
   const resetMs = resetsAt ? Date.parse(resetsAt) : Number.NaN;
   const exhaustWhen =
-    !Number.isNaN(exhaustMs) && (Number.isNaN(resetMs) || exhaustMs < resetMs)
+    !past && !Number.isNaN(exhaustMs) && (Number.isNaN(resetMs) || exhaustMs < resetMs)
       ? formatWhen(exhaustionAt, now, locale, words)
       : null;
   const pctText = shown === null ? t('usage.unknown') : t('usage.pct', { pct: shown });
   const hasPace = expectedPct !== null && expectedPct !== undefined && Number.isFinite(expectedPct);
 
   return (
-    <div className="sd-bar" data-level={level} data-compact={compact || undefined}>
+    <div
+      className="sd-bar"
+      data-level={level}
+      data-compact={compact || undefined}
+      data-expired={past ? true : undefined}
+    >
       <div className="sd-bar__head">
         <span>{label}</span>
         <span className="sd-bar__pct">{pctText}</span>

@@ -21,6 +21,9 @@ use crate::text::Lang;
 const KEY_AUTOSTART: &str = "autostart";
 const KEY_MINI: &str = "miniWidget";
 const KEY_UPDATES: &str = "updates";
+/// Sottochiavi di `miniWidget`.
+const KEY_COMPACT_POS: &str = "compactPosition";
+const KEY_EXPANDED_POS: &str = "expandedPosition";
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
@@ -33,8 +36,12 @@ pub struct Settings {
     pub autostart: bool,
     /// La chiave `autostart` c'era nella config (altrimenti è il primo avvio).
     pub autostart_saved: bool,
-    /// Ultima posizione del mini-widget, in pixel fisici.
-    pub mini_position: Option<(i32, i32)>,
+    /// Posizione della striscia compressa scelta dall'utente (`miniWidget.compactPosition`),
+    /// angolo in alto a sinistra in pixel fisici.
+    pub mini_compact_position: Option<(i32, i32)>,
+    /// Posizione del widget esteso scelta dall'utente (`miniWidget.expandedPosition`); si
+    /// azzera quando l'utente sposta la striscia, così l'espansione riparte da lì.
+    pub mini_expanded_position: Option<(i32, i32)>,
     /// Il mini-widget è ridotto a una striscia (chiave `miniWidget.compact`).
     pub mini_compact: bool,
     /// Aggiornamenti dalle GitHub Releases (`updates.enabled`): spenti di default finché il
@@ -58,9 +65,35 @@ fn mini_compact(v: Option<&Value>) -> bool {
 
 fn mini_position(v: Option<&Value>) -> Option<(i32, i32)> {
     let v = v?;
+    if !v.is_object() {
+        return None;
+    }
     let x = i32::try_from(v.get("x")?.as_i64()?).ok()?;
     let y = i32::try_from(v.get("y")?.as_i64()?).ok()?;
     Some((x, y))
+}
+
+/// Posizioni compressa ed estesa. Migrazione: la posizione unica di prima (`x`, `y`) era
+/// quella della finestra nello stato salvato, quindi vale per quello stato.
+fn mini_positions(v: Option<&Value>) -> (Option<(i32, i32)>, Option<(i32, i32)>) {
+    let Some(v) = v else {
+        return (None, None);
+    };
+    let compact = mini_position(v.get(KEY_COMPACT_POS));
+    let expanded = mini_position(v.get(KEY_EXPANDED_POS));
+    if v.get(KEY_COMPACT_POS).is_some() || v.get(KEY_EXPANDED_POS).is_some() {
+        return (compact, expanded);
+    }
+    let legacy = mini_position(Some(v));
+    if mini_compact(Some(v)) {
+        (legacy, None)
+    } else {
+        (None, legacy)
+    }
+}
+
+fn position_json((x, y): (i32, i32)) -> Value {
+    json!({ "x": x, "y": y })
 }
 
 impl Settings {
@@ -80,7 +113,8 @@ impl Settings {
                 .get(KEY_AUTOSTART)
                 .and_then(Value::as_bool)
                 .is_some(),
-            mini_position: mini_position(c.extra.get(KEY_MINI)),
+            mini_compact_position: mini_positions(c.extra.get(KEY_MINI)).0,
+            mini_expanded_position: mini_positions(c.extra.get(KEY_MINI)).1,
             mini_compact: mini_compact(c.extra.get(KEY_MINI)),
             updates_enabled: c
                 .extra
@@ -142,10 +176,19 @@ impl Settings {
     pub fn patch(&self, c: &mut AppConfig) {
         c.extra
             .insert(KEY_AUTOSTART.into(), Value::Bool(self.autostart));
-        let mut mini = serde_json::Map::new();
-        if let Some((x, y)) = self.mini_position {
-            mini.insert("x".into(), json!(x));
-            mini.insert("y".into(), json!(y));
+        // Le altre sottochiavi (di versioni future) restano; la posizione unica di prima no.
+        let mut mini = match c.extra.get(KEY_MINI) {
+            Some(Value::Object(m)) => m.clone(),
+            _ => serde_json::Map::new(),
+        };
+        for key in ["x", "y", "compact", KEY_COMPACT_POS, KEY_EXPANDED_POS] {
+            mini.remove(key);
+        }
+        if let Some(p) = self.mini_compact_position {
+            mini.insert(KEY_COMPACT_POS.into(), position_json(p));
+        }
+        if let Some(p) = self.mini_expanded_position {
+            mini.insert(KEY_EXPANDED_POS.into(), position_json(p));
         }
         if self.mini_compact {
             mini.insert("compact".into(), Value::Bool(true));
@@ -257,7 +300,8 @@ mod tests {
         assert_eq!(s.poll_interval, Duration::from_secs(60));
         assert_eq!(s.notifications.thresholds, [80.0, 95.0]);
         assert!(s.autostart);
-        assert_eq!(s.mini_position, None);
+        assert_eq!(s.mini_compact_position, None);
+        assert_eq!(s.mini_expanded_position, None);
         assert!(!s.mini_compact);
         assert!(!s.updates_enabled, "aggiornamenti spenti di default");
     }
@@ -293,12 +337,14 @@ mod tests {
         assert_eq!(s.poll_interval, Duration::from_secs(120));
         assert_eq!(s.lang, Lang::En);
         s.autostart = false;
-        s.mini_position = Some((-1200, 40));
+        s.mini_compact_position = Some((-1200, 40));
+        s.mini_expanded_position = Some((-1200, -100));
         store.save(&s).unwrap();
         let (_, again, _) = SettingsStore::at(paths.clone()).read();
         assert!(!again.autostart);
         assert!(again.autostart_saved);
-        assert_eq!(again.mini_position, Some((-1200, 40)));
+        assert_eq!(again.mini_compact_position, Some((-1200, 40)));
+        assert_eq!(again.mini_expanded_position, Some((-1200, -100)));
         let text = std::fs::read_to_string(paths.config_file()).unwrap();
         assert!(
             text.contains("\"futureKey\""),
@@ -331,28 +377,68 @@ mod tests {
         .unwrap();
         let (store, mut s, _) = SettingsStore::at(paths.clone()).read();
         assert!(!s.mini_compact, "chiave assente: espanso");
+        assert_eq!(
+            s.mini_expanded_position,
+            Some((10, 20)),
+            "migrata come estesa"
+        );
+        assert_eq!(s.mini_compact_position, None);
         s.mini_compact = true;
         store.save(&s).unwrap();
         let (_, again, _) = SettingsStore::at(paths.clone()).read();
         assert!(again.mini_compact);
-        assert_eq!(again.mini_position, Some((10, 20)), "posizione conservata");
+        assert_eq!(again.mini_expanded_position, Some((10, 20)), "conservata");
         let v: Value =
             serde_json::from_str(&std::fs::read_to_string(paths.config_file()).unwrap()).unwrap();
         assert_eq!(v["miniWidget"]["compact"], true);
+        assert_eq!(
+            v["miniWidget"]["expandedPosition"],
+            json!({"x": 10, "y": 20})
+        );
+        assert!(v["miniWidget"].get("x").is_none(), "posizione unica tolta");
         assert_eq!(v["futureKey"], 1);
-        // Compresso senza posizione salvata: la chiave c'è comunque e si rilegge.
+        // Compresso senza posizioni salvate: la chiave c'è comunque e si rilegge.
         let mut s2 = again.clone();
-        s2.mini_position = None;
+        s2.mini_expanded_position = None;
         store.save(&s2).unwrap();
         let (_, back, _) = SettingsStore::at(paths.clone()).read();
         assert!(back.mini_compact);
-        assert_eq!(back.mini_position, None);
+        assert_eq!(back.mini_expanded_position, None);
         // Di nuovo espanso: resta solo la posizione, niente chiave `compact`.
         let mut s3 = again;
         s3.mini_compact = false;
         store.save(&s3).unwrap();
         let text = std::fs::read_to_string(paths.config_file()).unwrap();
         assert!(!text.contains("compact"), "{text}");
+    }
+
+    #[test]
+    fn legacy_position_of_a_compact_widget_becomes_the_compact_one() {
+        let legacy = json!({"x": 1500, "y": 990, "compact": true});
+        assert_eq!(mini_positions(Some(&legacy)), (Some((1500, 990)), None));
+        let both = json!({
+            "x": 1, "y": 2,
+            "compactPosition": {"x": 3, "y": 4},
+            "expandedPosition": {"x": 5, "y": "?"},
+        });
+        assert_eq!(mini_positions(Some(&both)), (Some((3, 4)), None));
+        assert_eq!(mini_positions(Some(&json!(7))), (None, None));
+        assert_eq!(mini_positions(None), (None, None));
+        // Sottochiavi sconosciute conservate alla scrittura.
+        let mut c = AppConfig::default();
+        c.extra
+            .insert(KEY_MINI.into(), json!({"x": 1, "y": 2, "future": true}));
+        let mut s = Settings::from_config(&c);
+        s.mini_compact_position = Some((8, 9));
+        s.patch(&mut c);
+        assert_eq!(
+            c.extra[KEY_MINI],
+            json!({
+                "future": true,
+                "compactPosition": {"x": 8, "y": 9},
+                "expandedPosition": {"x": 1, "y": 2},
+            })
+        );
     }
 
     #[test]

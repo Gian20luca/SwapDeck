@@ -8,6 +8,7 @@ import {
   formatCountdown,
   isStale,
   levelFor,
+  pastReset,
   shortEmail,
 } from './format.js';
 
@@ -140,5 +141,43 @@ describe('formatWhen', () => {
   it('dato assente o non valido', () => {
     expect(formatWhen(null, now, 'it', words)).toBeNull();
     expect(formatWhen('x', now, 'it', words)).toBeNull();
+  });
+  it('ieri solo con la parola, altrimenti giorno e data', () => {
+    const y = '2026-10-15T22:20:00Z'; // 00:20 del 16 a Roma: ieri rispetto al 17
+    const next = Date.parse('2026-10-17T12:13:00Z');
+    expect(formatWhen(y, next, 'it', { ...words, yesterday: 'ieri' }, rome)).toBe('ieri 00:20');
+    expect(formatWhen(y, next, 'it', words, rome)).toBe('ven 16/10 00:20');
+  });
+});
+
+describe('pastReset', () => {
+  const words = { today: 'oggi', tomorrow: 'domani', yesterday: 'ieri' };
+  const rome = 'Europe/Rome';
+  const now = Date.parse('2026-10-16T12:13:00Z'); // 14:13 a Roma
+
+  it('reset di oggi già avvenuto: solo l’ora', () => {
+    expect(pastReset('2026-10-15T22:20:00Z', now, 'it', words, rome)).toEqual({
+      today: true,
+      time: '00:20',
+      when: 'oggi 00:20',
+    });
+  });
+  it('reset di ieri', () => {
+    expect(pastReset('2026-10-15T21:50:00Z', now, 'it', words, rome)).toMatchObject({
+      today: false,
+      when: 'ieri 23:50',
+    });
+    expect(
+      pastReset('2026-10-15T21:50:00Z', now, 'en', { ...words, yesterday: 'yesterday' }, rome)
+        ?.when,
+    ).toBe('yesterday 23:50');
+  });
+  it('reset futuro, assente o non valido: null', () => {
+    expect(pastReset('2026-10-16T12:14:00Z', now, 'it', words, rome)).toBeNull();
+    expect(pastReset(null, now, 'it', words)).toBeNull();
+    expect(pastReset('x', now, 'it', words)).toBeNull();
+  });
+  it('l’istante esatto del reset conta già come passato', () => {
+    expect(pastReset('2026-10-16T12:13:00Z', now, 'it', words, rome)?.today).toBe(true);
   });
 });

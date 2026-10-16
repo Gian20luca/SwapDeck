@@ -90,6 +90,8 @@ export function formatClock(iso: string | null | undefined): string | null {
 export interface WhenWords {
   today: string;
   tomorrow: string;
+  /** Per gli istanti passati, come il reset già avvenuto; senza, ieri ha giorno e data. */
+  yesterday?: string;
 }
 
 /** Numero del giorno di calendario di un istante nel fuso dato (locale se assente). */
@@ -104,9 +106,42 @@ function dayNumber(ms: number, timeZone: string | undefined): number {
   return Date.UTC(get('year'), get('month') - 1, get('day')) / 86_400_000;
 }
 
+/** Ora `HH:MM` (24 ore) di un istante nel fuso dato (locale se assente). */
+function clockOf(ms: number, locale: string, timeZone: string | undefined): string {
+  return new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    ...(timeZone ? { timeZone } : {}),
+  }).format(ms);
+}
+
+/**
+ * Reset già avvenuto (`resetsAt` non nel futuro): `today` con la sola ora se è di oggi
+ * («alle 00:20»), altrimenti `when` come [`formatWhen`] (`ieri 00:20`, `ven 16/10 00:20`).
+ * `null` se il reset manca, non è valido o deve ancora arrivare.
+ */
+export function pastReset(
+  resetsAt: string | null | undefined,
+  now: number,
+  locale: string,
+  words: WhenWords,
+  timeZone?: string,
+): { today: boolean; time: string; when: string } | null {
+  if (!resetsAt) return null;
+  const ms = Date.parse(resetsAt);
+  if (Number.isNaN(ms) || ms > now) return null;
+  return {
+    today: dayNumber(ms, timeZone) === dayNumber(now, timeZone),
+    time: clockOf(ms, locale, timeZone),
+    when: formatWhen(resetsAt, now, locale, words, timeZone) ?? '',
+  };
+}
+
 /**
  * Data e ora esatte di un istante ISO 8601 nel fuso locale, con `Intl.DateTimeFormat`:
- * `oggi 15:12`, `domani 09:00`, altrimenti `ven 16/10 15:12` (`Fri 10/16 15:12` in inglese).
+ * `oggi 15:12`, `domani 09:00`, `ieri 00:20` (se `words.yesterday` c'è), altrimenti
+ * `ven 16/10 15:12` (`Fri 10/16 15:12` in inglese).
  * `null` se manca o non è valido. `timeZone` (IANA) serve ai test; di norma vale il fuso locale.
  */
 export function formatWhen(
@@ -120,15 +155,11 @@ export function formatWhen(
   const ms = Date.parse(iso);
   if (Number.isNaN(ms)) return null;
   const tz = timeZone ? { timeZone } : {};
-  const time = new Intl.DateTimeFormat(locale, {
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-    ...tz,
-  }).format(ms);
+  const time = clockOf(ms, locale, timeZone);
   const days = dayNumber(ms, timeZone) - dayNumber(now, timeZone);
   if (days === 0) return `${words.today} ${time}`;
   if (days === 1) return `${words.tomorrow} ${time}`;
+  if (days === -1 && words.yesterday) return `${words.yesterday} ${time}`;
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short', ...tz }).format(ms);
   const date = new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', ...tz }).format(
     ms,
