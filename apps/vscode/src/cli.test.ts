@@ -70,7 +70,8 @@ describe('createCliRunner', { timeout: PROCESS_TEST_TIMEOUT_MS }, () => {
   });
 
   it('timeout: termina il processo e rifiuta con timeout', async () => {
-    const env = fake('setInterval(() => undefined, 1000);');
+    // Bloccato nel preload: Node non arriva mai a cercare lo script `state` (che non esiste).
+    const env = fake('Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);');
     await expect(run(['state'], { env, timeoutMs: 300 })).rejects.toMatchObject({
       info: { kind: 'timeout' },
     });

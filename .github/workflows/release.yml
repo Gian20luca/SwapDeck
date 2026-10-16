@@ -7,10 +7,6 @@ name: Release
 on:
   push:
     tags: ['v*']
-    # Temporaneo (step 8): registra il workflow per il dispatch finché non è su main.
-    # Un push su un ramo vale sempre come prova, solo Windows.
-    branches: [wip/8]
-    paths: ['.github/workflows/release.yml']
   workflow_dispatch:
     inputs:
       dry_run:
