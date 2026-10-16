@@ -16,7 +16,10 @@ use crate::cswap::{
     CswapAction, CswapError, CswapVersion, DirectoryMapping, ErrorEnvelope, ListResponse,
     StatusResponse, SwitchResponse,
 };
-use crate::engine::{Decision, EngineMemory, EngineRules, EngineState, EngineView};
+use crate::engine::{
+    Decision, EngineMemory, EngineProfiles, EngineRules, EngineState, EngineView, Evaluation,
+    ProfileCommand,
+};
 use crate::history::{HistoryEvents, HistoryQuery, HistoryRecord};
 use crate::lock::LockInfo;
 use crate::setup::{SetupDiagnosis, SetupOutcome, SetupProgress, UpdateInfo};
@@ -61,6 +64,9 @@ fn render(dir: &Path) -> BTreeMap<String, String> {
     PreferencesPatch::export_all(&cfg).unwrap();
     EngineView::export_all(&cfg).unwrap();
     EngineState::export_all(&cfg).unwrap();
+    EngineProfiles::export_all(&cfg).unwrap();
+    ProfileCommand::export_all(&cfg).unwrap();
+    Evaluation::export_all(&cfg).unwrap();
     HistoryQuery::export_all(&cfg).unwrap();
     HistoryEvents::export_all(&cfg).unwrap();
 

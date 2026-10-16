@@ -24,7 +24,7 @@ use swapdeck_core::conflicts::{ConflictSource, SystemConflicts};
 use swapdeck_core::cswap::{
     ActionOutcome, AutoMessage, CswapAction, CswapClient, CswapError, CswapErrorKind,
 };
-use swapdeck_core::engine::{EngineRules, EngineState, EngineView};
+use swapdeck_core::engine::{EngineProfiles, EngineRules, EngineState, EngineView, ProfileCommand};
 use swapdeck_core::history::{History, HistoryEvents, HistoryQuery, HistoryRecord};
 use swapdeck_core::lock;
 use swapdeck_core::paths::AppPaths;
@@ -57,6 +57,7 @@ pub const USAGE: &str = "uso: swapdeck-cli <comando>
   engine status
   engine state
   engine rules set <json|->
+  engine profiles [<json|->]          (senza argomento: elenco; con un'operazione: la applica)
   setup diagnose|install|upgrade      (install e upgrade: eventi JSON per riga, poi l'esito)
   setup check-update [--force]
   setup dismiss-update <VERSIONE>
@@ -133,6 +134,8 @@ fn dispatch(args: &[String]) -> Res<Value> {
         ["preferences", "set", input] => to_value(preferences_set(&read_input(input)?)?),
         ["engine", "state"] => to_value(engine_state(&paths()?)?),
         ["engine", "rules", "set", input] => to_value(engine_rules_set(&read_input(input)?)?),
+        ["engine", "profiles"] => to_value(engine_profiles()?),
+        ["engine", "profiles", input] => to_value(engine_profile_apply(&read_input(input)?)?),
         ["config", "get"] => to_value(config_get()?),
         ["config", "set", input] => to_value(config_set(&read_input(input)?)?),
         ["engine", "status"] => to_value(engine_status(&paths()?)),
@@ -449,10 +452,9 @@ fn engine_state(paths: &AppPaths) -> Res<EngineState> {
         let events = History::new(&paths.data_dir)
             .events(&HistoryQuery::default(), now_unix())
             .unwrap_or_default();
-        events
-            .decisions
-            .last()
-            .map(|d| EngineView::new(true, &rules, Some(&d.decision)))
+        events.decisions.last().map(|d| {
+            EngineView::new(true, &rules, Some(&d.decision)).explained(d.why.clone(), None)
+        })
     } else {
         None
     };
@@ -473,6 +475,23 @@ fn engine_rules_set(text: &str) -> Res<EngineState> {
     let rules: EngineRules = serde_json::from_str(text).map_err(|e| json_error("regole", &e))?;
     let paths = paths()?;
     config::update(&paths.config_file(), |c| c.set_engine_rules(rules)).map_err(config_error)?;
+    engine_state(&paths)
+}
+
+/// Mappe e mappa attiva (migrate dalle regole se il file non le ha ancora).
+fn engine_profiles() -> Res<EngineProfiles> {
+    Ok(config::load(&paths()?.config_file())
+        .map_err(config_error)?
+        .config
+        .engine_profiles)
+}
+
+/// Applica un'operazione sulle mappe; il motore in esecuzione usa la mappa attiva dal giro dopo.
+fn engine_profile_apply(text: &str) -> Res<EngineState> {
+    let cmd: ProfileCommand = serde_json::from_str(text).map_err(|e| json_error("mappa", &e))?;
+    let paths = paths()?;
+    config::update(&paths.config_file(), |c| c.apply_profile_command(&cmd))
+        .map_err(config_error)?;
     engine_state(&paths)
 }
 

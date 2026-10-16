@@ -21,6 +21,7 @@ const CAUSE_KEYS = {
   activeNeedsRelogin: 'history.cause.activeNeedsRelogin',
   primaryReset: 'history.cause.primaryReset',
   reservesAtLimit: 'history.cause.reservesAtLimit',
+  earlierAvailable: 'history.cause.earlierAvailable',
 } as const satisfies Record<SwitchCause, MessageKey>;
 
 const IDLE_KEYS = {

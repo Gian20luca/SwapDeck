@@ -24,7 +24,10 @@ use crate::poller::Loop;
 /// resta la vista precedente.
 pub fn view_of(rules: &EngineRules, step: &Step) -> Option<EngineView> {
     let decision = step.decision.as_ref()?;
-    Some(EngineView::new(step.holder, rules, Some(decision)))
+    Some(
+        EngineView::new(step.holder, rules, Some(decision))
+            .explained(step.reason.clone(), step.candidate.clone()),
+    )
 }
 
 /// cswap visto dal motore attraverso l'interfaccia dell'app (stesso lock di chiamata dei comandi).
@@ -183,6 +186,8 @@ mod tests {
         let step = |decision| Step {
             list: Err(CswapError::new(CswapErrorKind::Failed, "x")),
             decision,
+            reason: None,
+            candidate: None,
             holder: true,
             switched_to: None,
         };

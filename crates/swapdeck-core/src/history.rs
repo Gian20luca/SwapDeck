@@ -93,6 +93,10 @@ pub struct DecisionRecord {
     pub ts: i64,
     pub decision: Decision,
     pub dry_run: bool,
+    /// Motivo leggibile (assente nelle righe scritte prima delle mappe).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub why: Option<String>,
 }
 
 /// Una riga dello storico.
@@ -609,6 +613,7 @@ mod events_tests {
             }))
             .unwrap(),
             dry_run: false,
+            why: None,
         }))
         .unwrap();
         let lines = [

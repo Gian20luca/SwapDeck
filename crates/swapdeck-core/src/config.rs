@@ -11,7 +11,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::engine::EngineRules;
+use crate::engine::{EngineProfiles, EngineRules, ProfileCommand};
 use crate::paths::create_private_dir;
 
 /// Nome del file.
@@ -93,6 +93,11 @@ pub struct AppConfig {
     /// Regole del motore.
     #[serde(default)]
     pub engine: EngineRules,
+    /// Mappe (profili con nome); `engine` sono le regole di quella attiva. Assenti nel file
+    /// = migrazione: le regole attuali diventano la mappa «Personale», più i preset.
+    #[serde(default)]
+    #[ts(skip)]
+    pub engine_profiles: EngineProfiles,
     /// Chiavi non note a questa versione, conservate così come sono.
     #[serde(flatten)]
     #[ts(skip)]
@@ -113,6 +118,7 @@ impl Default for AppConfig {
             language: Language::default(),
             theme: Theme::default(),
             engine: EngineRules::default(),
+            engine_profiles: EngineProfiles::seeded(&EngineRules::default()),
             extra: serde_json::Map::new(),
             preserved: serde_json::Map::new(),
         }
@@ -191,6 +197,8 @@ impl AppConfig {
             warnings.push("soglie delle notifiche corrette".into());
             self.notifications.thresholds = t;
         }
+        self.engine.sync_order();
+        warnings.extend(self.engine_profiles.normalize(&self.engine));
         warnings
     }
 }
@@ -264,7 +272,30 @@ impl AppConfig {
         if !problems.is_empty() {
             return Err(ConfigError::Invalid(problems.join("; ")));
         }
+        let mut rules = rules;
+        rules.sync_order();
+        self.engine_profiles.normalize(&rules);
         self.engine = rules;
+        Ok(())
+    }
+
+    /// Operazione sulle mappe; le regole della mappa attiva passano in `engine` (il motore le
+    /// usa dal giro dopo). Se le regole risultanti non sono valide la config resta com'era.
+    pub fn apply_profile_command(&mut self, cmd: &ProfileCommand) -> Result<(), ConfigError> {
+        let mut profiles = self.engine_profiles.clone();
+        profiles.normalize(&self.engine);
+        let rules = profiles
+            .apply(cmd, &self.engine)
+            .map_err(ConfigError::Invalid)?;
+        // Si controllano solo regole attive nuove: rinominare o creare resta sempre possibile.
+        let mut current = self.engine.clone();
+        current.sync_order();
+        let problems = rules.validate_for_save();
+        if rules != current && !problems.is_empty() {
+            return Err(ConfigError::Invalid(problems.join("; ")));
+        }
+        self.engine = rules;
+        self.engine_profiles = profiles;
         Ok(())
     }
 }
@@ -491,6 +522,62 @@ mod tests {
     }
 
     #[test]
+    fn engine_profiles_migration_and_commands() {
+        use crate::engine::{PresetKind, ProfileCommand, ReserveCriterion};
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(CONFIG_FILE);
+        std::fs::write(
+            &path,
+            r#"{"engine":{"enabled":true,"primary":6,"reserves":[1,3]}}"#,
+        )
+        .unwrap();
+        // Regole vecchie: diventano la mappa «Personale» attiva, più i preset.
+        let l = load(&path).unwrap();
+        assert!(l.warnings.is_empty(), "{:?}", l.warnings);
+        let p = &l.config.engine_profiles;
+        assert_eq!(p.active_id, "personal");
+        assert_eq!(p.profiles.len(), 1 + PresetKind::ALL.len());
+        assert_eq!(l.config.engine.order, Some(vec![6, 1, 3]));
+        assert_eq!(p.active().unwrap().rules, l.config.engine);
+
+        // Selezione: regole della mappa in `engine`, motore ancora acceso, file riscritto.
+        let select = ProfileCommand::Select { id: "sport".into() };
+        let c = update(&path, |c| c.apply_profile_command(&select)).unwrap();
+        assert!(c.engine.enabled);
+        assert_eq!(c.engine.reserve_criterion, ReserveCriterion::Lowest5h);
+        let reread = load(&path).unwrap().config;
+        assert_eq!(reread.engine, c.engine);
+        assert_eq!(reread.engine_profiles.active_id, "sport");
+
+        // Le regole salvate dall'interfaccia vanno nella mappa attiva.
+        let edited = EngineRules {
+            five_hour_threshold: 80.0,
+            ..c.engine.clone()
+        };
+        let c = update(&path, |c| c.set_engine_rules(edited.clone())).unwrap();
+        assert_eq!(c.engine_profiles.active().unwrap().rules, edited);
+
+        // Mappa senza lista con il motore acceso: selezione rifiutata, config invariata;
+        // le operazioni che non cambiano le regole attive restano possibili.
+        let mut on = AppConfig::default();
+        on.set_engine_rules(EngineRules {
+            enabled: true,
+            primary: Some(1),
+            ..EngineRules::default()
+        })
+        .unwrap();
+        let before = on.clone();
+        let select = ProfileCommand::Select { id: "eco".into() };
+        assert!(on.apply_profile_command(&select).is_err());
+        assert_eq!(on, before);
+        let create = ProfileCommand::Create {
+            name: "Vuota".into(),
+        };
+        on.apply_profile_command(&create).unwrap();
+        assert_eq!(on.engine, before.engine);
+    }
+
+    #[test]
     fn invalid_values() {
         let mut c = AppConfig {
             poll_interval_seconds: 5,
@@ -634,7 +721,12 @@ mod preferences_tests {
             ..EngineRules::default()
         };
         let c = update(&path, |c| c.set_engine_rules(rules.clone())).unwrap();
-        assert_eq!(c.engine, rules);
+        let rules = EngineRules {
+            order: Some(vec![3]),
+            ..rules
+        };
+        assert_eq!(c.engine, rules, "lista allineata alla principale");
+        assert_eq!(c.engine_profiles.active().unwrap().rules, rules);
         assert_eq!(c.poll_interval_seconds, 300);
         let invalid = EngineRules {
             enabled: true,

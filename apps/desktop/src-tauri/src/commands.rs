@@ -10,7 +10,7 @@ use swapdeck_core::cswap::{
     ConfigGetResponse, ConfigListResponse, Confirmation, CswapAction, CswapError, CswapErrorKind,
     DirectoryMapping, ListResponse, StatusResponse,
 };
-use swapdeck_core::engine::{EngineRules, EngineState};
+use swapdeck_core::engine::{EngineProfiles, EngineRules, EngineState, ProfileCommand};
 use swapdeck_core::history::{
     DEFAULT_RETENTION_DAYS, History, HistoryEvents, HistoryQuery, HistoryRecord,
 };
@@ -277,6 +277,31 @@ pub async fn set_engine_rules(
     blocking(move || {
         shared.update_config(|c| c.set_engine_rules(rules))?;
         // Un errore di lettura non annulla il salvataggio: la vista resta quella di prima.
+        let _ = poller.refresh_wait(RULES_APPLY_WAIT);
+        Ok(engine_state(&shared))
+    })
+    .await
+}
+
+/// Mappe e mappa attiva.
+#[tauri::command]
+pub fn get_engine_profiles(shared: State<'_, Arc<Shared>>) -> EngineProfiles {
+    lock(&shared.settings).engine_profiles.clone()
+}
+
+/// Operazione sulle mappe (crea, rinomina, duplica, elimina, ripristina, seleziona): le regole
+/// della mappa attiva valgono dal giro dopo, senza riavvio. Restituisce lo stato aggiornato.
+#[tauri::command]
+pub async fn apply_engine_profile(
+    app: AppHandle,
+    shared: State<'_, Arc<Shared>>,
+    command: serde_json::Value,
+) -> Res<EngineState> {
+    let command: ProfileCommand = parse_arg("mappa", command)?;
+    let shared = Arc::clone(&shared);
+    let poller = app::poller(&app);
+    blocking(move || {
+        shared.update_config(|c| c.apply_profile_command(&command))?;
         let _ = poller.refresh_wait(RULES_APPLY_WAIT);
         Ok(engine_state(&shared))
     })

@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 use swapdeck_core::config::{self, AppConfig, AppPreferences, ConfigError, Language, Theme};
-use swapdeck_core::engine::EngineRules;
+use swapdeck_core::engine::{EngineProfiles, EngineRules};
 use swapdeck_core::paths::AppPaths;
 
 use crate::state::lock;
@@ -38,6 +38,8 @@ pub struct Settings {
     pub updates_enabled: bool,
     /// Regole del motore (sezione `engine`): il ciclo di lettura le rilegge a ogni giro.
     pub engine: EngineRules,
+    /// Mappe (sezione `engineProfiles`); `engine` sono le regole di quella attiva.
+    pub engine_profiles: EngineProfiles,
 }
 
 impl Default for Settings {
@@ -78,6 +80,7 @@ impl Settings {
                 .and_then(Value::as_bool)
                 .unwrap_or(false),
             engine: EngineRules::default(),
+            engine_profiles: EngineProfiles::default(),
         };
         s.apply_config(c);
         s
@@ -96,6 +99,7 @@ impl Settings {
         };
         self.theme = c.theme;
         self.engine.clone_from(&c.engine);
+        self.engine_profiles.clone_from(&c.engine_profiles);
     }
 
     /// Config equivalente, per chi la modifica quando le impostazioni restano in memoria.
@@ -105,6 +109,7 @@ impl Settings {
             language: self.preferences().language,
             theme: self.theme,
             engine: self.engine.clone(),
+            engine_profiles: self.engine_profiles.clone(),
             ..AppConfig::default()
         };
         c.notifications.thresholds.clone_from(&self.thresholds);
@@ -341,7 +346,10 @@ mod tests {
             .update(&s, |c| c.set_engine_rules(rules.clone()))
             .unwrap();
         s.apply_config(&saved);
+        let mut rules = rules;
+        rules.sync_order();
         assert_eq!(s.engine, rules);
+        assert_eq!(s.engine_profiles.active().unwrap().rules, rules);
         let text = std::fs::read_to_string(paths.config_file()).unwrap();
         let v: Value = serde_json::from_str(&text).unwrap();
         assert_eq!(v["autostart"], false);

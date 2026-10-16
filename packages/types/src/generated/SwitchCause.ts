@@ -3,4 +3,4 @@
 /**
  * Motivo di un cambio.
  */
-export type SwitchCause = "primaryAtLimit" | "reserveAtLimit" | "activeNeedsRelogin" | "primaryReset" | "reservesAtLimit";
+export type SwitchCause = "primaryAtLimit" | "reserveAtLimit" | "activeNeedsRelogin" | "primaryReset" | "reservesAtLimit" | "earlierAvailable";

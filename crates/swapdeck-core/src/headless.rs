@@ -14,8 +14,8 @@ use crate::config::{self, MAX_POLL_INTERVAL_SECONDS, MIN_POLL_INTERVAL_SECONDS};
 use crate::conflicts::{Conflict, ConflictSource, SystemConflicts};
 use crate::cswap::{CswapClient, CswapError, CswapErrorKind, ListResponse, SwitchResponse};
 use crate::engine::{
-    Decision, EngineMemory, EngineRules, IdleReason, Observation, SuspendReason, SwitchCause,
-    decide,
+    Candidate, Decision, EngineMemory, EngineRules, IdleReason, Observation, SuspendReason,
+    SwitchCause, evaluate,
 };
 use crate::history::{
     DEFAULT_RETENTION_DAYS, DecisionRecord, History, HistoryRecord, HistoryWriter, SwitchRecord,
@@ -137,6 +137,7 @@ pub fn describe(d: &Decision) -> String {
         SwitchCause::ActiveNeedsRelogin => "account attivo da riautenticare",
         SwitchCause::PrimaryReset => "principale resettato",
         SwitchCause::ReservesAtLimit => "riserve al limite",
+        SwitchCause::EarlierAvailable => "utenza precedente di nuovo libera",
     };
     match d {
         Decision::NoAction { reason } => match reason {
@@ -274,6 +275,8 @@ impl Runner<'_, '_> {
                 return Step {
                     list: Err(e),
                     decision: None,
+                    reason: None,
+                    candidate: None,
                     holder: self.holder.is_some(),
                     switched_to: None,
                 };
@@ -293,7 +296,8 @@ impl Runner<'_, '_> {
             list: &list,
             conflicts: &conflicts,
         };
-        let decision = decide(obs, &self.rules, &mem, now);
+        let evaluation = evaluate(obs, &self.rules, &mem, now);
+        let decision = evaluation.decision;
         if self.last_decision.as_ref() != Some(&decision) {
             let prefix = if self.holder.is_none() {
                 "[in attesa del lock] "
@@ -302,11 +306,15 @@ impl Runner<'_, '_> {
             } else {
                 ""
             };
-            self.log(now, &format!("{prefix}{}", describe(&decision)));
+            self.log(
+                now,
+                &format!("{prefix}{} ({})", describe(&decision), evaluation.reason),
+            );
             let record = HistoryRecord::Decision(DecisionRecord {
                 ts: now,
                 decision: decision.clone(),
                 dry_run: self.rules.dry_run,
+                why: Some(evaluation.reason.clone()),
             });
             if let Some(h) = self.holder.as_mut() {
                 if let Err(e) = h.writer.append(&record) {
@@ -326,6 +334,8 @@ impl Runner<'_, '_> {
         Step {
             list: Ok(list),
             decision: Some(decision),
+            reason: Some(evaluation.reason),
+            candidate: evaluation.candidate,
             holder: self.holder.is_some(),
             switched_to,
         }
@@ -504,6 +514,10 @@ pub struct Step {
     pub list: Result<ListResponse, CswapError>,
     /// Decisione del giro; `None` se la lettura non è riuscita.
     pub decision: Option<Decision>,
+    /// Motivo leggibile della decisione.
+    pub reason: Option<String>,
+    /// Dove andrebbe il motore se l'attiva superasse la soglia adesso.
+    pub candidate: Option<Candidate>,
     /// Il lock è di questa istanza: storico, memoria e cambi sono suoi.
     pub holder: bool,
     /// Account su cui il motore ha cambiato in questo giro.

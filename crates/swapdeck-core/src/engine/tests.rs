@@ -4,10 +4,10 @@ use super::*;
 use crate::conflicts::{Conflict, ConflictKind};
 use crate::timeutil::format_iso;
 
-const NOW: i64 = 1_800_000_000;
-const H5_RESET: i64 = NOW + 3600;
+pub(crate) const NOW: i64 = 1_800_000_000;
+pub(crate) const H5_RESET: i64 = NOW + 3600;
 
-fn window(pct: f64, reset: i64) -> UsageWindow {
+pub(crate) fn window(pct: f64, reset: i64) -> UsageWindow {
     UsageWindow {
         pct,
         resets_at: Some(format_iso(reset)),
@@ -15,7 +15,7 @@ fn window(pct: f64, reset: i64) -> UsageWindow {
     }
 }
 
-fn usage(p5: f64, p7: f64) -> Usage {
+pub(crate) fn usage(p5: f64, p7: f64) -> Usage {
     Usage {
         five_hour: Some(window(p5, H5_RESET)),
         seven_day: Some(window(p7, NOW + 3 * 86_400)),
@@ -46,12 +46,12 @@ pub(crate) fn acc(number: u32, p5: f64, p7: f64) -> Account {
     }
 }
 
-fn stale(mut a: Account, age: f64) -> Account {
+pub(crate) fn stale(mut a: Account, age: f64) -> Account {
     a.usage_age_seconds = Some(age);
     a
 }
 
-fn status(mut a: Account, s: UsageStatus) -> Account {
+pub(crate) fn status(mut a: Account, s: UsageStatus) -> Account {
     a.usage_status = s;
     if s != UsageStatus::Ok {
         a.last_good_usage = a.usage.take();
@@ -98,26 +98,26 @@ fn guard_task() -> Conflict {
     }
 }
 
-fn sw(from: u32, to: u32, cause: SwitchCause) -> Decision {
+pub(crate) fn sw(from: u32, to: u32, cause: SwitchCause) -> Decision {
     Decision::Switch { from, to, cause }
 }
 
-fn back(from: u32, cause: SwitchCause) -> Decision {
+pub(crate) fn back(from: u32, cause: SwitchCause) -> Decision {
     Decision::ReturnToPrimary { from, to: 6, cause }
 }
 
-fn idle(reason: IdleReason) -> Decision {
+pub(crate) fn idle(reason: IdleReason) -> Decision {
     Decision::NoAction { reason }
 }
 
-fn susp(reason: SuspendReason) -> Decision {
+pub(crate) fn susp(reason: SuspendReason) -> Decision {
     Decision::Suspended {
         reason,
         detail: Vec::new(),
     }
 }
 
-struct Case {
+pub(crate) struct Case {
     name: &'static str,
     active: Option<u32>,
     accounts: Vec<Account>,
@@ -125,11 +125,16 @@ struct Case {
     expect: Decision,
 }
 
-fn case(name: &'static str, active: u32, accounts: Vec<Account>, expect: Decision) -> Case {
+pub(crate) fn case(
+    name: &'static str,
+    active: u32,
+    accounts: Vec<Account>,
+    expect: Decision,
+) -> Case {
     with_mem(name, active, accounts, EngineMemory::default(), expect)
 }
 
-fn with_mem(
+pub(crate) fn with_mem(
     name: &'static str,
     active: u32,
     accounts: Vec<Account>,
@@ -145,7 +150,7 @@ fn with_mem(
     }
 }
 
-fn run_cases(rules: &EngineRules, cases: Vec<Case>) {
+pub(crate) fn run_cases(rules: &EngineRules, cases: Vec<Case>) {
     for c in cases {
         let l = list(c.active, c.accounts);
         let obs = Observation {
@@ -166,11 +171,15 @@ fn run_cases(rules: &EngineRules, cases: Vec<Case>) {
 fn user_rule_scenarios() {
     use IdleReason::*;
     use SwitchCause::*;
+    // La regola attuale e il preset «Come cswap-guard» devono decidere allo stesso modo,
+    // anche con la memoria nella forma precedente.
+    for rules in guard_rule_sets() {
     let passed = EngineMemory {
         last_switch_at: Some(NOW - 6 * 3600),
         left_primary_at: Some(NOW - 6 * 3600),
         primary_reset_at: Some(NOW - 60),
         primary_left_windows: Some(vec![LimitWindow::FiveHour]),
+        left_accounts: Vec::new(),
     };
     let future = EngineMemory { primary_reset_at: Some(NOW + 600), ..passed.clone() };
     let seven_day = EngineMemory { primary_left_windows: Some(vec![LimitWindow::SevenDay]), ..passed.clone() };
@@ -213,9 +222,21 @@ fn user_rule_scenarios() {
         with_mem("lasciato per la 7d: 7d al 93% resta", 3, vec![acc(6, 5.0, 93.0), acc(3, 20.0, 20.0)], seven_day.clone(), idle(OnReserve)),
         with_mem("lasciato per la 7d: 7d all'85% torna", 3, vec![acc(6, 5.0, 85.0), acc(3, 20.0, 20.0)], seven_day, back(3, PrimaryReset)),
     ];
-    let mut rules = user_rules();
-    rules.excluded = vec![2];
     run_cases(&rules, cases);
+    }
+}
+
+/// Regola attuale (con 2 escluso) e preset «Come cswap-guard» (con 2 escluso).
+pub(crate) fn guard_rule_sets() -> [EngineRules; 2] {
+    let mut user = user_rules();
+    user.excluded = vec![2];
+    let on = EngineRules {
+        enabled: true,
+        ..EngineRules::default()
+    };
+    let mut preset = PresetKind::CswapGuard.rules(&on);
+    preset.excluded = vec![2];
+    [user, preset]
 }
 
 #[test]
@@ -374,14 +395,19 @@ fn no_oscillation_near_threshold() {
             switches += 1;
         }
         if min == 1 {
-            assert_eq!(mem.primary_reset_at, Some(H5_RESET), "reset ricordato");
-            assert_eq!(mem.primary_left_windows, Some(vec![LimitWindow::FiveHour]));
+            let left = mem.left_accounts.iter().find(|r| r.number == 6).unwrap();
+            assert_eq!(left.reset_at, Some(H5_RESET), "reset ricordato");
+            assert_eq!(left.windows, vec![LimitWindow::FiveHour]);
         }
     }
     // 6→3 al minuto 1, ritorno 3→6 al 61; al 62 il 96% cade nella pausa minima; al 70 è al 4%.
     assert_eq!(switches, 2);
     assert_eq!(active, 6);
-    assert_eq!(mem.primary_reset_at, None);
+    assert!(
+        mem.left_accounts.iter().all(|r| r.number != 6),
+        "ripresa: memoria tolta"
+    );
+    assert_eq!(mem.left_accounts.len(), 1, "resta la riserva lasciata");
 }
 
 #[test]

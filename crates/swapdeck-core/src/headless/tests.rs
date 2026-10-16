@@ -151,7 +151,16 @@ fn once_switches_and_records() {
     );
     let mem = load_memory(dir.path());
     assert_eq!(mem.last_switch_at, Some(T0));
-    assert!(mem.primary_reset_at.is_some());
+    assert!(
+        mem.left_accounts
+            .iter()
+            .any(|r| r.number == 6 && r.reset_at.is_some())
+    );
+    assert!(
+        o.output.contains("passo a #3"),
+        "motivo leggibile nel log: {}",
+        o.output
+    );
     assert!(
         !dir.path().join(lock::LOCK_FILE).exists(),
         "lock rilasciato"

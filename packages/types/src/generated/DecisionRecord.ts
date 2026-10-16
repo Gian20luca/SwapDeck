@@ -4,4 +4,8 @@ import type { Decision } from "./Decision.js";
 /**
  * Decisione del motore (registrata solo quando cambia).
  */
-export type DecisionRecord = { ts: number, decision: Decision, dryRun: boolean, };
+export type DecisionRecord = { ts: number, decision: Decision, dryRun: boolean, 
+/**
+ * Motivo leggibile (assente nelle righe scritte prima delle mappe).
+ */
+why?: string, };

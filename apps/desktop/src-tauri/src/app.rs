@@ -184,6 +184,8 @@ pub fn run(api: Arc<dyn CswapApi>) {
             commands::list_mappings,
             commands::get_engine_state,
             commands::set_engine_rules,
+            commands::get_engine_profiles,
+            commands::apply_engine_profile,
             commands::get_preferences,
             commands::set_preferences,
             commands::get_history_events,

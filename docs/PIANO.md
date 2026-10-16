@@ -39,6 +39,8 @@ Esclusa: esportazione dello storico in CSV (punto 12).
 - Ritorno al principale dopo il suo reset, con isteresi.
 - Intervallo di controllo (default 60 s) e pausa minima tra due cambi.
 - La regola che usi oggi diventa la configurazione: principale 6, riserve [1, 3], criterio «settimanale più bassa», soglia 95%, ritorno dopo il reset.
+- Flusso a lista (decisione dell'utente): le utenze sono una lista con priorità, la prima è la principale. Con il criterio «ordine» si usa sempre la prima libera, anche al ritorno dopo un reset (con l'isteresi sulla finestra che l'aveva fatta lasciare); con gli altri criteri il ritorno va alla principale. Criteri in più: reset settimanale più vicino, ritmo sicuro, 5h più libera, punteggio bilanciato (pesi regolabili), settimanali livellate, margine su un modello. Dati mancanti = candidata esclusa, a parità vale l'ordine. Ogni decisione ha un motivo leggibile e il motore espone il candidato attuale.
+- Mappe (profili con nome, scelta solo manuale): la regola attuale diventa la mappa «Personale»; preset «Come cswap-guard» (6, 1, 3: numeri assenti saltati), «Eco», «Sport», «Sicura», modificabili, duplicabili e ripristinabili. Acceso, osservazione e conflitti ignorati valgono per tutte le mappe.
 
 ### Azioni con conferma
 - `remove`, `import` (sovrascrive), `export` (il file contiene credenziali), `swap`/`move`, `unmap`, `disable` dell'account attivo, `unclaimed --purge`, installazione di uv/cswap: conferma semplice.

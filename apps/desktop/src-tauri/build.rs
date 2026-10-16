@@ -17,6 +17,8 @@ fn main() {
             "list_mappings",
             "get_engine_state",
             "set_engine_rules",
+            "get_engine_profiles",
+            "apply_engine_profile",
             "get_preferences",
             "set_preferences",
             "get_history_events",
