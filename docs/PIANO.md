@@ -22,6 +22,10 @@ Stato: **piano, in attesa del via**. Prontezza circa 95% (il contratto di `cswap
 | F10 | Modalità senza interfaccia `swapdeck --headless [--once]`, per attività pianificate, WSL e server | confermata |
 | F11 | Lock unico: il motore gira in un'istanza sola; avviso se sono attivi `cswap auto` o un guard esterno | confermata |
 | F13 | Interfaccia in italiano e in inglese | confermata |
+| F14 | Flusso a lista (16/10): utenze in ordine con trascinamento (icona ⋮⋮), si usa sempre la prima disponibile, si passa alla successiva alle soglie 5h/7d e si torna alla prima libera dopo il reset; «Usa ora» per il cambio immediato e interruttore per includere o escludere | confermata |
+| F15 | Criteri intelligenti (16/10): oltre a settimanale più bassa, best e ordine, anche reset più vicino, ritmo previsto, 5 ore più bassa, punteggio bilanciato (pesi regolabili), distribuzione uniforme, margine sul modello | confermata |
+| F16 | Mappe (16/10): profili con nome come le mappe delle centraline, ognuno con lista, criterio e soglie; scelta solo manuale da app, menu dell'icona, mini-widget e VS Code; preset Come cswap-guard, Eco, Sport, Sicura | confermata |
+| F17 | Tooltip informativi (16/10) su ogni pulsante, campo e voce dell'app principale | confermata |
 | — | Conferma a video prima delle azioni delicate | confermata |
 
 Esclusa: esportazione dello storico in CSV (punto 12).
