@@ -55,26 +55,30 @@ interface MarkerProps {
   testId?: string;
 }
 
-/** Trattino sulla barra con tooltip al passaggio del mouse e da tastiera (`aria-describedby`). */
+/**
+ * Trattino sulla barra con tooltip al passaggio del mouse e da tastiera (`aria-describedby`).
+ * Il tooltip è un fratello del trattino, posizionato sulla barra intera, così non esce dai bordi
+ * del widget (il CSS lo mostra con `:hover` e `:focus-visible` del trattino).
+ */
 function Marker({ kind, pct, tone, label, tip, testId }: MarkerProps) {
   const tipId = useId();
   return (
-    <span
-      className="sd-bar__mark"
-      data-kind={kind}
-      data-tone={tone}
-      data-side={pct > 50 ? 'end' : 'start'}
-      data-testid={testId}
-      role="note"
-      tabIndex={0}
-      aria-label={label}
-      aria-describedby={tipId}
-      style={{ left: `${Math.min(100, Math.max(0, pct))}%` }}
-    >
+    <>
+      <span
+        className="sd-bar__mark"
+        data-kind={kind}
+        data-tone={tone}
+        data-testid={testId}
+        role="note"
+        tabIndex={0}
+        aria-label={label}
+        aria-describedby={tipId}
+        style={{ left: `${Math.min(100, Math.max(0, pct))}%` }}
+      />
       <span id={tipId} role="tooltip" className="sd-bar__tip">
         {tip}
       </span>
-    </span>
+    </>
   );
 }
 

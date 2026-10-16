@@ -245,7 +245,8 @@ body {
   bottom: calc(100% + 4px);
   left: 0;
   width: max-content;
-  max-width: 220px;
+  max-width: 100%;
+  box-sizing: border-box;
   padding: 4px 6px;
   border: 1px solid var(--sd-border);
   border-radius: 4px;
@@ -256,16 +257,14 @@ body {
   font-weight: 400;
   line-height: 1.3;
   white-space: normal;
-  visibility: hidden;
+  z-index: 2;
   pointer-events: none;
+  /* Nascosto, ma resta la descrizione accessibile del trattino (aria-describedby). */
+  display: none;
 }
-.sd-bar__mark[data-side='end'] .sd-bar__tip {
-  left: auto;
-  right: 0;
-}
-.sd-bar__mark:hover .sd-bar__tip,
-.sd-bar__mark:focus-visible .sd-bar__tip {
-  visibility: visible;
+.sd-bar__mark:hover + .sd-bar__tip,
+.sd-bar__mark:focus-visible + .sd-bar__tip {
+  display: block;
 }
 .sd-bar__foot {
   display: flex;

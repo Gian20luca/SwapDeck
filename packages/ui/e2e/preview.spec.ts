@@ -141,7 +141,7 @@ test('finestra 420×640 senza scroll orizzontale', async ({ page }) => {
   await noHorizontalScroll(page);
   await page.getByLabel('Tema').selectOption('dark');
   await noHorizontalScroll(page);
-  await page.getByRole('button', { name: 'Mostra lo storico di alias6' }).click();
+  await page.getByRole('button', { name: 'Apri lo storico di alias6' }).click();
   await expect(page.getByRole('img', { name: /Grafico/ }).first()).toBeVisible();
   await noHorizontalScroll(page);
   await page.screenshot({ path: `${SHOTS}/finestra-420x640.png`, fullPage: true });
