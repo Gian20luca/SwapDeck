@@ -316,7 +316,10 @@ fn real_install_in_isolated_profile() {
     let vars: Vec<(&str, OsString)> = vec![
         ("TEMP", p("tmp")),
         ("TMP", p("tmp")),
-        ("PSModuleAnalysisCachePath", p("home/AppData/Local/ps-module-cache")),
+        (
+            "PSModuleAnalysisCachePath",
+            p("home/AppData/Local/ps-module-cache"),
+        ),
         ("HOME", home.clone().into_os_string()),
         ("USERPROFILE", home.clone().into_os_string()),
         ("APPDATA", p("home/AppData/Roaming")),

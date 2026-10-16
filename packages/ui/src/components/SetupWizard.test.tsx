@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { BackendProvider } from '../backend/context.js';
+import { hasSetup } from '../backend/types.js';
 import { FakeBackend, type FakeBackendOptions } from '../dev/FakeBackend.js';
 import { I18nProvider, type LocalePreference } from '../i18n/index.js';
 import { CswapUpdateNotice } from './CswapUpdateNotice.js';
@@ -174,5 +175,25 @@ describe('CswapUpdateNotice', () => {
     expect(await screen.findByText('Aggiornamento di cswap non riuscito.')).toBeVisible();
     expect(screen.getByRole('alert')).toHaveTextContent('aggiorna SwapDeck');
     expect(screen.getByRole('button', { name: 'Riprova' })).toBeVisible();
+  });
+});
+
+describe('host senza SetupBackend', () => {
+  it('hasSetup lo riconosce e i componenti non mostrano nulla', async () => {
+    const base = fake({ setup: { state: 'missing', latest: '0.28.0' } });
+    expect(hasSetup(base)).toBe(true);
+    // Stesso backend, ma senza un metodo di setup: come un host che non li implementa.
+    const plain = Object.assign(Object.create(base) as FakeBackend, { upgradeCswap: undefined });
+    expect(hasSetup(plain)).toBe(false);
+    const { container } = wrap(
+      plain,
+      <>
+        <SetupWizard onReady={vi.fn()} />
+        <CswapUpdateNotice />
+      </>,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(container).toBeEmptyDOMElement();
+    expect(base.setup.calls).toEqual([]);
   });
 });

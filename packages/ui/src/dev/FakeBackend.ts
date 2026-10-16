@@ -19,6 +19,7 @@ import {
   type Backend,
   type HistoryPoint,
   type HistoryQuery,
+  type SetupBackend,
   type Unsubscribe,
 } from '../backend/types.js';
 import configList from '../../../../fixtures/cswap/config-list.json';
@@ -63,7 +64,7 @@ function usable(account: Account): boolean {
  * Backend finto per sviluppo e test: legge le fixture di `fixtures/cswap/`, simula i cambi di account
  * e genera uno storico sintetico di 7 giorni. Non parla con cswap né con il disco.
  */
-export class FakeBackend implements Backend {
+export class FakeBackend implements Backend, SetupBackend {
   private list: ListResponse;
   private readonly listeners = new Set<(state: ListResponse) => void>();
   private readonly latencyMs: number;

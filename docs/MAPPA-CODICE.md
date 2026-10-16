@@ -78,7 +78,7 @@ Esporta i sorgenti (`src/index.ts`), non una build: i consumatori (Tauri, webvie
 
 | Percorso (`src/`) | Ruolo |
 |---|---|
-| `backend/types.ts` | interfaccia `Backend` (async, `onStateChanged`, `hostConfirms` facoltativo: l'host chiede da sé le conferme), `HistoryPoint`, `BackendError`; `actions.ts` costruisce le `CswapAction`; `context.tsx`, `useAccounts.ts` |
+| `backend/types.ts` | interfaccia `Backend` (async, `onStateChanged`, `hostConfirms` facoltativo: l'host chiede da sé le conferme), `SetupBackend` facoltativo (F5: diagnosi, installazione, controllo e aggiornamento di cswap; `hasSetup`, senza il quale `SetupWizard` e `CswapUpdateNotice` non mostrano nulla), `HistoryPoint`, `BackendError`; `actions.ts` costruisce le `CswapAction`; `context.tsx`, `useAccounts.ts` |
 | `dev/` | `FakeBackend` (fixture di `fixtures/cswap/` con istanti riallineati a «ora», cambi simulati; `fakeSetup.ts` simula diagnosi, installazione, controllo versione e aggiornamento con l'opzione `setup`), `history.ts` (storico sintetico di 7 giorni), `main.tsx` (anteprima con demo dei dialoghi di conferma e degli stati di cswap) |
 | `components/` | `Dashboard`, `AccountCard`, `UsageBar`, `PaceIndicator`, `QuickSwitch`, `HistoryPanel`, `UsageChart` (uPlot), `MiniWidget`, `ConfirmDialog` (anche a doppia conferma con parola), `PreferenceControls`, `SetupWizard` (primo avvio: installazione di cswap, guida al primo account), `SetupRun` (passi e log), `CswapUpdateNotice` (avviso di nuova versione, chiusura ricordata per versione, aggiornamento con conferma) |
 | `i18n/` | dizionari `it.ts` (fonte delle chiavi) ed `en.ts`, `I18nProvider`, `useI18n` |

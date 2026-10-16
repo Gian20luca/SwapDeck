@@ -82,6 +82,15 @@ export interface Backend {
   confirmationFor(action: CswapAction): Promise<Confirmation>;
   /** Esegue un'azione di F0: switch, add, add-token, remove, disable/enable, alias, swap, move, map, config, export/import, unclaimed, purge, upgrade, run, auto. */
   runAction(action: CswapAction): Promise<ActionOutcome>;
+  /** Evento di aggiornamento dello stato: il motore o un'azione hanno prodotto una nuova lista. */
+  onStateChanged(listener: (state: ListResponse) => void): Unsubscribe;
+}
+
+/**
+ * Primo avvio e manutenzione di cswap (F5). Facoltativa: un host che non la implementa non mostra
+ * `SetupWizard` né `CswapUpdateNotice` (vedi `hasSetup`). Errori come `Backend`.
+ */
+export interface SetupBackend {
   /** Diagnosi di cswap e uv (presenza, percorso, versione, `schemaVersion`, numero di account). Solo letture. */
   diagnoseSetup(): Promise<SetupDiagnosis>;
   /**
@@ -98,6 +107,16 @@ export interface Backend {
    * i processi cswap e riprovare), `unsupportedSchema` (serve una SwapDeck più recente).
    */
   upgradeCswap(onProgress: (event: SetupProgress) => void): Promise<SetupOutcome>;
-  /** Evento di aggiornamento dello stato: il motore o un'azione hanno prodotto una nuova lista. */
-  onStateChanged(listener: (state: ListResponse) => void): Unsubscribe;
+}
+
+/** L'host offre anche l'installazione e l'aggiornamento di cswap. */
+export function hasSetup(backend: Backend): backend is Backend & SetupBackend {
+  const b = backend as Partial<SetupBackend>;
+  return (
+    typeof b.diagnoseSetup === 'function' &&
+    typeof b.installCswap === 'function' &&
+    typeof b.checkCswapUpdate === 'function' &&
+    typeof b.dismissCswapUpdate === 'function' &&
+    typeof b.upgradeCswap === 'function'
+  );
 }

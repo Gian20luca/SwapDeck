@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { CswapError, SetupDiagnosis, SetupOutcome } from '@swapdeck/types';
 import { useBackend } from '../backend/context.js';
-import { BackendError } from '../backend/types.js';
+import { BackendError, hasSetup, type Backend, type SetupBackend } from '../backend/types.js';
 import { useI18n } from '../i18n/index.js';
 import { INSTALL_STEPS, UPGRADE_STEPS, setupErrorKey } from '../lib/setup.js';
 import { useSetupRun } from '../lib/useSetupRun.js';
@@ -28,9 +28,18 @@ type Phase =
  * Procedura di primo avvio: diagnosi di cswap; se manca, spiegazione, conferma, installazione con
  * avanzamento ed esito; se non ci sono account, guida a `/login` e ad «Aggiungi account corrente».
  * Propone anche l'aggiornamento quando la versione installata è sotto la minima.
+ * Non mostra nulla se l'host non offre `SetupBackend`.
  */
-export function SetupWizard({ initial, onReady }: SetupWizardProps) {
+export function SetupWizard(props: SetupWizardProps) {
   const backend = useBackend();
+  return hasSetup(backend) ? <Wizard {...props} backend={backend} /> : null;
+}
+
+function Wizard({
+  initial,
+  onReady,
+  backend,
+}: SetupWizardProps & { backend: Backend & SetupBackend }) {
   const { t } = useI18n();
   const { run, start } = useSetupRun();
   const [phase, setPhase] = useState<Phase>(

@@ -30,8 +30,10 @@ export {
 
 export {
   BackendError,
+  hasSetup,
   type ActionOutcome,
   type Backend,
+  type SetupBackend,
   type HistoryPoint,
   type HistoryQuery,
   type Unsubscribe,

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { SetupOutcome, UpdateInfo } from '@swapdeck/types';
 import { useBackend } from '../backend/context.js';
+import { hasSetup, type Backend, type SetupBackend } from '../backend/types.js';
 import { useI18n } from '../i18n/index.js';
 import { UPGRADE_STEPS } from '../lib/setup.js';
 import { useSetupRun } from '../lib/useSetupRun.js';
@@ -18,10 +19,17 @@ type Phase = 'idle' | 'confirm' | 'running' | 'done' | 'failed' | 'hidden';
 /**
  * Avviso «nuova versione di cswap disponibile». Chiuderlo ricorda la scelta per quella versione
  * (`dismissCswapUpdate`); «Aggiorna» chiede conferma e mostra l'avanzamento. Un controllo non
- * riuscito (rete, cswap assente) non mostra nulla.
+ * riuscito (rete, cswap assente) o un host senza `SetupBackend` non mostrano nulla.
  */
-export function CswapUpdateNotice({ onUpgraded }: CswapUpdateNoticeProps) {
+export function CswapUpdateNotice(props: CswapUpdateNoticeProps) {
   const backend = useBackend();
+  return hasSetup(backend) ? <Notice {...props} backend={backend} /> : null;
+}
+
+function Notice({
+  onUpgraded,
+  backend,
+}: CswapUpdateNoticeProps & { backend: Backend & SetupBackend }) {
   const { t } = useI18n();
   const { run, start } = useSetupRun();
   const [info, setInfo] = useState<UpdateInfo | null>(null);
