@@ -81,7 +81,7 @@ Se la riserva scelta è al limite si passa alla successiva. L'isteresi vale solo
 
 **Un solo motore per utente.** Un lock impedisce che app, finestra VS Code o processo headless cambino account insieme: chi non ha il lock resta in osservazione.
 
-**Stato «sospeso» e conflitti.** Se rileva `cswap auto` in esecuzione o un'attività, timer, cron o LaunchAgent che richiama `cswap` (per esempio un vecchio guard), il motore si **sospende** da solo: icona «sospeso», riga nel tooltip e avviso sopra la dashboard. Non è un errore: evita due automatismi che si contraddicono. Per riattivarlo ferma l'altro automatismo (vedi [la guida dal cswap-guard](docs/GUIDA-DA-CSWAP-GUARD.md)). Conta un'attività o un timer che cita `cswap` o `claude-swap` nel nome o nel comando; un'attività disabilitata dà solo un avviso. Per ignorare un conflitto noto si mette il suo id (per esempio `task:cswap-guard`) in `ignoredConflicts`. Provare prima in sola osservazione (`dryRun`) è sempre sicuro.
+**Stato «sospeso» e conflitti.** Se rileva `cswap auto` in esecuzione o un'attività, timer, cron o LaunchAgent che richiama `cswap` (per esempio lo script pianificato di un altro motore che usa `cswap`), il motore si **sospende** da solo: icona «sospeso», riga nel tooltip e avviso sopra la dashboard. Non è un errore: evita due automatismi che si contraddicono. Per riattivarlo ferma l'altro automatismo (vedi la [guida alla migrazione](docs/GUIDA-MIGRAZIONE.md)). Conta un'attività o un timer che cita `cswap` o `claude-swap` nel nome o nel comando; un'attività disabilitata dà solo un avviso. Per ignorare un conflitto noto si mette il suo id (per esempio `task:nome-attività`) in `ignoredConflicts`. Provare prima in sola osservazione (`dryRun`) è sempre sicuro.
 
 ## Modalità senza interfaccia
 
@@ -111,7 +111,7 @@ Contengono `config.json`, il lock del motore (`engine.lock`, nella cartella dati
 
 | Sintomo                                  | Causa probabile e rimedio                                                             |
 | ---------------------------------------- | ------------------------------------------------------------------------------------- |
-| Motore «sospeso»                         | c'è `cswap auto` o un guard attivo: ferma l'altro automatismo (guida sopra)           |
+| Motore «sospeso»                         | c'è `cswap auto` o un altro motore attivo: ferma l'altro automatismo (guida sopra)           |
 | «motore attivo in un'altra istanza»      | un'altra finestra o l'app tiene il lock: è voluto                                     |
 | Il motore non cambia mai                 | spento (`enabled: false`), in sola osservazione (`dryRun: true`) o `primary` mancante |
 | `cswap` non trovato                      | riapri l'app per l'installazione guidata, oppure imposta `swapdeck.cliPath` / il PATH |

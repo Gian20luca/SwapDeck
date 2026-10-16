@@ -285,7 +285,7 @@ Regole per il client:
 2. **Uscita 0 non significa riuscito:** i prompt annullati, `switched:false`, `unmap` senza mappatura escono con 0. Il client verifica l'effetto rileggendo `list --json`.
 3. **Prompt con stdin chiuso = traceback** (`remove`, `purge`, ambiguità). Il client scrive sempre la risposta su stdin; un traceback (`Traceback (most recent call last)` su stderr) è un errore interno, non un rifiuto dell'utente.
 4. **Effetti impliciti fuori da JSON:** `switch` in testo aggiunge un login non gestito; `list` in testo può chiedere di aggiungerlo (default Sì). Il client non usa mai la modalità testo per `list` e `switch`.
-5. **Cambio globale:** ogni `switch` vale per tutte le sessioni di Claude Code della macchina e corre con `cswap auto`, `cswap-guard` o altri motori: rilevamento conflitti (§3.9) e lock di SwapDeck prima di ogni cambio automatico.
+5. **Cambio globale:** ogni `switch` vale per tutte le sessioni di Claude Code della macchina e corre con `cswap auto`, script pianificati o altri motori: rilevamento conflitti (§3.9) e lock di SwapDeck prima di ogni cambio automatico.
 6. **Dati vecchi presentati come `ok`:** dopo un 429 `ok` può avere ore di età. Le soglie del motore usano `usageAgeSeconds`; l'interfaccia mostra l'età.
 7. **Budget di rete condiviso** (~28–30 richieste/ora per identità tra tutte le macchine): non forzare refresh; nessuna opzione di cswap li forza, e non va cercato un modo per aggirare la cache.
 8. **Credenziali in chiaro (base64)** nella cartella di backup e negli export: SwapDeck non le legge, non le copia e non le registra. Per `export` chiede conferma e propone un percorso nel profilo utente; per `add-token` usa solo stdin.

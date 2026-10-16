@@ -9,7 +9,7 @@ interfaccia (su Windows la modalità console passerà a `swapdeck-cli`, step 7).
 - A ogni lettura il ciclo esegue un giro del motore (`swapdeck_core::headless::Engine`): con il lock
   scrive lo storico, batte il lock, decide e cambia; senza lock (un'altra istanza o `--headless`) osserva.
 - Il motore resta spento finché `engine.enabled` (o `engine.dryRun`) non è attivo in `config.json`.
-- Sospeso per un conflitto (per esempio l'attività `cswap-guard`): icona nella variante «sospeso»,
+- Sospeso per un conflitto (per esempio un'attività pianificata di un altro motore): icona nella variante «sospeso»,
   riga nel tooltip e avviso sopra la dashboard. Le regole si rileggono all'avvio.
 - `cswap auto` avviato dalla UI si ferma all'uscita (attesa breve) e, su Windows, sta in un Job Object
   con `KILL_ON_JOB_CLOSE`: un'uscita forzata dell'app lo chiude comunque.
