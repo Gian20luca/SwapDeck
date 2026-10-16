@@ -4,6 +4,7 @@
 pub mod config;
 pub mod cswap;
 pub mod paths;
+pub mod setup;
 // Step 2: pub mod engine;
 // Step 2: pub mod lock;
 // Step 2: pub mod history;

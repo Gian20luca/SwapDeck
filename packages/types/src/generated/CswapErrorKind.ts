@@ -3,4 +3,4 @@
 /**
  * Classe di un errore o di un problema di un account.
  */
-export type CswapErrorKind = "notInstalled" | "unsupportedVersion" | "timeout" | "rateLimited" | "staleUsage" | "tokenExpired" | "reloginRequired" | "busy" | "invalidUsage" | "interrupted" | "cancelled" | "uncertain" | "failed";
+export type CswapErrorKind = "notInstalled" | "unsupportedVersion" | "unsupportedSchema" | "timeout" | "rateLimited" | "staleUsage" | "tokenExpired" | "reloginRequired" | "busy" | "invalidUsage" | "interrupted" | "cancelled" | "uncertain" | "failed";

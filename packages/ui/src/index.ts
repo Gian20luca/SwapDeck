@@ -16,6 +16,17 @@ export { HistoryPanel, type HistoryPanelProps } from './components/HistoryPanel.
 export { UsageChart, type ChartLine, type UsageChartProps } from './components/UsageChart.js';
 export { ConfirmDialog, type ConfirmDialogProps } from './components/ConfirmDialog.js';
 export { LanguageSelect, ThemeSelect } from './components/PreferenceControls.js';
+export { SetupWizard, type SetupWizardProps } from './components/SetupWizard.js';
+export { SetupRun, type SetupRunProps } from './components/SetupRun.js';
+export { CswapUpdateNotice, type CswapUpdateNoticeProps } from './components/CswapUpdateNotice.js';
+export {
+  INSTALL_STEPS,
+  UPGRADE_STEPS,
+  reduceProgress,
+  setupErrorKey,
+  type RunState,
+  type StepState,
+} from './lib/setup.js';
 
 export {
   BackendError,

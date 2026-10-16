@@ -5,9 +5,13 @@ import type {
   Confirmation,
   CswapAction,
   ListResponse,
+  SetupDiagnosis,
+  SetupOutcome,
+  SetupProgress,
   StatusResponse,
   SwitchReason,
   SwitchResponse,
+  UpdateInfo,
 } from '@swapdeck/types';
 import {
   BackendError,
@@ -19,6 +23,7 @@ import {
 } from '../backend/types.js';
 import configList from '../../../../fixtures/cswap/config-list.json';
 import { loadScenario, type ScenarioName } from './fixtures.js';
+import { FakeSetup, type FakeSetupOptions } from './fakeSetup.js';
 import { generateHistory } from './history.js';
 
 export interface FakeBackendOptions {
@@ -27,6 +32,8 @@ export interface FakeBackendOptions {
   latencyMs?: number;
   /** Orologio iniettabile per i test. */
   now?: () => number;
+  /** Stato simulato di cswap e uv per la procedura di primo avvio e l'aggiornamento. */
+  setup?: FakeSetupOptions;
 }
 
 /** Soglia oltre cui un account conta come «al limite» per `best` e `next-available`. */
@@ -66,12 +73,19 @@ export class FakeBackend implements Backend {
   listCalls = 0;
   /** Azioni ricevute da `runAction`, utili ai test. */
   readonly actionLog: CswapAction[] = [];
+  /** Simulazione di diagnosi, installazione e aggiornamento (`calls` per i test). */
+  readonly setup: FakeSetup;
 
   constructor(options: FakeBackendOptions = {}) {
     this.latencyMs = options.latencyMs ?? 0;
     this.now = options.now ?? Date.now;
     this.list = loadScenario(options.scenario ?? 'default', this.now());
     this.config = structuredClone(configList) as unknown as ConfigListResponse;
+    this.setup = new FakeSetup(
+      options.setup ?? {},
+      () => this.list.accounts.length,
+      () => this.delay(),
+    );
   }
 
   private async delay(): Promise<void> {
@@ -218,6 +232,26 @@ export class FakeBackend implements Backend {
         // Le altre azioni (add, export, run, ...) non hanno effetti simulati.
         return { message: 'Simulato dal FakeBackend' };
     }
+  }
+
+  diagnoseSetup(): Promise<SetupDiagnosis> {
+    return this.setup.diagnose();
+  }
+
+  installCswap(onProgress: (event: SetupProgress) => void): Promise<SetupOutcome> {
+    return this.setup.install(onProgress);
+  }
+
+  checkCswapUpdate(_options?: { force?: boolean }): Promise<UpdateInfo> {
+    return this.setup.checkUpdate();
+  }
+
+  dismissCswapUpdate(version: string): Promise<void> {
+    return this.setup.dismiss(version);
+  }
+
+  upgradeCswap(onProgress: (event: SetupProgress) => void): Promise<SetupOutcome> {
+    return this.setup.upgrade(onProgress);
   }
 
   onStateChanged(listener: (state: ListResponse) => void): Unsubscribe {

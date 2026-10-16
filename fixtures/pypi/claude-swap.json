@@ -1,0 +1,50 @@
+{
+  "info": {
+    "name": "claude-swap",
+    "version": "0.27.2",
+    "yanked": false,
+    "yanked_reason": null,
+    "requires_python": ">=3.12",
+    "summary": "Multi-account switcher for Claude Code",
+    "package_url": "https://pypi.org/project/claude-swap/",
+    "release_url": "https://pypi.org/project/claude-swap/0.27.2/"
+  },
+  "last_serial": 42272634,
+  "releases": {
+    "0.7.3": [],
+    "0.8.0": [],
+    "0.8.0b1": [],
+    "0.8.1": [],
+    "0.9.0": [],
+    "0.9.0b1": [],
+    "0.26.0": [],
+    "0.27.2": []
+  },
+  "urls": [
+    {
+      "filename": "claude_swap-0.27.2-py3-none-any.whl",
+      "packagetype": "bdist_wheel",
+      "python_version": "py3",
+      "requires_python": ">=3.12",
+      "size": 356263,
+      "yanked": false,
+      "url": "https://files.pythonhosted.org/packages/05/cc/41f37065054ae7348b863f2655e717b33668168fe2885d43fdd9caa87146/claude_swap-0.27.2-py3-none-any.whl",
+      "digests": {
+        "sha256": "5d404d8d9c49f3689287ffa4213fd2c55fe683e5a2957abd9856f83bce6c6c9d"
+      }
+    },
+    {
+      "filename": "claude_swap-0.27.2.tar.gz",
+      "packagetype": "sdist",
+      "python_version": "source",
+      "requires_python": ">=3.12",
+      "size": 782739,
+      "yanked": false,
+      "url": "https://files.pythonhosted.org/packages/03/a6/ae45f5ed0261b5f3ec75e5c84a0a749a03ce7633d27fb89f03ceede44d2f/claude_swap-0.27.2.tar.gz",
+      "digests": {
+        "sha256": "8ca851fd891fb80099579c82f39b12b7ab8fc0664a5ed49d0a9ea01d77100c81"
+      }
+    }
+  ],
+  "vulnerabilities": []
+}

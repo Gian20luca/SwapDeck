@@ -92,6 +92,68 @@ export const en: Record<MessageKey, string> = {
   'confirm.wordLabel': 'Confirmation word',
   'confirm.step': 'Step {current} of {total}',
 
+  'setup.checking': 'Checking cswap…',
+  'setup.missing.title': 'cswap is not installed',
+  'setup.missing.body':
+    'SwapDeck uses cswap (the claude-swap package) to read usage and switch accounts. I can install it now with uv, the Python package manager by Astral.',
+  'setup.missing.uvFound': 'uv is already present ({path}): I will use it.',
+  'setup.missing.uvMissing':
+    'uv is not present: I will download it with the official Astral script ({url}).',
+  'setup.install': 'Install',
+  'setup.confirm.title': 'Install cswap?',
+  'setup.confirm.body':
+    'I will install uv and claude-swap in your user profile, without administrator rights. An Internet connection is required.',
+  'setup.confirm.bodyUv':
+    'I will install claude-swap with uv in your user profile, without administrator rights. An Internet connection is required.',
+  'setup.upgrade.title': 'Upgrade claude-swap?',
+  'setup.installing': 'Installing cswap…',
+  'setup.step.downloadUv': 'Download the uv script',
+  'setup.step.installUv': 'Install uv',
+  'setup.step.installCswap': 'Install claude-swap',
+  'setup.step.upgradeCswap': 'Upgrade claude-swap',
+  'setup.step.verifyCswap': 'Verify cswap',
+  'setup.state.pending': 'Pending',
+  'setup.state.running': 'Running',
+  'setup.state.done': 'Done',
+  'setup.state.skipped': 'Not needed',
+  'setup.state.failed': 'Failed',
+  'setup.log': 'Details',
+  'setup.logLabel': 'Operation output',
+  'setup.done.title': 'cswap {version} is ready',
+  'setup.failed.title': 'Installation failed',
+  'setup.noAccounts.title': 'No accounts in cswap',
+  'setup.noAccounts.body': 'To add the first account:',
+  'setup.noAccounts.step1': 'open Claude Code and run /login with the account to add;',
+  'setup.noAccounts.step2': 'come back here and press “Add current account”.',
+  'setup.addCurrent': 'Add current account',
+  'setup.added': 'Account added.',
+  'setup.addFailed': 'Account not added: {message}',
+  'setup.unsupportedVersion.title': 'Unsupported cswap version',
+  'setup.unsupportedVersion.body': 'Version {version} is installed; at least {min} is required.',
+  'setup.unsupportedVersion.noUv':
+    'uv was not found: upgrade claude-swap the way you installed it and try again.',
+  'setup.unsupportedSchema.title': 'Unsupported cswap format',
+  'setup.unsupportedSchema.body':
+    'This cswap version uses a data format (schemaVersion {found}) that SwapDeck does not know yet: update SwapDeck.',
+  'setup.error.title': 'cswap is not responding as expected',
+  'setup.error.busy':
+    'A cswap file is in use. Close the cswap processes (cswap auto, the TUI, other windows) and try again.',
+  'setup.error.schema': 'The new cswap version uses an unsupported data format: update SwapDeck.',
+  'setup.error.timeout':
+    'The operation did not finish in time. Check the connection and try again.',
+  'setup.error.notInstalled': 'Program not found.',
+  'setup.error.generic': 'An error occurred.',
+
+  'update.available': 'cswap {latest} is available (installed {installed}).',
+  'update.upgrade': 'Upgrade',
+  'update.dismiss': 'Dismiss the notice for {latest}',
+  'update.confirm.title': 'Upgrade cswap to {latest}?',
+  'update.confirm.body':
+    'I will run “uv tool upgrade claude-swap”. First close cswap auto, the TUI and other cswap windows: a file in use blocks the upgrade.',
+  'update.upgrading': 'Upgrading cswap…',
+  'update.done': 'cswap upgraded to {version}.',
+  'update.failed': 'cswap upgrade failed.',
+
   'settings.language': 'Language',
   'settings.language.auto': 'Automatic',
   'settings.language.it': 'Italiano',

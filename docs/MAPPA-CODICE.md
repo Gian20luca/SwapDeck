@@ -32,9 +32,10 @@ Struttura iniziale (step 0). Ogni step aggiorna la sezione che tocca.
 | `cswap::secret` | `SecretToken` (Debug oscurato, azzerato al rilascio) |
 | `config` | `AppConfig` (`config.json`): default, `validate`, `normalize`, `load`, `save` atomico; `language`/`theme` sconosciuti → default con avviso, valore originale conservato in `preserved` |
 | `paths` | `AppPaths`: cartelle per utente |
+| `setup` (step 6) | `Setup`: `diagnose` (cswap e uv: percorso, versione, `schemaVersion`, numero di account), `install` (script ufficiale di uv scaricato e poi eseguito, ripiego PowerShell o curl/wget; `uv tool install claude-swap`; verifica), `upgrade` (`uv tool upgrade claude-swap`, `busy` con spiegazione, `unsupportedSchema`), `check_update`/`dismiss_update` (PyPI con cache di 6 ore in `cswap-update.json`); avanzamento `SetupProgress` a passi con righe ripulite. `stream` (processo con output riga per riga), `http` (ureq + rustls, certificati di sistema, solo HTTPS, proxy da env, ritentativi), `update` (PyPI e cache) |
 | `ts_export` (test) | genera `packages/types/src/generated/` (`pnpm gen:types`) e ne controlla l'aggiornamento |
 
-Test: `tests/fixtures_parse.rs` (tutte le fixture), `tests/cswap_client.rs` (ogni comando e classe d'errore con il finto cswap `tests/support/fake_cswap.rs`, bin `fake-cswap`).
+Test: `tests/fixtures_parse.rs` (tutte le fixture), `tests/cswap_client.rs` (ogni comando e classe d'errore con il finto cswap `tests/support/fake_cswap.rs`, bin `fake-cswap`), `tests/setup.rs` (diagnosi, installazione e aggiornamento con finto cswap e finto uv; `real_install_in_isolated_profile` con `--ignored`: installazione reale in un profilo temporaneo, su Windows da PowerShell).
 
 ## TypeScript
 
@@ -54,9 +55,9 @@ Esporta i sorgenti (`src/index.ts`), non una build: i consumatori (Tauri, webvie
 | Percorso (`src/`) | Ruolo |
 |---|---|
 | `backend/types.ts` | interfaccia `Backend` (async, `onStateChanged`), `HistoryPoint`, `BackendError`; `actions.ts` costruisce le `CswapAction`; `context.tsx`, `useAccounts.ts` |
-| `dev/` | `FakeBackend` (fixture di `fixtures/cswap/` con istanti riallineati a «ora», cambi simulati), `history.ts` (storico sintetico di 7 giorni), `main.tsx` (anteprima con demo dei dialoghi di conferma) |
-| `components/` | `Dashboard`, `AccountCard`, `UsageBar`, `PaceIndicator`, `QuickSwitch`, `HistoryPanel`, `UsageChart` (uPlot), `MiniWidget`, `ConfirmDialog` (anche a doppia conferma con parola), `PreferenceControls` |
+| `dev/` | `FakeBackend` (fixture di `fixtures/cswap/` con istanti riallineati a «ora», cambi simulati; `fakeSetup.ts` simula diagnosi, installazione, controllo versione e aggiornamento con l'opzione `setup`), `history.ts` (storico sintetico di 7 giorni), `main.tsx` (anteprima con demo dei dialoghi di conferma e degli stati di cswap) |
+| `components/` | `Dashboard`, `AccountCard`, `UsageBar`, `PaceIndicator`, `QuickSwitch`, `HistoryPanel`, `UsageChart` (uPlot), `MiniWidget`, `ConfirmDialog` (anche a doppia conferma con parola), `PreferenceControls`, `SetupWizard` (primo avvio: installazione di cswap, guida al primo account), `SetupRun` (passi e log), `CswapUpdateNotice` (avviso di nuova versione, chiusura ricordata per versione, aggiornamento con conferma) |
 | `i18n/` | dizionari `it.ts` (fonte delle chiavi) ed `en.ts`, `I18nProvider`, `useI18n` |
 | `theme/`, `styles/index.css` | `ThemeProvider` (chiaro/scuro/auto via `data-theme`), variabili CSS, test di contrasto AA |
-| `lib/` | soglie e formattazione (`format.ts`), helper degli account (`account.ts`), `useNow` |
+| `lib/` | soglie e formattazione (`format.ts`), helper degli account (`account.ts`), `useNow`, `setup.ts` (reducer dell'avanzamento, testi degli errori), `useSetupRun` |
 | `e2e/`, `playwright.config.ts` (fuori da `src/`) | Playwright su Chromium contro l'anteprima (porta 5199): `pnpm --filter @swapdeck/ui e2e`; screenshot in `e2e/screenshots/` (ignorati da git). Copertura: `pnpm --filter @swapdeck/ui test:coverage` (v8, soglia 80% righe e funzioni, esclusi `src/dev/**`) |

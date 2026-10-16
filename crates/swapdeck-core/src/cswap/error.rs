@@ -17,8 +17,10 @@ const MAX_MESSAGE_CHARS: usize = 300;
 pub enum CswapErrorKind {
     /// Eseguibile non trovato.
     NotInstalled,
-    /// Versione sotto la minima o `schemaVersion` diverso da 1.
+    /// Versione sotto la minima o illeggibile.
     UnsupportedVersion,
+    /// `schemaVersion` del JSON assente o diverso da quello supportato (per esempio dopo un aggiornamento).
+    UnsupportedSchema,
     /// Il processo non ha risposto entro il tempo massimo.
     Timeout,
     /// L'endpoint dei consumi ha risposto 429.
@@ -154,7 +156,7 @@ pub fn check_schema_version(found: u32) -> Result<(), CswapError> {
         Ok(())
     } else {
         Err(CswapError::new(
-            CswapErrorKind::UnsupportedVersion,
+            CswapErrorKind::UnsupportedSchema,
             format!("schemaVersion {found} non supportato (atteso {SUPPORTED_SCHEMA_VERSION})"),
         ))
     }

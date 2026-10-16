@@ -783,7 +783,7 @@ fn parse_json<T: DeserializeOwned>(stdout: &str) -> Res<T> {
         .and_then(serde_json::Value::as_u64)
         .ok_or_else(|| {
             CswapError::new(
-                CswapErrorKind::UnsupportedVersion,
+                CswapErrorKind::UnsupportedSchema,
                 "risposta di cswap senza schemaVersion",
             )
         })?;

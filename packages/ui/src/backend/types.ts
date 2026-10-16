@@ -5,8 +5,12 @@ import type {
   CswapAction,
   CswapError,
   ListResponse,
+  SetupDiagnosis,
+  SetupOutcome,
+  SetupProgress,
   StatusResponse,
   SwitchResponse,
+  UpdateInfo,
 } from '@swapdeck/types';
 
 export type Unsubscribe = () => void;
@@ -73,6 +77,22 @@ export interface Backend {
   confirmationFor(action: CswapAction): Promise<Confirmation>;
   /** Esegue un'azione di F0: switch, add, add-token, remove, disable/enable, alias, swap, move, map, config, export/import, unclaimed, purge, upgrade, run, auto. */
   runAction(action: CswapAction): Promise<ActionOutcome>;
+  /** Diagnosi di cswap e uv (presenza, percorso, versione, `schemaVersion`, numero di account). Solo letture. */
+  diagnoseSetup(): Promise<SetupDiagnosis>;
+  /**
+   * Installa per utente, senza admin, uv (se manca) e claude-swap, poi verifica `--version` e `list --json`.
+   * L'avanzamento arriva a passi su `onProgress`, con l'output dei processi riga per riga già ripulito.
+   */
+  installCswap(onProgress: (event: SetupProgress) => void): Promise<SetupOutcome>;
+  /** Versione installata contro l'ultima su PyPI (cache di 6 ore; `force` la ignora). */
+  checkCswapUpdate(options?: { force?: boolean }): Promise<UpdateInfo>;
+  /** Ricorda che l'avviso per `version` è stato chiuso (`UpdateInfo.dismissed`). */
+  dismissCswapUpdate(version: string): Promise<void>;
+  /**
+   * `uv tool upgrade claude-swap` e verifica di `schemaVersion`. Errori tipici: `busy` (file in uso: chiudere
+   * i processi cswap e riprovare), `unsupportedSchema` (serve una SwapDeck più recente).
+   */
+  upgradeCswap(onProgress: (event: SetupProgress) => void): Promise<SetupOutcome>;
   /** Evento di aggiornamento dello stato: il motore o un'azione hanno prodotto una nuova lista. */
   onStateChanged(listener: (state: ListResponse) => void): Unsubscribe;
 }

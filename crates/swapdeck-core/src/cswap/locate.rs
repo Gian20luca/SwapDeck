@@ -88,7 +88,7 @@ pub fn locate_uv(search: &SearchEnv) -> Option<PathBuf> {
 /// Finder non eredita il `PATH` della shell.
 const HOMEBREW_BIN_DIRS: [&str; 2] = ["/opt/homebrew/bin", "/usr/local/bin"];
 
-fn locate(base: &str, search: &SearchEnv) -> Option<PathBuf> {
+pub(crate) fn locate(base: &str, search: &SearchEnv) -> Option<PathBuf> {
     let name = exe_name(base);
     let from_path = search
         .path
@@ -107,7 +107,7 @@ fn locate(base: &str, search: &SearchEnv) -> Option<PathBuf> {
 }
 
 /// Primo eseguibile `name` nelle cartelle assolute di `dirs`.
-fn find_in(dirs: impl IntoIterator<Item = PathBuf>, name: &str) -> Option<PathBuf> {
+pub(crate) fn find_in(dirs: impl IntoIterator<Item = PathBuf>, name: &str) -> Option<PathBuf> {
     dirs.into_iter()
         .filter(|d| d.is_absolute())
         .map(|d| d.join(name))

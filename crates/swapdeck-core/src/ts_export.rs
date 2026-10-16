@@ -15,6 +15,7 @@ use crate::cswap::{
     CswapAction, CswapError, CswapVersion, ErrorEnvelope, ListResponse, StatusResponse,
     SwitchResponse,
 };
+use crate::setup::{SetupDiagnosis, SetupOutcome, SetupProgress, UpdateInfo};
 
 const HEADER: &str =
     "// Generato da swapdeck-core (ts-rs): non modificare a mano. Rigenera con `pnpm gen:types`.\n";
@@ -41,6 +42,10 @@ fn render(dir: &Path) -> BTreeMap<String, String> {
     CswapError::export_all(&cfg).unwrap();
     CswapVersion::export_all(&cfg).unwrap();
     AppConfig::export_all(&cfg).unwrap();
+    SetupDiagnosis::export_all(&cfg).unwrap();
+    SetupProgress::export_all(&cfg).unwrap();
+    SetupOutcome::export_all(&cfg).unwrap();
+    UpdateInfo::export_all(&cfg).unwrap();
 
     let mut files = BTreeMap::new();
     collect(dir, dir, &mut files);

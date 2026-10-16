@@ -343,11 +343,45 @@ impl Fake {
         }
     }
 
+    /// `uv`: `--version`, `tool install claude-swap` (con `installTo` collega sé stesso come
+    /// cswap in quel percorso), `tool upgrade claude-swap` (con `upgradeTo` cambia la
+    /// versione di cswap, con `upgradeSchema` lo `schemaVersion` dello stato). `uvStderr`
+    /// è stampato su stderr da ogni comando `tool`.
     fn uv(&mut self, args: &[String]) -> u8 {
+        if args.first().map(String::as_str) == Some("--version") {
+            println!("uv 0.9.9 (fake)");
+            return 0;
+        }
+        if let Some(s) = self.cfg.get("uvStderr").and_then(Value::as_str) {
+            eprint!("{s}");
+        }
+        if args == ["tool", "install", "claude-swap"] {
+            if let Some(code) = self.overrides("uvInstall") {
+                return code;
+            }
+            eprintln!("Resolved 12 packages in 10ms\nInstalled 2 executables: claude-swap, cswap");
+            if let Some(dest) = self.cfg.get("installTo").and_then(Value::as_str) {
+                let src = std::env::current_exe().unwrap();
+                if fs::hard_link(&src, dest).is_err() {
+                    fs::copy(&src, dest).unwrap();
+                }
+            }
+            return 0;
+        }
         if let Some(code) = self.overrides("uv") {
             return code;
         }
         if args == ["tool", "upgrade", "claude-swap"] {
+            if let Some(v) = self.cfg.get("upgradeTo").and_then(Value::as_str) {
+                let mut cfg = self.cfg.clone();
+                cfg["version"] = json!(format!("cswap {v}"));
+                fs::write(self.dir.join("fake.json"), cfg.to_string()).unwrap();
+            }
+            if let Some(s) = self.cfg.get("upgradeSchema").and_then(Value::as_u64) {
+                let mut state = self.state();
+                state["schemaVersion"] = json!(s);
+                self.save(&state);
+            }
             println!("Updated claude-swap v0.27.2 -> v0.28.0");
             0
         } else {

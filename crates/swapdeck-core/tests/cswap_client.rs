@@ -878,7 +878,7 @@ fn error_classes() {
         "list",
         json!({"exit": 0, "stdout": "{\"schemaVersion\":2,\"accounts\":[]}"}),
     );
-    assert_eq!(schema.kind, CswapErrorKind::UnsupportedVersion);
+    assert_eq!(schema.kind, CswapErrorKind::UnsupportedSchema);
 
     let garbage = failing("list", json!({"exit": 0, "stdout": "non json"}));
     assert_eq!(garbage.kind, CswapErrorKind::Failed);
