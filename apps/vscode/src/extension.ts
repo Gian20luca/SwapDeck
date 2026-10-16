@@ -1,5 +1,13 @@
 /** Estensione SwapDeck: barra di stato, cambio rapido, pannello, notifiche e motore opzionale. */
-import type { ActionOutcome, Confirmation, CswapAction, SwitchStrategy } from '@swapdeck/types';
+import type {
+  ActionOutcome,
+  Confirmation,
+  CswapAction,
+  ListResponse,
+  Notification,
+  NotifyPoll,
+  SwitchStrategy,
+} from '@swapdeck/types';
 import { displayUsage } from '@swapdeck/ui/account';
 import { displayPct, shortEmail } from '@swapdeck/ui/format';
 import * as vscode from 'vscode';
@@ -15,7 +23,7 @@ import {
 } from './cli.js';
 import { DEACTIVATE_GRACE_MS, EngineProcess, shouldRetryEngine } from './engine.js';
 import type { CliState } from './generated/index.js';
-import { UsageNotifier, type Notice } from './notifier.js';
+import { fromPoll, langOf, messageOf, parseEngineEvent, shouldPoll } from './notifications.js';
 import { DashboardPanel } from './panel.js';
 import type { PickParams } from './protocol.js';
 import { Refresher } from './refresher.js';
@@ -70,7 +78,6 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
   /** Il lock è di un'altra finestra o dell'app desktop: si ritenta quando si libera. */
   let waitingLock = false;
   let panelReady = false;
-  const notifier = new UsageNotifier();
 
   const status = vscode.window.createStatusBarItem(
     'swapdeck.status',
@@ -81,7 +88,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
   status.command = 'swapdeck.switchAccount';
 
   const engine = new EngineProcess({
-    onLine: (line) => output.info(`[motore] ${line}`),
+    onLine: (line) => {
+      const note = parseEngineEvent(line);
+      if (note) show(note);
+      else output.info(`[motore] ${line}`);
+    },
     onUnexpectedExit: (code) => {
       output.warn(`[motore] uscito con codice ${code ?? 'segnale'}`);
       if (!engineWarned) {
@@ -122,24 +133,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     status.show();
   };
 
-  const notify = (notices: Notice[]) => {
-    for (const n of notices) {
-      if (n.kind === 'switch') {
-        void vscode.window.showInformationMessage(t('SwapDeck: active account is now {0}', n.name));
-      } else {
-        const text = t(
-          'SwapDeck: {0} has used {1}% of the {2} window (threshold {3}%)',
-          n.name,
-          displayPct(n.pct),
-          n.window,
-          n.threshold,
-        );
-        void (n.threshold >= colorThresholds(settings().thresholds).danger
-          ? vscode.window.showWarningMessage(text)
-          : vscode.window.showInformationMessage(text));
-      }
+  function show(note: Notification): void {
+    const { level, text } = messageOf(note, langOf(vscode.env.language));
+    void (level === 'error'
+      ? vscode.window.showErrorMessage(text)
+      : level === 'warning'
+        ? vscode.window.showWarningMessage(text)
+        : vscode.window.showInformationMessage(text));
+  }
+
+  /** Mittente unico: senza motore vivo (né il nostro né altrove) le notifiche le chiede la CLI. */
+  async function pollNotifications(list: ListResponse): Promise<void> {
+    const elsewhere = state?.engine.problem ? undefined : state?.engine.running;
+    if (!shouldPoll(engine.running, elsewhere)) return;
+    try {
+      const poll = await cli<NotifyPoll>(['notifications', 'poll', '-'], {
+        stdin: JSON.stringify(list),
+      });
+      for (const note of fromPoll(poll)) show(note);
+    } catch (error) {
+      output.warn(`notifications: ${toCswapError(error).message}`);
     }
-  };
+  }
 
   /** Selettori nativi di VS Code per i percorsi di export, import e cartelle mappate. */
   async function pickPath(
@@ -221,7 +236,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     state = next;
     if (next.error) output.warn(`state: ${next.error.kind}: ${next.error.message}`);
     if (next.list) {
-      notify(notifier.update(next.list, settings().thresholds));
+      void pollNotifications(next.list);
       panel.post({ type: 'state', list: next.list });
     }
     if (
@@ -268,7 +283,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
         error: null,
         updatedAtMs: Date.now(),
       };
-      notify(notifier.update(outcome.list, settings().thresholds));
+      void pollNotifications(outcome.list);
       panel.post({ type: 'state', list: outcome.list });
       render();
     } else {

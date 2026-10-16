@@ -8,5 +8,5 @@
   "config.refreshIntervalSeconds": "Ogni quanti secondi leggere `cswap list`.",
   "config.cliPath": "Percorso assoluto di `swapdeck-cli`. Vuoto: quello incluso nell'estensione.",
   "config.engine.enabled": "Esegue il motore di SwapDeck (`swapdeck-cli headless`) mentre VS Code è aperto. Rispetta il lock di istanza unica e le regole della config di SwapDeck.",
-  "config.notifications.thresholds": "Soglie di consumo (%) dell'account attivo che fanno partire una notifica. La più bassa colora la barra di stato come avviso, la più alta come critica."
+  "config.notifications.thresholds": "Soglie di consumo (%) per i colori della barra di stato: la più bassa come avviso, la più alta come critica. Le notifiche seguono le regole di SwapDeck (sezione notifications della config)."
 }

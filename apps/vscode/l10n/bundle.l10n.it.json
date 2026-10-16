@@ -16,8 +16,6 @@
   "Next available": "Prossimo disponibile",
   "No active account": "Nessun account attivo",
   "SwapDeck engine stopped unexpectedly (exit code {0}). See the SwapDeck output.": "Il motore di SwapDeck si è fermato (codice di uscita {0}). Vedi l'output di SwapDeck.",
-  "SwapDeck: {0} has used {1}% of the {2} window (threshold {3}%)": "SwapDeck: {0} ha usato il {1}% della finestra {2} (soglia {3}%)",
-  "SwapDeck: active account is now {0}": "SwapDeck: ora è attivo {0}",
   "SwapDeck: cswap not available": "SwapDeck: cswap non disponibile",
   "SwapDeck: loading…": "SwapDeck: caricamento…",
   "SwapDeck: switch failed: {0}": "SwapDeck: cambio non riuscito: {0}",

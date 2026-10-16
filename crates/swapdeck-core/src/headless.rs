@@ -21,6 +21,9 @@ use crate::history::{
     DEFAULT_RETENTION_DAYS, DecisionRecord, History, HistoryRecord, HistoryWriter, SwitchRecord,
 };
 use crate::lock::{self, Acquire, LockGuard, LockInfo};
+use crate::notify::{
+    EngineContext, HeadlessEvent, NotificationConfig, Notifier, SwitchDone, SwitchPreview,
+};
 use crate::paths::{AppPaths, create_private_dir};
 use crate::timeutil::{format_iso, now_unix};
 
@@ -33,6 +36,10 @@ pub trait CswapPort {
     fn list(&mut self) -> Result<ListResponse, CswapError>;
     /// `cswap switch <number> --json`.
     fn switch_to(&mut self, number: u32) -> Result<SwitchResponse, CswapError>;
+    /// Versione installata (`cswap --version`), per l'avviso di aggiornamento delle notifiche.
+    fn installed_version(&mut self) -> Option<String> {
+        None
+    }
 }
 
 impl CswapPort for CswapClient {
@@ -44,6 +51,12 @@ impl CswapPort for CswapClient {
         self.switch(Some(number), None, None, false)?
             .switch
             .ok_or_else(|| CswapError::new(CswapErrorKind::Failed, "switch senza risposta JSON"))
+    }
+
+    fn installed_version(&mut self) -> Option<String> {
+        self.version()
+            .ok()
+            .map(|v| format!("{}.{}.{}", v.major, v.minor, v.patch))
     }
 }
 
@@ -206,6 +219,11 @@ struct Runner<'o, 'r> {
     busy_logged: bool,
     /// Errore di rilettura della config già segnalato.
     reload_failed: bool,
+    /// Notifiche (solo in [`run`], da titolare del lock): eventi JSON su `out`.
+    notifier: Notifier,
+    notify_rules: NotificationConfig,
+    /// Nome della mappa attiva (per le notifiche di cambio).
+    profile: Option<String>,
 }
 
 impl Runner<'_, '_> {
@@ -341,6 +359,44 @@ impl Runner<'_, '_> {
         }
     }
 
+    /// Notifiche del giro, una riga JSON ciascuna (`HeadlessEvent`). Solo il titolare del lock
+    /// le manda: un solo mittente.
+    fn notify(&mut self, now: i64, step: &Step) {
+        if !step.holder {
+            return;
+        }
+        let decision = step.decision.as_ref();
+        let list = step.list.as_ref().ok();
+        let switched = step.switched_to.and_then(|to| {
+            Some(SwitchDone {
+                from: list.and_then(|l| l.active_account_number),
+                to,
+                cause: cause_of(decision?)?,
+            })
+        });
+        let preview = step.candidate.as_ref().map(SwitchPreview::from);
+        let engine = EngineContext {
+            rules: &self.rules,
+            decision,
+            switched,
+            preview: preview.as_ref(),
+            profile: self.profile.as_deref(),
+        };
+        let port = &mut *self.rt.port;
+        let notes = self
+            .notifier
+            .tick(list, Some(engine), &self.notify_rules, now, &mut || {
+                port.installed_version()
+            });
+        for notification in notes {
+            let event = HeadlessEvent::Notification { notification };
+            if let Ok(line) = serde_json::to_string(&event) {
+                let _ = writeln!(self.rt.out, "{line}");
+            }
+        }
+        let _ = self.rt.out.flush();
+    }
+
     fn report_prune_error(&mut self, now: i64) {
         let err = self
             .holder
@@ -425,6 +481,9 @@ impl<'o, 'r> Runner<'o, 'r> {
             switches: 0,
             busy_logged: false,
             reload_failed: false,
+            notifier: Notifier::new(Some(&opts.data_dir)),
+            notify_rules: NotificationConfig::default(),
+            profile: None,
         })
     }
 
@@ -489,6 +548,12 @@ impl<'o, 'r> Runner<'o, 'r> {
         match config::load(path) {
             Ok(loaded) => {
                 self.reload_failed = false;
+                self.notify_rules = loaded.config.notifications.clone();
+                self.profile = loaded
+                    .config
+                    .engine_profiles
+                    .active()
+                    .map(|p| p.name.clone());
                 let before = (self.rules.clone(), self.interval);
                 self.set_rules(&loaded.config.engine);
                 self.set_interval(loaded.config.poll_interval_seconds);
@@ -593,7 +658,8 @@ pub fn run(opts: &RunOptions, rt: Runtime<'_>) -> io::Result<RunOutcome> {
             }
             r.note_busy(now, info.as_ref());
         }
-        r.tick(now);
+        let step = r.tick(now);
+        r.notify(now, &step);
         r.finish(now);
         ticks += 1;
         let done = opts.once

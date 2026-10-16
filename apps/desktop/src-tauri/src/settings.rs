@@ -11,6 +11,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use swapdeck_core::config::{self, AppConfig, AppPreferences, ConfigError, Language, Theme};
 use swapdeck_core::engine::{EngineProfiles, EngineRules};
+use swapdeck_core::notify::NotificationConfig;
 use swapdeck_core::paths::AppPaths;
 
 use crate::state::lock;
@@ -24,7 +25,8 @@ const KEY_UPDATES: &str = "updates";
 #[derive(Debug, Clone, PartialEq)]
 pub struct Settings {
     pub poll_interval: Duration,
-    pub thresholds: Vec<f64>,
+    /// Regole delle notifiche (sezione `notifications`).
+    pub notifications: NotificationConfig,
     pub lang: Lang,
     pub theme: Theme,
     /// Avvio automatico al login: attivo di default.
@@ -65,7 +67,7 @@ impl Settings {
     pub fn from_config(c: &AppConfig) -> Self {
         let mut s = Self {
             poll_interval: Duration::ZERO,
-            thresholds: Vec::new(),
+            notifications: NotificationConfig::default(),
             lang: Lang::It,
             theme: Theme::System,
             autostart: c
@@ -99,7 +101,7 @@ impl Settings {
             c.poll_interval_seconds
                 .max(config::MIN_POLL_INTERVAL_SECONDS),
         ));
-        self.thresholds.clone_from(&c.notifications.thresholds);
+        self.notifications.clone_from(&c.notifications);
         self.lang = match c.language {
             Language::It => Lang::It,
             Language::En => Lang::En,
@@ -119,7 +121,7 @@ impl Settings {
             engine_profiles: self.engine_profiles.clone(),
             ..AppConfig::default()
         };
-        c.notifications.thresholds.clone_from(&self.thresholds);
+        c.notifications.clone_from(&self.notifications);
         self.patch(&mut c);
         c
     }
@@ -127,7 +129,7 @@ impl Settings {
     pub fn preferences(&self) -> AppPreferences {
         AppPreferences {
             poll_interval_seconds: u32::try_from(self.poll_interval.as_secs()).unwrap_or(u32::MAX),
-            notification_thresholds: self.thresholds.clone(),
+            notification_thresholds: self.notifications.thresholds.clone(),
             language: match self.lang {
                 Lang::It => Language::It,
                 Lang::En => Language::En,
@@ -253,7 +255,7 @@ mod tests {
     fn defaults_follow_the_plan() {
         let s = Settings::default();
         assert_eq!(s.poll_interval, Duration::from_secs(60));
-        assert_eq!(s.thresholds, [80.0, 95.0]);
+        assert_eq!(s.notifications.thresholds, [80.0, 95.0]);
         assert!(s.autostart);
         assert_eq!(s.mini_position, None);
         assert!(!s.mini_compact);

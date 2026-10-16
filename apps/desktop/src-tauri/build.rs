@@ -25,6 +25,8 @@ fn main() {
             "apply_engine_profile",
             "get_preferences",
             "set_preferences",
+            "get_notification_settings",
+            "set_notification_settings",
             "get_history_events",
             "diagnose_setup",
             "install_cswap",

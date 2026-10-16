@@ -3606,6 +3606,7 @@ dependencies = [
 name = "swapdeck-core"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "directories",
  "rustix",
  "serde",

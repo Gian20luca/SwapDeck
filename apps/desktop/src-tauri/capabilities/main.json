@@ -26,6 +26,8 @@
     "allow-apply-engine-profile",
     "allow-get-preferences",
     "allow-set-preferences",
+    "allow-get-notification-settings",
+    "allow-set-notification-settings",
     "allow-get-history-events",
     "allow-diagnose-setup",
     "allow-install-cswap",

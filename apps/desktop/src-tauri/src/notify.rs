@@ -1,172 +1,106 @@
-//! Logica delle notifiche (F2): soglie della config sull'account attivo, una sola volta per finestra
-//! di reset e per soglia, più un avviso a ogni cambio di account. Funzione pura: chi la usa mostra
-//! le [`Notice`] restituite.
+//! Notifiche dell'app (F2, F18): decide il modulo `swapdeck_core::notify`, l'app le mostra solo
+//! da mittente unico, cioè quando tiene il lock del motore (senza cartella dati non c'è lock e
+//! le manda lei). Il giro del motore arriva da `engine_loop` prima dell'esito della lettura.
 
-use std::collections::HashMap;
+use std::path::Path;
 
-use swapdeck_core::cswap::{Account, ListResponse, UsageWindow};
+use swapdeck_core::cswap::ListResponse;
+use swapdeck_core::engine::{Decision, EngineRules, SwitchCause};
+use swapdeck_core::headless::Step;
+pub use swapdeck_core::notify::display_name;
+use swapdeck_core::notify::{
+    EngineContext, Notification, NotificationConfig, Notifier, SwitchDone, SwitchPreview,
+};
+use swapdeck_core::timeutil::now_unix;
 
-/// Calo della % che indica una finestra nuova anche senza `resetsAt`.
-const RESET_DROP_PCT: f64 = 10.0;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Window {
-    FiveHour,
-    SevenDay,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Notice {
-    Threshold {
-        account: u32,
-        name: String,
-        window: Window,
-        threshold: f64,
-        pct: f64,
-    },
-    Switched {
-        from: Option<u32>,
-        to: u32,
-        name: String,
-    },
-}
-
-#[derive(Debug, Clone)]
-struct Mark {
-    reset_key: Option<String>,
-    last_pct: f64,
-    /// Soglia più alta già notificata in questa finestra.
-    notified: f64,
-}
-
-/// Nome da mostrare: alias, altrimenti il numero (niente email nelle notifiche di sistema).
-pub fn display_name(account: &Account) -> String {
-    match account.alias.as_deref().map(str::trim) {
-        Some(a) if !a.is_empty() => a.to_owned(),
-        _ => format!("#{}", account.number),
-    }
-}
-
-/// Chiave della finestra di reset al minuto (ignora le frazioni di secondo che cambiano tra letture).
-fn reset_key(window: &UsageWindow) -> Option<String> {
-    window
-        .resets_at
-        .as_deref()
-        .map(|s| s.chars().take(16).collect())
-}
-
+/// Ultimo giro del motore visto dall'app.
 #[derive(Debug, Default)]
-pub struct Notifier {
-    thresholds: Vec<f64>,
-    marks: HashMap<(u32, Window), Mark>,
-    /// `None` finché non è arrivata la prima lista.
-    last_active: Option<Option<u32>>,
+struct EngineTick {
+    holder: bool,
+    rules: EngineRules,
+    decision: Option<Decision>,
+    /// Candidato del motore (preavviso di switch).
+    preview: Option<SwitchPreview>,
+    /// Cambio del giro, consumato dalla prima valutazione.
+    switched: Option<SwitchDone>,
 }
 
-impl Notifier {
-    pub fn new(thresholds: &[f64]) -> Self {
-        let mut n = Self::default();
-        n.set_thresholds(thresholds);
-        n
+#[derive(Debug)]
+pub struct AppNotifier {
+    inner: Notifier,
+    has_data_dir: bool,
+    tick: EngineTick,
+}
+
+fn cause(d: &Decision) -> Option<SwitchCause> {
+    match d {
+        Decision::Switch { cause, .. } | Decision::ReturnToPrimary { cause, .. } => Some(*cause),
+        _ => None,
+    }
+}
+
+impl AppNotifier {
+    pub fn new(data_dir: Option<&Path>) -> Self {
+        Self {
+            inner: Notifier::new(data_dir),
+            has_data_dir: data_dir.is_some(),
+            tick: EngineTick::default(),
+        }
     }
 
-    pub fn set_thresholds(&mut self, thresholds: &[f64]) {
-        let mut t: Vec<f64> = thresholds
-            .iter()
-            .copied()
-            .filter(|t| t.is_finite() && *t > 0.0 && *t <= 100.0)
-            .collect();
-        t.sort_by(f64::total_cmp);
-        t.dedup();
-        self.thresholds = t;
-    }
-
-    /// Confronta la nuova lista con le precedenti e restituisce le notifiche da mostrare.
-    pub fn observe(&mut self, list: &ListResponse) -> Vec<Notice> {
-        let mut out = Vec::new();
-        let active = list.active_account_number;
-        if let Some(prev) = self.last_active
-            && prev != active
-            && let Some(to) = active
-        {
-            let name = list
-                .accounts
-                .iter()
-                .find(|a| a.number == to)
-                .map(display_name)
-                .unwrap_or_else(|| format!("#{to}"));
-            out.push(Notice::Switched {
-                from: prev,
+    /// Giro del motore: titolarità del lock, decisione e cambio eseguito.
+    pub fn on_step(&mut self, rules: &EngineRules, step: &Step) {
+        let switched = step.switched_to.and_then(|to| {
+            Some(SwitchDone {
+                from: step.list.as_ref().ok()?.active_account_number,
                 to,
-                name,
-            });
-        }
-        self.last_active = Some(active);
-
-        let Some(account) = list
-            .accounts
-            .iter()
-            .find(|a| Some(a.number) == active || (active.is_none() && a.active))
-        else {
-            return out;
+                cause: cause(step.decision.as_ref()?)?,
+            })
+        });
+        self.tick = EngineTick {
+            holder: step.holder,
+            rules: rules.clone(),
+            decision: step.decision.clone(),
+            preview: step.candidate.as_ref().map(SwitchPreview::from),
+            switched: switched.or(self.tick.switched.take()),
         };
-        // Solo dati freschi: lastGoodUsage può essere vecchio di ore.
-        let Some(usage) = &account.usage else {
-            return out;
-        };
-        for (window, w) in [
-            (Window::FiveHour, usage.five_hour.as_ref()),
-            (Window::SevenDay, usage.seven_day.as_ref()),
-        ] {
-            if let Some(w) = w
-                && let Some(n) = self.check(account, window, w)
-            {
-                out.push(n);
-            }
-        }
-        out
     }
 
-    fn check(&mut self, account: &Account, window: Window, w: &UsageWindow) -> Option<Notice> {
-        let pct = w.pct;
-        if !pct.is_finite() {
-            return None;
+    /// `true` se l'app è il mittente.
+    pub fn is_sender(&self) -> bool {
+        !self.has_data_dir || self.tick.holder
+    }
+
+    /// Notifiche di una lettura (`None` = fallita). Vuoto se il mittente è un altro.
+    pub fn observe(
+        &mut self,
+        list: Option<&ListResponse>,
+        (rules, profile): (&NotificationConfig, Option<&str>),
+        installed: &mut dyn FnMut() -> Option<String>,
+    ) -> Vec<Notification> {
+        self.observe_at(list, (rules, profile), now_unix(), installed)
+    }
+
+    fn observe_at(
+        &mut self,
+        list: Option<&ListResponse>,
+        (rules, profile): (&NotificationConfig, Option<&str>),
+        now: i64,
+        installed: &mut dyn FnMut() -> Option<String>,
+    ) -> Vec<Notification> {
+        if !self.is_sender() {
+            self.tick.switched = None;
+            return Vec::new();
         }
-        let key = reset_key(w);
-        let mark = self
-            .marks
-            .entry((account.number, window))
-            .or_insert_with(|| Mark {
-                reset_key: key.clone(),
-                last_pct: pct,
-                notified: f64::NEG_INFINITY,
-            });
-        let new_window = matches!((&mark.reset_key, &key), (Some(a), Some(b)) if a != b)
-            || pct + RESET_DROP_PCT < mark.last_pct;
-        if new_window {
-            mark.notified = f64::NEG_INFINITY;
-        }
-        if key.is_some() {
-            mark.reset_key = key;
-        }
-        mark.last_pct = pct;
-        let crossed = self
-            .thresholds
-            .iter()
-            .copied()
-            .filter(|t| *t <= pct)
-            .fold(f64::NEG_INFINITY, f64::max);
-        if crossed > mark.notified {
-            mark.notified = crossed;
-            return Some(Notice::Threshold {
-                account: account.number,
-                name: display_name(account),
-                window,
-                threshold: crossed,
-                pct,
-            });
-        }
-        None
+        let switched = self.tick.switched.take();
+        let engine = self.has_data_dir.then_some(EngineContext {
+            rules: &self.tick.rules,
+            decision: self.tick.decision.as_ref(),
+            switched,
+            preview: self.tick.preview.as_ref(),
+            profile,
+        });
+        self.inner.tick(list, engine, rules, now, installed)
     }
 }
 
@@ -174,107 +108,151 @@ impl Notifier {
 mod tests {
     use super::*;
     use crate::api::mock::fixture_list;
+    use swapdeck_core::notify::NotificationKind;
 
-    /// Lista con l'account attivo 6 ai valori dati.
-    fn list_with(active: u32, five: f64, resets: &str) -> ListResponse {
-        let mut list = fixture_list();
-        list.active_account_number = Some(active);
-        for a in &mut list.accounts {
-            a.active = a.number == active;
-            if a.number == active {
-                let usage = a.usage.get_or_insert_with(Default::default);
-                let w = usage.five_hour.get_or_insert_with(Default::default);
-                w.pct = five;
-                w.resets_at = Some(resets.to_owned());
-                usage.seven_day = None;
-            }
+    fn step(holder: bool, list: ListResponse, decision: Option<Decision>, to: Option<u32>) -> Step {
+        Step {
+            list: Ok(list),
+            decision,
+            reason: None,
+            candidate: None,
+            holder,
+            switched_to: to,
         }
-        list
     }
 
-    fn thresholds(notices: &[Notice]) -> Vec<f64> {
-        notices
-            .iter()
-            .filter_map(|n| match n {
-                Notice::Threshold { threshold, .. } => Some(*threshold),
-                Notice::Switched { .. } => None,
-            })
-            .collect()
-    }
-
-    const R1: &str = "2026-10-15T22:20:00.105830+00:00";
-    const R1_JITTER: &str = "2026-10-15T22:20:00.987000+00:00";
-    const R2: &str = "2026-10-16T03:20:00.105830+00:00";
-
-    #[test]
-    fn each_threshold_once_per_window() {
-        let mut n = Notifier::new(&[80.0, 95.0]);
-        assert!(n.observe(&list_with(6, 50.0, R1)).is_empty());
-        assert_eq!(thresholds(&n.observe(&list_with(6, 81.0, R1))), [80.0]);
-        assert!(n.observe(&list_with(6, 85.0, R1_JITTER)).is_empty());
-        assert!(n.observe(&list_with(6, 82.0, R1)).is_empty());
-        assert_eq!(thresholds(&n.observe(&list_with(6, 95.5, R1))), [95.0]);
-        assert!(n.observe(&list_with(6, 99.0, R1)).is_empty());
-        // Nuova finestra: si riparte.
-        assert!(n.observe(&list_with(6, 2.0, R2)).is_empty());
-        assert_eq!(thresholds(&n.observe(&list_with(6, 80.0, R2))), [80.0]);
+    fn rules() -> NotificationConfig {
+        let mut r = NotificationConfig::default();
+        r.percent.five_hour = vec![50.0];
+        r.stale.enabled = false;
+        r.login.enabled = false;
+        r.exhaustion.enabled = false;
+        r.model_limit.enabled = false;
+        r
     }
 
     #[test]
-    fn jump_over_two_thresholds_notifies_only_the_highest() {
-        let mut n = Notifier::new(&[80.0, 95.0]);
-        let first = n.observe(&list_with(6, 96.0, R1));
-        assert_eq!(thresholds(&first), [95.0]);
-        assert!(n.observe(&list_with(6, 97.0, R1)).is_empty());
-    }
-
-    #[test]
-    fn drop_without_reset_time_rearms() {
-        let mut n = Notifier::new(&[90.0]);
-        let mut list = list_with(6, 91.0, R1);
-        let strip = |l: &mut ListResponse| {
-            for a in &mut l.accounts {
-                if let Some(w) = a.usage.as_mut().and_then(|u| u.five_hour.as_mut()) {
-                    w.resets_at = None;
-                }
-            }
-        };
-        strip(&mut list);
-        assert_eq!(thresholds(&n.observe(&list)), [90.0]);
-        let mut low = list_with(6, 3.0, R1);
-        strip(&mut low);
-        assert!(n.observe(&low).is_empty());
-        assert_eq!(thresholds(&n.observe(&list)), [90.0]);
-    }
-
-    #[test]
-    fn switch_is_notified_except_on_first_list() {
-        let mut n = Notifier::new(&[]);
-        assert!(n.observe(&list_with(6, 10.0, R1)).is_empty());
-        let notices = n.observe(&list_with(3, 10.0, R1));
-        assert_eq!(
-            notices,
-            [Notice::Switched {
-                from: Some(6),
-                to: 3,
-                name: "alias3".into()
-            }]
-        );
-        assert!(n.observe(&list_with(3, 10.0, R1)).is_empty());
-    }
-
-    #[test]
-    fn thresholds_are_sanitized() {
-        let n = Notifier::new(&[95.0, f64::NAN, 80.0, 80.0, -1.0, 150.0]);
-        assert_eq!(n.thresholds, [80.0, 95.0]);
-    }
-
-    #[test]
-    fn display_name_never_uses_email() {
+    fn only_the_lock_holder_sends() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut n = AppNotifier::new(Some(dir.path()));
         let list = fixture_list();
-        let mut a = list.accounts[0].clone();
-        assert_eq!(display_name(&a), "alias1");
-        a.alias = Some("  ".into());
-        assert_eq!(display_name(&a), "#1");
+        let mut none = || None;
+        // Prima del primo giro (lettura veloce) e senza lock: niente.
+        assert!(
+            n.observe(Some(&list), (&rules(), None), &mut none)
+                .is_empty()
+        );
+        n.on_step(
+            &EngineRules::default(),
+            &step(false, list.clone(), None, None),
+        );
+        assert!(
+            n.observe(Some(&list), (&rules(), None), &mut none)
+                .is_empty()
+        );
+        // Con il lock: soglie dell'attiva (fixture: alias6 al 66% sulle 5 ore).
+        n.on_step(
+            &EngineRules::default(),
+            &step(true, list.clone(), None, None),
+        );
+        let out = n.observe(Some(&list), (&rules(), None), &mut none);
+        assert_eq!(out.len(), 1, "{out:?}");
+        assert!(out[0].title.it.starts_with("alias6"));
+    }
+
+    #[test]
+    fn engine_switch_carries_the_cause_once() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut n = AppNotifier::new(Some(dir.path()));
+        let mut r = rules();
+        r.percent.enabled = false;
+        let before = fixture_list();
+        let mut none = || None;
+        n.on_step(
+            &EngineRules::default(),
+            &step(true, before.clone(), None, None),
+        );
+        assert!(n.observe(Some(&before), (&r, None), &mut none).is_empty());
+        let d = Decision::Switch {
+            from: 6,
+            to: 3,
+            cause: SwitchCause::PrimaryAtLimit,
+        };
+        n.on_step(
+            &EngineRules::default(),
+            &step(true, before.clone(), Some(d), Some(3)),
+        );
+        // Lista riletta dopo il cambio.
+        let mut after = before.clone();
+        after.active_account_number = Some(3);
+        let out = n.observe(Some(&after), (&r, Some("Eco")), &mut none);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].kind, NotificationKind::Switched);
+        assert!(out[0].body.it.contains("al limite"), "{}", out[0].body.it);
+        assert!(out[0].body.it.contains("Mappa: Eco"), "{}", out[0].body.it);
+        assert!(
+            n.observe(Some(&after), (&r, Some("Eco")), &mut none)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn without_data_dir_the_app_sends_and_failed_reads_count() {
+        let mut n = AppNotifier::new(None);
+        let mut r = rules();
+        r.stale.enabled = true;
+        r.stale.minutes = 1;
+        let list = fixture_list();
+        let mut none = || None;
+        let t0 = now_unix();
+        assert_eq!(
+            n.observe_at(Some(&list), (&r, None), t0, &mut none).len(),
+            1
+        );
+        let out = n.observe_at(None, (&r, None), t0 + 600, &mut none);
+        assert!(
+            out.iter().any(|x| x.kind == NotificationKind::Stale),
+            "{out:?}"
+        );
+    }
+
+    #[test]
+    fn switch_preview_names_the_engine_candidate() {
+        use swapdeck_core::engine::{Candidate, IdleReason, ReserveCriterion};
+        let dir = tempfile::tempdir().unwrap();
+        let mut n = AppNotifier::new(Some(dir.path()));
+        let mut r = rules();
+        r.percent.enabled = false;
+        let list = fixture_list();
+        let engine = EngineRules {
+            enabled: true,
+            primary: Some(6),
+            five_hour_threshold: 70.0,
+            ..EngineRules::default()
+        };
+        let mut s = step(
+            true,
+            list.clone(),
+            Some(Decision::NoAction {
+                reason: IdleReason::BelowThreshold,
+            }),
+            None,
+        );
+        s.candidate = Some(Candidate {
+            number: 3,
+            criterion: ReserveCriterion::LowestWeekly,
+            fallback: false,
+            why: "settimanale più bassa".into(),
+        });
+        n.on_step(&engine, &s);
+        let mut none = || None;
+        let out = n.observe(Some(&list), (&r, None), &mut none);
+        assert_eq!(out.len(), 1, "{out:?}");
+        assert_eq!(out[0].kind, NotificationKind::SwitchPreview);
+        assert!(
+            out[0].body.it.contains("passo a alias3"),
+            "{}",
+            out[0].body.it
+        );
     }
 }

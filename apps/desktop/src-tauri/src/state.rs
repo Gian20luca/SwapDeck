@@ -10,7 +10,7 @@ use swapdeck_core::cswap::{CswapError, CswapErrorKind, ListResponse};
 
 use crate::api::{CswapApi, Res};
 use crate::engine_loop::EngineView;
-use crate::notify::Notifier;
+use crate::notify::AppNotifier;
 use crate::settings::{Settings, SettingsStore};
 
 /// Evento con lo [`Snapshot`] aggiornato, verso tutte le finestre.
@@ -84,7 +84,7 @@ pub struct Shared {
     /// Ultime impostazioni scritte (o lette): si riscrive solo se cambiano.
     saved: Mutex<Settings>,
     pub store: SettingsStore,
-    pub notifier: Mutex<Notifier>,
+    pub notifier: Mutex<AppNotifier>,
     /// Firma dell'ultimo menu costruito: si ricostruisce solo se cambia.
     pub menu_signature: Mutex<String>,
     /// Ultimo salvataggio della posizione del mini-widget.
@@ -98,7 +98,8 @@ impl Shared {
         Self {
             api,
             snapshot: Mutex::new(Snapshot::default()),
-            notifier: Mutex::new(Notifier::new(&settings.thresholds)),
+            // Cartella dati impostata da `app::run` (memoria delle notifiche e lock).
+            notifier: Mutex::new(AppNotifier::new(None)),
             saved: Mutex::new(settings.clone()),
             settings: Mutex::new(settings),
             store,
@@ -118,7 +119,6 @@ impl Shared {
         let saved = self.store.update(&current, change).map_err(config_error)?;
         lock(&self.settings).apply_config(&saved);
         lock(&self.saved).apply_config(&saved);
-        lock(&self.notifier).set_thresholds(&saved.notifications.thresholds);
         Ok(saved)
     }
 

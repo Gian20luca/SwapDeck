@@ -77,21 +77,22 @@ fn interval_secs(interval: Duration) -> u32 {
 }
 
 /// Corpo del ciclo di lettura con il motore. `live` dà regole e intervallo correnti (letti a
-/// ogni giro); `on_view` riceve lo stato del motore a ogni giro che decide, prima dell'esito
+/// ogni giro); `on_step` riceve regole ed esito di ogni giro del motore (vista con [`view_of`],
+/// notifiche), prima dell'esito
 /// della lettura; `on_conflicts` i conflitti letti. Senza cartella dati: solo lettura.
 pub fn run(
     lp: Loop,
     api: Arc<dyn CswapApi>,
     data_dir: Option<PathBuf>,
     live: impl Fn() -> (EngineRules, Duration),
-    on_view: impl Fn(EngineView),
+    on_step: impl Fn(&EngineRules, &Step),
     on_conflicts: impl Fn(&[Conflict]),
 ) {
     run_with(
         lp,
         api,
         data_dir,
-        (live, on_view, on_conflicts),
+        (live, on_step, on_conflicts),
         SystemConflicts::default(),
     );
 }
@@ -101,9 +102,9 @@ fn run_with(
     lp: Loop,
     api: Arc<dyn CswapApi>,
     data_dir: Option<PathBuf>,
-    (live, on_view, on_conflicts): (
+    (live, on_step, on_conflicts): (
         impl Fn() -> (EngineRules, Duration),
-        impl Fn(EngineView),
+        impl Fn(&EngineRules, &Step),
         impl Fn(&[Conflict]),
     ),
     source: impl ConflictSource,
@@ -158,9 +159,7 @@ fn run_with(
         }
         engine.set_interval(interval_secs(interval));
         let step = engine.step();
-        if let Some(view) = view_of(&rules, &step) {
-            on_view(view);
-        }
+        on_step(&rules, &step);
         // Dopo un cambio la lista letta prima è vecchia: si rilegge.
         if step.switched_to.is_some() {
             return (api.list(), Some(interval));
@@ -225,7 +224,11 @@ mod tests {
                     api,
                     Some(data),
                     || (EngineRules::default(), Duration::from_secs(60)),
-                    move |v| sink.lock().unwrap().push(v),
+                    move |r: &EngineRules, s: &Step| {
+                        if let Some(v) = view_of(r, s) {
+                            sink.lock().unwrap().push(v);
+                        }
+                    },
                     |_| {},
                 );
             },
@@ -284,7 +287,11 @@ mod tests {
                     Some(data),
                     (
                         move || live2.lock().unwrap().clone(),
-                        move |v| views2.lock().unwrap().push(v),
+                        move |r: &EngineRules, s: &Step| {
+                            if let Some(v) = view_of(r, s) {
+                                views2.lock().unwrap().push(v);
+                            }
+                        },
                         move |c: &[Conflict]| seen2.lock().unwrap().push(c.len()),
                     ),
                     source,

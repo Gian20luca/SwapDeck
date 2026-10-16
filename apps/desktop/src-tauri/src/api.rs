@@ -44,6 +44,10 @@ pub trait CswapApi: Send + Sync {
     }
     /// cswap installato o spostato: la prossima chiamata lo cerca di nuovo.
     fn relocate(&self) {}
+    /// Versione installata (`cswap --version`), per l'avviso di aggiornamento.
+    fn installed_version(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Attesa della pausa tra due giri di `cswap auto` quando l'app si chiude.
@@ -193,6 +197,11 @@ impl CswapApi for ClientApi {
     }
     fn mappings(&self) -> Res<Vec<DirectoryMapping>> {
         self.with(CswapClient::mappings)
+    }
+    fn installed_version(&self) -> Option<String> {
+        self.with(CswapClient::version)
+            .ok()
+            .map(|v| format!("{}.{}.{}", v.major, v.minor, v.patch))
     }
     fn execute(&self, action: &CswapAction) -> Res<Outcome> {
         match action {

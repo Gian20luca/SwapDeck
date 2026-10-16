@@ -22,6 +22,7 @@ use crate::engine::{
 };
 use crate::history::{HistoryEvents, HistoryQuery, HistoryRecord};
 use crate::lock::LockInfo;
+use crate::notify::{HeadlessEvent, NotificationConfig, NotifyPoll};
 use crate::setup::{SetupDiagnosis, SetupOutcome, SetupProgress, UpdateInfo};
 
 const HEADER: &str =
@@ -69,6 +70,9 @@ fn render(dir: &Path) -> BTreeMap<String, String> {
     Evaluation::export_all(&cfg).unwrap();
     HistoryQuery::export_all(&cfg).unwrap();
     HistoryEvents::export_all(&cfg).unwrap();
+    NotificationConfig::export_all(&cfg).unwrap();
+    NotifyPoll::export_all(&cfg).unwrap();
+    HeadlessEvent::export_all(&cfg).unwrap();
 
     let mut files = BTreeMap::new();
     collect(dir, dir, &mut files);

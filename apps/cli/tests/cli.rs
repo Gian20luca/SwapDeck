@@ -375,3 +375,40 @@ fn management_commands_validate_and_save() {
     let (code, _) = env.run(&["history", "events", "--since"]);
     assert_eq!(code, 2);
 }
+
+#[test]
+fn notifications_get_set_and_poll_single_sender() {
+    let env = Env::new();
+    let (code, v) = env.run(&["notifications", "get"]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["percent"]["fiveHour"], json!([80.0, 95.0]));
+    let patch = r#"{"percent":{"scope":"all","fiveHour":[10],"sevenDay":[]},"stale":{"enabled":false},"login":{"enabled":false}}"#;
+    let (code, v) = env.run(&["notifications", "set", patch]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["thresholds"], json!([10.0]), "copia della versione 1");
+    let (code, _) = env.run(&["notifications", "set", r#"{"quietHours":{"start":"9"}}"#]);
+    assert_eq!(code, 2);
+    // Senza motore: manda chi chiede, una volta per finestra.
+    let (code, v) = env.run(&["notifications", "poll"]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["sender"], "caller");
+    let first = v["notifications"].as_array().unwrap().len();
+    assert!(first >= 1, "{v}");
+    assert!(!v.to_string().contains('@'), "niente email: {v}");
+    let list = fs::read_to_string(fixtures().join("list.json")).unwrap();
+    let (code, v) = env.run_stdin(&["notifications", "poll", "-"], &list);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["notifications"], json!([]));
+    let (code, _) = env.run_stdin(&["notifications", "poll", "-"], "{");
+    assert_eq!(code, 2);
+    // Motore vivo (lock di questo processo di test): manda lui.
+    let now = swapdeck_core::timeutil::now_unix();
+    let swapdeck_core::lock::Acquire::Acquired(guard) =
+        swapdeck_core::lock::try_acquire(&env.home().join("data"), 60, now).unwrap()
+    else {
+        panic!("lock non preso");
+    };
+    let (_, v) = env.run_stdin(&["notifications", "poll", "-"], &list);
+    assert_eq!(v["sender"], "engine", "{v}");
+    guard.release();
+}

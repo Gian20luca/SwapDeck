@@ -8,6 +8,7 @@ pub mod engine;
 pub mod headless;
 pub mod history;
 pub mod lock;
+pub mod notify;
 pub mod paths;
 pub mod setup;
 pub mod timeutil;

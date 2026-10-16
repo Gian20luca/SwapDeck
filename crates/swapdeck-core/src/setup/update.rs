@@ -180,6 +180,14 @@ impl UpdateStore {
     }
 }
 
+/// Esito dalla sola cache (nessuna chiamata di rete), per le notifiche: `None` se la cache
+/// non ha ancora una versione. `installed` si chiama solo in quel caso.
+pub fn cached(data_dir: &Path, installed: impl FnOnce() -> Option<String>) -> Option<UpdateInfo> {
+    let cache = UpdateStore::new(data_dir).load();
+    let latest = cache.latest?;
+    Some(info(installed(), latest, cache.checked_at, cache.dismissed))
+}
+
 /// Costruisce l'esito confrontando installata e ultima.
 /// `installed` è la parola della versione così com'è (anche `0.28.0rc1`).
 pub(crate) fn info(

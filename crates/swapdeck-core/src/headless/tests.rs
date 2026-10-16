@@ -560,3 +560,47 @@ fn run_rereads_rules_from_the_config_before_each_tick() {
         o.output
     );
 }
+
+#[test]
+fn holder_emits_notifications_as_json_lines() {
+    let events = |out: &str| -> Vec<serde_json::Value> {
+        out.lines()
+            .filter(|l| l.starts_with('{'))
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect()
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let o = run_with(dir.path(), user_rules(), at_limit(), Vec::new(), |_| {});
+    let ev = events(&o.output);
+    let kinds: Vec<&str> = ev
+        .iter()
+        .map(|e| e["notification"]["kind"].as_str().unwrap())
+        .collect();
+    assert!(ev.iter().all(|e| e["event"] == "notification"));
+    assert!(kinds.contains(&"switched"), "{}", o.output);
+    assert!(kinds.contains(&"threshold"), "{}", o.output);
+    assert!(dir.path().join(crate::notify::MEMORY_FILE).exists());
+    // Stesso stato al giro dopo (riavvio): niente di ripetuto.
+    let o = run_with(dir.path(), user_rules(), at_limit(), Vec::new(), |o| {
+        o.dry_run = true;
+    });
+    assert!(
+        !events(&o.output)
+            .iter()
+            .any(|e| e["notification"]["kind"] == "threshold"),
+        "{}",
+        o.output
+    );
+
+    // Senza lock: nessuna notifica.
+    let dir = tempfile::tempdir().unwrap();
+    let _holder = match lock::try_acquire(dir.path(), 60, T0).unwrap() {
+        Acquire::Acquired(g) => g,
+        Acquire::Busy(_) => unreachable!(),
+    };
+    let o = run_with(dir.path(), user_rules(), at_limit(), Vec::new(), |o| {
+        o.once = false;
+        o.max_ticks = Some(2);
+    });
+    assert!(events(&o.output).is_empty(), "{}", o.output);
+}

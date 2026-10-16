@@ -46,26 +46,9 @@ pub enum Theme {
     Dark,
 }
 
-/// Notifiche (F2).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
-pub struct NotificationConfig {
-    /// Soglie in percentuale, crescenti (default 80 e 95).
-    #[serde(default = "default_thresholds")]
-    pub thresholds: Vec<f64>,
-}
-
-impl Default for NotificationConfig {
-    fn default() -> Self {
-        Self {
-            thresholds: default_thresholds(),
-        }
-    }
-}
-
-fn default_thresholds() -> Vec<f64> {
-    vec![80.0, 95.0]
-}
+/// Notifiche (F2, F18): regole nel modulo `notify`.
+pub use crate::notify::NotificationConfig;
+use crate::notify::rules::default_thresholds;
 
 fn default_interval() -> u32 {
     60
@@ -165,6 +148,10 @@ impl AppConfig {
                 "le soglie devono essere crescenti e distinte".into(),
             ));
         }
+        let problems = self.notifications.problems();
+        if !problems.is_empty() {
+            return Err(ConfigError::Invalid(problems.join("; ")));
+        }
         Ok(())
     }
 
@@ -199,6 +186,7 @@ impl AppConfig {
         }
         self.engine.sync_order();
         warnings.extend(self.engine_profiles.normalize(&self.engine));
+        warnings.extend(self.notifications.normalize());
         warnings
     }
 }
@@ -251,7 +239,7 @@ impl AppConfig {
             next.poll_interval_seconds = v;
         }
         if let Some(v) = &patch.notification_thresholds {
-            next.notifications.thresholds.clone_from(v);
+            next.notifications.set_legacy_thresholds(v);
         }
         if let Some(v) = patch.language {
             next.language = v;
@@ -263,6 +251,16 @@ impl AppConfig {
         }
         next.validate()?;
         *self = next;
+        Ok(())
+    }
+
+    /// Applica una merge patch (RFC 7386) alle notifiche e la valida; se non è valida la
+    /// config resta com'era.
+    pub fn patch_notifications(&mut self, patch: &serde_json::Value) -> Result<(), ConfigError> {
+        self.notifications = self
+            .notifications
+            .merged(patch)
+            .map_err(ConfigError::Invalid)?;
         Ok(())
     }
 
@@ -364,6 +362,7 @@ pub fn load(path: &Path) -> Result<Loaded, ConfigError> {
             _ => Theme::deserialize(v).is_ok(),
         };
         migrate_engine_interval(obj, &mut warnings);
+        warnings.extend(crate::notify::rules::migrate(obj));
         for key in ["language", "theme"] {
             if let Some(v) = obj.get(key).filter(|v| !known(key, v)) {
                 warnings.push(format!("{key} {v} sconosciuto: si usa il default"));
@@ -445,7 +444,7 @@ pub fn save(path: &Path, config: &AppConfig) -> Result<(), ConfigError> {
 }
 
 /// Apre in lettura senza seguire un link simbolico finale (Unix).
-fn open_no_follow(path: &Path) -> io::Result<File> {
+pub(crate) fn open_no_follow(path: &Path) -> io::Result<File> {
     let mut opts = OpenOptions::new();
     opts.read(true);
     #[cfg(unix)]

@@ -8,5 +8,5 @@
   "config.refreshIntervalSeconds": "How often to read `cswap list`, in seconds.",
   "config.cliPath": "Absolute path of `swapdeck-cli`. Empty: the one bundled with the extension.",
   "config.engine.enabled": "Run the SwapDeck engine (`swapdeck-cli headless`) while VS Code is open. It respects the single-instance lock and the rules in the SwapDeck config.",
-  "config.notifications.thresholds": "Usage thresholds (%) of the active account that raise a notification. The lowest also colors the status bar as a warning, the highest as critical."
+  "config.notifications.thresholds": "Usage thresholds (%) for the status bar colors: the lowest as a warning, the highest as critical. Notifications follow the SwapDeck rules (notifications section of the config)."
 }

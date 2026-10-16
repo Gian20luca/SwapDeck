@@ -2,7 +2,7 @@
 
 use swapdeck_core::cswap::{CswapError, ListResponse};
 
-use crate::notify::{Notice, Window, display_name};
+use crate::notify::display_name;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Lang {
@@ -100,70 +100,6 @@ pub fn account_label(account: &swapdeck_core::cswap::Account) -> String {
     format!("{name} · 5h {}", pct(five))
 }
 
-/// Titolo e testo di una notifica.
-pub fn notice(lang: Lang, n: &Notice) -> (String, String) {
-    match (lang, n) {
-        (
-            Lang::It,
-            Notice::Threshold {
-                name,
-                window,
-                threshold,
-                pct: p,
-                ..
-            },
-        ) => (
-            format!("{name}: {} sulle {}", pct(Some(*p)), window_it(*window)),
-            format!("Soglia superata: {}.", pct(Some(*threshold))),
-        ),
-        (
-            Lang::En,
-            Notice::Threshold {
-                name,
-                window,
-                threshold,
-                pct: p,
-                ..
-            },
-        ) => (
-            format!(
-                "{name}: {} of the {} limit",
-                pct(Some(*p)),
-                window_en(*window)
-            ),
-            format!("Crossed the {} threshold.", pct(Some(*threshold))),
-        ),
-        (Lang::It, Notice::Switched { from, name, .. }) => (
-            format!("Account attivo: {name}"),
-            match from {
-                Some(f) => format!("Cambio dall'account {f}."),
-                None => "Account attivato.".into(),
-            },
-        ),
-        (Lang::En, Notice::Switched { from, name, .. }) => (
-            format!("Active account: {name}"),
-            match from {
-                Some(f) => format!("Switched from account {f}."),
-                None => "Account activated.".into(),
-            },
-        ),
-    }
-}
-
-fn window_it(w: Window) -> &'static str {
-    match w {
-        Window::FiveHour => "5 ore",
-        Window::SevenDay => "7 giorni",
-    }
-}
-
-fn window_en(w: Window) -> &'static str {
-    match w {
-        Window::FiveHour => "5-hour",
-        Window::SevenDay => "7-day",
-    }
-}
-
 /// Testo dell'errore di un cambio dal menu.
 pub fn switch_failed(lang: Lang, err: &CswapError) -> (String, String) {
     let title = match lang {
@@ -237,33 +173,13 @@ mod tests {
     }
 
     #[test]
-    fn labels_and_notices() {
+    fn labels() {
         let list = fixture_list();
         assert_eq!(account_label(&list.accounts[4]), "alias6 (6) · 5h 66%");
         let mut no_data = list.accounts[1].clone();
         no_data.usage = None;
         no_data.last_good_usage = None;
         assert_eq!(account_label(&no_data), "alias2 (2) · 5h –");
-        let n = Notice::Threshold {
-            account: 6,
-            name: "alias6".into(),
-            window: Window::FiveHour,
-            threshold: 80.0,
-            pct: 81.4,
-        };
-        assert_eq!(
-            notice(Lang::It, &n),
-            (
-                "alias6: 81% sulle 5 ore".into(),
-                "Soglia superata: 80%.".into()
-            )
-        );
-        let s = Notice::Switched {
-            from: Some(6),
-            to: 3,
-            name: "alias3".into(),
-        };
-        assert_eq!(notice(Lang::En, &s).0, "Active account: alias3");
     }
 
     #[test]

@@ -22,11 +22,12 @@ use swapdeck_core::config::{
 };
 use swapdeck_core::conflicts::{ConflictSource, SystemConflicts};
 use swapdeck_core::cswap::{
-    ActionOutcome, AutoMessage, CswapAction, CswapClient, CswapError, CswapErrorKind,
+    ActionOutcome, AutoMessage, CswapAction, CswapClient, CswapError, CswapErrorKind, ListResponse,
 };
 use swapdeck_core::engine::{EngineProfiles, EngineRules, EngineState, EngineView, ProfileCommand};
 use swapdeck_core::history::{History, HistoryEvents, HistoryQuery, HistoryRecord};
 use swapdeck_core::lock;
+use swapdeck_core::notify::{self, NotificationConfig, NotifyPoll};
 use swapdeck_core::paths::AppPaths;
 use swapdeck_core::setup::{Setup, SetupProgress};
 use swapdeck_core::timeutil::now_unix;
@@ -54,6 +55,9 @@ pub const USAGE: &str = "uso: swapdeck-cli <comando>
   config set <json|->
   preferences get
   preferences set <json|->
+  notifications get
+  notifications set <json|->   (merge patch della sezione notifications)
+  notifications poll [-]       (lista da stdin; notifiche solo senza motore vivo)
   engine status
   engine state
   engine rules set <json|->
@@ -136,6 +140,10 @@ fn dispatch(args: &[String]) -> Res<Value> {
         ["engine", "rules", "set", input] => to_value(engine_rules_set(&read_input(input)?)?),
         ["engine", "profiles"] => to_value(engine_profiles()?),
         ["engine", "profiles", input] => to_value(engine_profile_apply(&read_input(input)?)?),
+        ["notifications", "get"] => to_value(notifications_get()?),
+        ["notifications", "set", input] => to_value(notifications_set(&read_input(input)?)?),
+        ["notifications", "poll"] => to_value(notifications_poll(None)?),
+        ["notifications", "poll", "-"] => to_value(notifications_poll(Some(read_input("-")?))?),
         ["config", "get"] => to_value(config_get()?),
         ["config", "set", input] => to_value(config_set(&read_input(input)?)?),
         ["engine", "status"] => to_value(engine_status(&paths()?)),
@@ -495,6 +503,49 @@ fn engine_profile_apply(text: &str) -> Res<EngineState> {
     engine_state(&paths)
 }
 
+/// Regole delle notifiche (sezione `notifications` della config).
+fn notifications_get() -> Res<NotificationConfig> {
+    let loaded = config::load(&paths()?.config_file()).map_err(config_error)?;
+    Ok(loaded.config.notifications)
+}
+
+/// Applica una merge patch (RFC 7386) alle notifiche, la valida e la salva; le altre chiavi
+/// della config restano.
+fn notifications_set(text: &str) -> Res<NotificationConfig> {
+    let patch: Value = serde_json::from_str(text).map_err(|e| json_error("notifiche", &e))?;
+    let saved = config::update(&paths()?.config_file(), |c| c.patch_notifications(&patch))
+        .map_err(config_error)?;
+    Ok(saved.notifications)
+}
+
+/// Notifiche per l'estensione VS Code: solo se nessun motore vivo tiene il lock (altrimenti
+/// le manda lui). La lista arriva da stdin (`-`, quella appena letta con `state`) o da cswap.
+fn notifications_poll(input: Option<String>) -> Res<NotifyPoll> {
+    let paths = paths()?;
+    let list = match input {
+        Some(text) => {
+            Some(serde_json::from_str::<ListResponse>(&text).map_err(|e| json_error("lista", &e))?)
+        }
+        None => client().and_then(|c| c.list()).ok(),
+    };
+    let loaded = config::load(&paths.config_file()).map_err(config_error)?;
+    let mut installed = || {
+        client()
+            .ok()?
+            .version()
+            .ok()
+            .map(|v| format!("{}.{}.{}", v.major, v.minor, v.patch))
+    };
+    notify::poll(
+        &paths.data_dir,
+        list.as_ref(),
+        &loaded.config.notifications,
+        loaded.config.language,
+        now_unix(),
+        &mut installed,
+    )
+    .map_err(|e| failed(format!("notifiche non valutate: {e}")))
+}
 fn config_view(path: &Path) -> Res<ConfigView> {
     let loaded = config::load(path).map_err(|e| failed(e.to_string()))?;
     Ok(ConfigView {
@@ -523,6 +574,14 @@ fn config_set(patch_text: &str) -> Res<ConfigView> {
     let mut next: AppConfig = serde_json::from_value(merged)
         .map_err(|e| usage_error(format!("config non valida: {e}")))?;
     next.schema_version = CONFIG_SCHEMA_VERSION;
+    // Notifiche con le stesse regole di `notifications set` (soglie della versione 1 comprese).
+    if let Some(n) = patch.get("notifications").filter(|n| n.is_object()) {
+        next.notifications = current
+            .config
+            .notifications
+            .merged(n)
+            .map_err(|e| usage_error(format!("config non valida: {e}")))?;
+    }
     next.preserved = current.config.preserved;
     let mut warnings = next.normalize();
     config::save(&path, &next).map_err(|e| usage_error(e.to_string()))?;

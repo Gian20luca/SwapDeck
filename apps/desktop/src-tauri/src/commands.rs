@@ -14,6 +14,7 @@ use swapdeck_core::engine::{EngineProfiles, EngineRules, EngineState, ProfileCom
 use swapdeck_core::history::{
     DEFAULT_RETENTION_DAYS, History, HistoryEvents, HistoryQuery, HistoryRecord,
 };
+use swapdeck_core::notify::NotificationConfig;
 use swapdeck_core::timeutil::{now_unix, parse_iso};
 use tauri::{AppHandle, State};
 
@@ -328,6 +329,24 @@ pub async fn set_preferences(
     Ok(saved.preferences())
 }
 
+/// Regole delle notifiche (sezione `notifications` della config).
+#[tauri::command]
+pub fn get_notification_settings(shared: State<'_, Arc<Shared>>) -> NotificationConfig {
+    lock(&shared.settings).notifications.clone()
+}
+
+/// Applica una merge patch (RFC 7386) alle regole delle notifiche, la valida e la salva; vale
+/// dalla lettura dopo. Valori non validi = `invalidUsage`, config intatta.
+#[tauri::command]
+pub async fn set_notification_settings(
+    shared: State<'_, Arc<Shared>>,
+    patch: serde_json::Value,
+) -> Res<NotificationConfig> {
+    let shared = Arc::clone(&shared);
+    let saved = blocking(move || shared.update_config(|c| c.patch_notifications(&patch))).await?;
+    Ok(saved.notifications)
+}
+
 /// Cambi di account e decisioni del motore dallo storico (intervallo limitato alla
 /// conservazione, al massimo `MAX_EVENTS` per tipo).
 #[tauri::command]
@@ -551,6 +570,19 @@ mod tests {
         };
         let saved = s.update_config(|c| c.apply_preferences(&prefs)).unwrap();
         assert_eq!(saved.notifications.thresholds, [50.0, 90.0]);
-        assert_eq!(lock(&s.settings).thresholds, [50.0, 90.0]);
+        assert_eq!(lock(&s.settings).notifications.thresholds, [50.0, 90.0]);
+        // Notifiche: patch validata, in memoria per la lettura dopo; errore = config intatta.
+        let patch =
+            serde_json::json!({"quietHours": {"enabled": true}, "percent": {"sevenDay": [70]}});
+        s.update_config(|c| c.patch_notifications(&patch)).unwrap();
+        let n = lock(&s.settings).notifications.clone();
+        assert!(n.quiet_hours.enabled);
+        assert_eq!(n.percent.seven_day, [70.0]);
+        let bad = serde_json::json!({"login": {"daysBefore": 0}});
+        let err = s
+            .update_config(|c| c.patch_notifications(&bad))
+            .unwrap_err();
+        assert_eq!(err.kind, CswapErrorKind::InvalidUsage);
+        assert_eq!(lock(&s.settings).notifications, n);
     }
 }

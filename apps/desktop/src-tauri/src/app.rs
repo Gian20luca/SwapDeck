@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use swapdeck_core::config::Language;
 use swapdeck_core::cswap::ListResponse;
 use swapdeck_core::paths::AppPaths;
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
@@ -13,6 +14,7 @@ use tauri_plugin_notification::NotificationExt as _;
 use crate::api::{AutoPoll, CswapApi, Outcome, Res};
 use crate::auto_watch::{AUTO_WATCH_PERIOD, AutoWatcher};
 use crate::autostart::{self, MINIMIZED_ARG, Startup};
+use crate::notify::AppNotifier;
 use crate::poller::Poller;
 use crate::settings::SettingsStore;
 use crate::state::{STATE_EVENT, Shared, Snapshot, lock, now_ms};
@@ -59,12 +61,29 @@ pub fn on_list(app: &AppHandle, result: &Res<ListResponse>) {
         s.apply(result, now_ms());
         true
     });
-    if let Ok(list) = result {
-        let notices = lock(&shared.notifier).observe(list);
-        let lang = lock(&shared.settings).lang;
-        for n in &notices {
-            notify(app, text::notice(lang, n));
-        }
+    let (lang, rules, profile) = {
+        let s = lock(&shared.settings);
+        let profile = s.engine_profiles.active().map(|p| p.name.clone());
+        (s.lang, s.notifications.clone(), profile)
+    };
+    let api = Arc::clone(&shared.api);
+    let notices = lock(&shared.notifier).observe(
+        result.as_ref().ok(),
+        (&rules, profile.as_deref()),
+        &mut || api.installed_version(),
+    );
+    let language = match lang {
+        text::Lang::It => Language::It,
+        text::Lang::En => Language::En,
+    };
+    for n in &notices {
+        notify(
+            app,
+            (
+                n.title.get(language).to_owned(),
+                n.body.get(language).to_owned(),
+            ),
+        );
     }
 }
 
@@ -158,6 +177,7 @@ pub fn run(api: Arc<dyn CswapApi>) {
     let updates = settings.updates_enabled;
     let data_dir = AppPaths::from_env_or_system().map(|p| p.data_dir);
     let shared = Arc::new(Shared::new(api, store, settings));
+    *lock(&shared.notifier) = AppNotifier::new(data_dir.as_deref());
 
     let app = tauri::Builder::default()
         // Per prima: la seconda istanza mostra la finestra principale e termina.
@@ -192,6 +212,8 @@ pub fn run(api: Arc<dyn CswapApi>) {
             commands::apply_engine_profile,
             commands::get_preferences,
             commands::set_preferences,
+            commands::get_notification_settings,
+            commands::set_notification_settings,
             commands::get_history_events,
             setup_cmd::diagnose_setup,
             setup_cmd::install_cswap,
@@ -226,7 +248,11 @@ pub fn run(api: Arc<dyn CswapApi>) {
                             let s = lock(&live.settings);
                             (s.engine.clone(), s.poll_interval)
                         },
-                        move |view| {
+                        move |rules, step| {
+                            lock(&engine_cb.state::<Arc<Shared>>().notifier).on_step(rules, step);
+                            let Some(view) = engine_loop::view_of(rules, step) else {
+                                return;
+                            };
                             // Senza invio: l'esito della lettura segue subito e lo manda.
                             update_snapshot(&engine_cb, |s| {
                                 s.set_engine(view);
