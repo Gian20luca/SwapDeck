@@ -5,7 +5,14 @@ on:
   push:
     branches: ['**']
   pull_request:
+  # Manuale: un solo sistema per le correzioni mirate (macOS costa 10 volte i minuti).
   workflow_dispatch:
+    inputs:
+      os:
+        description: Sistema da verificare
+        type: choice
+        options: [tutti, windows-latest, ubuntu-22.04, macos-latest]
+        default: tutti
 
 permissions:
   contents: read
@@ -26,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-22.04, macos-latest]
+        os: ${{ fromJSON((github.event_name != 'workflow_dispatch' || inputs.os == 'tutti') && '["windows-latest","ubuntu-22.04","macos-latest"]' || format('["{0}"]', inputs.os)) }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     steps:
@@ -66,6 +73,7 @@ jobs:
 
   e2e:
     name: e2e (packages/ui)
+    if: github.event_name != 'workflow_dispatch' || inputs.os == 'tutti' || inputs.os == 'ubuntu-22.04'
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:

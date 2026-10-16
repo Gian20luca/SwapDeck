@@ -6,6 +6,8 @@ use std::path::Path;
 
 use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 use tauri::AppHandle;
+#[cfg(target_os = "linux")]
+use tauri::Manager as _;
 
 /// Argomento con cui l'avvio automatico lancia l'app: parte nell'area di notifica, senza finestra.
 pub const MINIMIZED_ARG: &str = "--minimized";
