@@ -6,6 +6,7 @@ import { formatAge, formatClock, isStale, shortEmail } from '../lib/format.js';
 import { useI18n } from '../i18n/index.js';
 import { PaceIndicator } from './PaceIndicator.js';
 import { UsageBar } from './UsageBar.js';
+import { Tooltip } from './Tooltip.js';
 
 export interface AccountCardProps {
   account: Account;
@@ -143,25 +144,28 @@ export function AccountCard({
         </span>
         <span className="sd-card__actions">
           {onOpenHistory && usage && (
+            <Tooltip text={t('account.history.tip')}>
+              <button
+                type="button"
+                className="sd-btn sd-btn--small"
+                aria-label={t('account.historyOpen', { name })}
+                onClick={() => onOpenHistory(account)}
+              >
+                {t('account.history')}
+              </button>
+            </Tooltip>
+          )}
+          <Tooltip text={blocked ? t(blocked) : t('account.switchTo.tip')}>
             <button
               type="button"
-              className="sd-btn sd-btn--small"
-              aria-label={t('account.historyOpen', { name })}
-              onClick={() => onOpenHistory(account)}
+              className="sd-btn sd-btn--small sd-btn--primary"
+              disabled={busy || blocked !== null}
+              aria-label={t('account.switchToLabel', { name })}
+              onClick={() => onSwitch(account)}
             >
-              {t('account.history')}
+              {t('account.switchTo')}
             </button>
-          )}
-          <button
-            type="button"
-            className="sd-btn sd-btn--small sd-btn--primary"
-            disabled={busy || blocked !== null}
-            title={blocked ? t(blocked) : undefined}
-            aria-label={t('account.switchToLabel', { name })}
-            onClick={() => onSwitch(account)}
-          >
-            {t('account.switchTo')}
-          </button>
+          </Tooltip>
         </span>
       </div>
 

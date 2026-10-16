@@ -8,6 +8,7 @@ import { mergeEvents, type EventRow } from '../../lib/historyEvents.js';
 import { useLoad } from '../../lib/useLoad.js';
 import { HistoryPanel } from '../HistoryPanel.js';
 import { LoadGate, Section } from './common.js';
+import { Tooltip } from '../Tooltip.js';
 
 const RANGES = [
   { hours: 24, label: 'history.range.24h' },
@@ -104,15 +105,16 @@ export function HistoryPage({ target }: { target?: { account: number; key: numbe
           {t('history.range')}
         </span>
         {RANGES.map((range) => (
-          <button
-            key={range.hours}
-            type="button"
-            className={`sd-btn sd-btn--small${hours === range.hours ? ' sd-btn--primary' : ''}`}
-            aria-pressed={hours === range.hours}
-            onClick={() => setHours(range.hours)}
-          >
-            {t(range.label)}
-          </button>
+          <Tooltip key={range.hours} text={t('history.range.tip')}>
+            <button
+              type="button"
+              className={`sd-btn sd-btn--small${hours === range.hours ? ' sd-btn--primary' : ''}`}
+              aria-pressed={hours === range.hours}
+              onClick={() => setHours(range.hours)}
+            >
+              {t(range.label)}
+            </button>
+          </Tooltip>
         ))}
       </div>
 
@@ -140,21 +142,23 @@ export function HistoryPage({ target }: { target?: { account: number; key: numbe
               <li key={account.number} className="sd-card">
                 <div className="sd-toolbar">
                   <span className="sd-card__name">{name}</span>
-                  <button
-                    type="button"
-                    ref={(node) => {
-                      if (node) toggles.current.set(account.number, node);
-                      else toggles.current.delete(account.number);
-                    }}
-                    className="sd-btn sd-btn--small"
-                    aria-expanded={isOpen}
-                    aria-label={t(isOpen ? 'account.historyHide' : 'account.historyLabel', {
-                      name,
-                    })}
-                    onClick={() => toggle(account.number)}
-                  >
-                    {t(isOpen ? 'history.hide' : 'history.show')}
-                  </button>
+                  <Tooltip text={t('history.toggle.tip')}>
+                    <button
+                      type="button"
+                      ref={(node) => {
+                        if (node) toggles.current.set(account.number, node);
+                        else toggles.current.delete(account.number);
+                      }}
+                      className="sd-btn sd-btn--small"
+                      aria-expanded={isOpen}
+                      aria-label={t(isOpen ? 'account.historyHide' : 'account.historyLabel', {
+                        name,
+                      })}
+                      onClick={() => toggle(account.number)}
+                    >
+                      {t(isOpen ? 'history.hide' : 'history.show')}
+                    </button>
+                  </Tooltip>
                 </div>
                 {isOpen && (
                   <div className="sd-card__history">
@@ -216,13 +220,15 @@ function EventsSection({ hours }: { hours: number }) {
               </ul>
               {rows.length > shown && (
                 <div className="sd-row">
-                  <button
-                    type="button"
-                    className="sd-btn sd-btn--small"
-                    onClick={() => setShown((n) => n + PAGE_SIZE)}
-                  >
-                    {t('history.events.more', { count: rows.length - shown })}
-                  </button>
+                  <Tooltip text={t('history.more.tip')}>
+                    <button
+                      type="button"
+                      className="sd-btn sd-btn--small"
+                      onClick={() => setShown((n) => n + PAGE_SIZE)}
+                    >
+                      {t('history.events.more', { count: rows.length - shown })}
+                    </button>
+                  </Tooltip>
                 </div>
               )}
             </>

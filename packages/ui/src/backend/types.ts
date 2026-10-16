@@ -12,6 +12,7 @@ import type {
   EngineView,
   HistoryEvents,
   ListResponse,
+  NotificationConfig,
   ProfileCommand,
   SetupDiagnosis,
   SetupOutcome,
@@ -79,6 +80,12 @@ export type {
 /** Stato del motore all'ultimo giro (`EngineView` del Rust). */
 export type EngineViewInfo = EngineView;
 
+/** Patch delle notifiche: per ogni avviso solo i campi che cambiano. */
+export type NotificationPatch = {
+  [K in Exclude<keyof NotificationConfig, 'thresholds'>]?: Partial<NotificationConfig[K]>;
+};
+export type { NotificationConfig };
+
 /** Impostazioni dell'host desktop (avvio al login, versione). */
 export interface HostSettings {
   autostart: boolean;
@@ -143,6 +150,10 @@ export interface Backend {
   getEngineProfiles?(): Promise<EngineProfiles>;
   /** Crea, rinomina, duplica, elimina, ripristina o seleziona una mappa; stato del motore aggiornato. */
   applyEngineProfile?(command: ProfileCommand): Promise<EngineState>;
+  /** Regole delle notifiche (F18). */
+  getNotificationSettings?(): Promise<NotificationConfig>;
+  /** Merge patch delle regole (validata dal Rust); restituisce le regole salvate. */
+  setNotificationSettings?(patch: NotificationPatch): Promise<NotificationConfig>;
   /** Intervallo, soglie delle notifiche, lingua e tema salvati nella config. */
   getPreferences?(): Promise<AppPreferences>;
   /** Salva solo i campi presenti. */

@@ -14,6 +14,7 @@ import { AccountActions } from './manage/AccountActions.js';
 import { AccountDetailPage } from './manage/AccountDetailPage.js';
 import { AddAccount } from './manage/AddAccount.js';
 import { QuickSwitch, type QuickStrategy } from './QuickSwitch.js';
+import { Tooltip } from './Tooltip.js';
 
 export interface DashboardProps {
   /** Contenuto extra nella barra degli strumenti (per esempio le preferenze). */
@@ -140,16 +141,20 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
         <h1 id="sd-dashboard-title">{t('dashboard.title')}</h1>
         <div className="sd-toolbar__group">
           <QuickSwitch onSwitch={onQuick} disabled={busy || state.status !== 'ready'} />
-          <button
-            type="button"
-            className="sd-btn sd-btn--small"
-            disabled={state.status === 'loading' || (state.status === 'ready' && state.refreshing)}
-            onClick={() => void refresh()}
-          >
-            {state.status === 'ready' && state.refreshing
-              ? t('dashboard.refreshing')
-              : t('common.refresh')}
-          </button>
+          <Tooltip text={t('dashboard.refresh.tip')}>
+            <button
+              type="button"
+              className="sd-btn sd-btn--small"
+              disabled={
+                state.status === 'loading' || (state.status === 'ready' && state.refreshing)
+              }
+              onClick={() => void refresh()}
+            >
+              {state.status === 'ready' && state.refreshing
+                ? t('dashboard.refreshing')
+                : t('common.refresh')}
+            </button>
+          </Tooltip>
         </div>
       </div>
       {(updated || toolbarExtra) && (
@@ -174,9 +179,11 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
           <h2>{t('dashboard.error.title')}</h2>
           <p>{state.message}</p>
           <p>{t('dashboard.error.hint')}</p>
-          <button type="button" className="sd-btn" onClick={() => void refresh()}>
-            {t('common.retry')}
-          </button>
+          <Tooltip text={t('dashboard.refresh.tip')}>
+            <button type="button" className="sd-btn" onClick={() => void refresh()}>
+              {t('common.retry')}
+            </button>
+          </Tooltip>
         </div>
       )}
 

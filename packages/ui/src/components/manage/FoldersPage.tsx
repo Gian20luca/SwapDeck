@@ -8,6 +8,7 @@ import { useI18n } from '../../i18n/index.js';
 import { accountName } from '../../lib/account.js';
 import { useLoad } from '../../lib/useLoad.js';
 import { LoadGate, NoticeView, PathField, SelectField, Section, Unavailable } from './common.js';
+import { Tooltip } from '../Tooltip.js';
 
 /** Cartelle mappate agli account: elenco, `map` con scelta della cartella e `unmap`. */
 export function FoldersPage() {
@@ -82,15 +83,17 @@ export function FoldersPage() {
                           : nameOf(m.account)}
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      className="sd-btn sd-btn--small"
-                      disabled={busy}
-                      aria-label={t('folders.unmapLabel', { path: m.path })}
-                      onClick={() => void unmap(m.path)}
-                    >
-                      {t('folders.unmap')}
-                    </button>
+                    <Tooltip text={t('folders.unmap.tip')}>
+                      <button
+                        type="button"
+                        className="sd-btn sd-btn--small"
+                        disabled={busy}
+                        aria-label={t('folders.unmapLabel', { path: m.path })}
+                        onClick={() => void unmap(m.path)}
+                      >
+                        {t('folders.unmap')}
+                      </button>
+                    </Tooltip>
                   </li>
                 ))}
               </ul>
@@ -103,6 +106,7 @@ export function FoldersPage() {
         <div className="sd-form">
           <SelectField
             label={t('folders.account')}
+            tip={t('folders.account.tip')}
             value={selected}
             onChange={setAccount}
             disabled={busy || accounts.length === 0}
@@ -113,20 +117,23 @@ export function FoldersPage() {
           />
           <PathField
             label={t('folders.path')}
+            tip={t('folders.path.tip')}
             value={path}
             onChange={setPath}
             {...(onBrowse ? { onBrowse } : {})}
             disabled={busy}
           />
           <div className="sd-row">
-            <button
-              type="button"
-              className="sd-btn sd-btn--primary"
-              disabled={busy || path.trim() === '' || selected === ''}
-              onClick={() => void map()}
-            >
-              {t('folders.map')}
-            </button>
+            <Tooltip text={t('folders.map.tip')}>
+              <button
+                type="button"
+                className="sd-btn sd-btn--primary"
+                disabled={busy || path.trim() === '' || selected === ''}
+                onClick={() => void map()}
+              >
+                {t('folders.map')}
+              </button>
+            </Tooltip>
           </div>
         </div>
       </Section>

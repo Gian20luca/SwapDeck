@@ -8,6 +8,7 @@ import { displayPct, formatClock, isStale, levelFor } from '../lib/format.js';
 import { useEngineMarks } from '../lib/useEngineMarks.js';
 import { useNow } from '../lib/useNow.js';
 import { UsageBar } from './UsageBar.js';
+import { Tooltip } from './Tooltip.js';
 
 /** Durata minima dell'indicazione «in aggiornamento»: una lettura dalla cache sarebbe invisibile. */
 const MIN_REFRESH_MS = 600;
@@ -32,26 +33,27 @@ function ToolButton({
   busy?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      className="sd-mini__tool"
-      aria-label={label}
-      title={label}
-      aria-busy={busy || undefined}
-      data-busy={busy || undefined}
-      onClick={onClick}
-    >
-      <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
-        <path
-          d={ICONS[icon]}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </button>
+    <Tooltip text={label}>
+      <button
+        type="button"
+        className="sd-mini__tool"
+        aria-label={label}
+        aria-busy={busy || undefined}
+        data-busy={busy || undefined}
+        onClick={onClick}
+      >
+        <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true" focusable="false">
+          <path
+            d={ICONS[icon]}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+    </Tooltip>
   );
 }
 
@@ -228,9 +230,11 @@ export function MiniWidget() {
     body = (
       <div role="alert">
         <div className="sd-mini__foot">{state.message}</div>
-        <button type="button" className="sd-btn sd-btn--small" onClick={() => void refresh()}>
-          {t('common.retry')}
-        </button>
+        <Tooltip text={t('mini.refresh.tip')}>
+          <button type="button" className="sd-btn sd-btn--small" onClick={() => void refresh()}>
+            {t('common.retry')}
+          </button>
+        </Tooltip>
       </div>
     );
   } else {

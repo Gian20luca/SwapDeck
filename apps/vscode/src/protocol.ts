@@ -26,6 +26,8 @@ export const REQUEST_METHODS = [
   'setEngineRules',
   'getEngineProfiles',
   'applyEngineProfile',
+  'getNotificationSettings',
+  'setNotificationSettings',
   'getPreferences',
   'setPreferences',
   'getHistoryEvents',
@@ -62,11 +64,17 @@ export type RequestParams =
   | { method: 'confirmationFor'; params: { action: CswapAction } }
   | { method: 'runAction'; params: { action: CswapAction } }
   | {
-      method: 'listMappings' | 'getEngineState' | 'getEngineProfiles' | 'getPreferences';
+      method:
+        | 'listMappings'
+        | 'getEngineState'
+        | 'getEngineProfiles'
+        | 'getPreferences'
+        | 'getNotificationSettings';
       params: Record<string, never>;
     }
   | { method: 'setEngineRules'; params: { rules: EngineRules } }
   | { method: 'applyEngineProfile'; params: { command: ProfileCommand } }
+  | { method: 'setNotificationSettings'; params: { patch: Record<string, unknown> } }
   | { method: 'setPreferences'; params: { prefs: Partial<AppPreferences> } }
   | { method: 'getHistoryEvents'; params: HistoryParams }
   | { method: 'pickOpenFile' | 'pickSaveFile' | 'pickFolder'; params: PickParams }

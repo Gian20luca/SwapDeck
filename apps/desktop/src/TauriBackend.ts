@@ -7,6 +7,7 @@ import type {
   EngineProfiles,
   EngineRules,
   ListResponse,
+  NotificationConfig,
   ProfileCommand,
   SetupDiagnosis,
   SetupOutcome,
@@ -26,6 +27,7 @@ import {
   type HistoryEvents,
   type HistoryPoint,
   type HistoryQuery,
+  type NotificationPatch,
   type MiniWindowControls,
   type PickOptions,
   type SetupBackend,
@@ -257,6 +259,14 @@ export class TauriBackend implements Backend, SetupBackend {
 
   applyEngineProfile(command: ProfileCommand): Promise<EngineState> {
     return this.call('apply_engine_profile', { command });
+  }
+
+  getNotificationSettings(): Promise<NotificationConfig> {
+    return this.call('get_notification_settings');
+  }
+
+  setNotificationSettings(patch: NotificationPatch): Promise<NotificationConfig> {
+    return this.call('set_notification_settings', { patch });
   }
 
   getPreferences(): Promise<AppPreferences> {

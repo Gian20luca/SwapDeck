@@ -10,6 +10,7 @@ import type {
   EngineProfiles,
   EngineRules,
   EngineState,
+  NotificationConfig,
   ProfileCommand,
   HistoryEvents,
   ListResponse,
@@ -25,6 +26,7 @@ import {
   type Backend,
   type HistoryPoint,
   type HistoryQuery,
+  type NotificationPatch,
   type PickOptions,
   type SetupBackend,
   type Unsubscribe,
@@ -159,6 +161,14 @@ export class VsCodeBackend implements Backend, SetupBackend {
 
   applyEngineProfile(command: ProfileCommand): Promise<EngineState> {
     return this.request({ method: 'applyEngineProfile', params: { command } });
+  }
+
+  getNotificationSettings(): Promise<NotificationConfig> {
+    return this.request({ method: 'getNotificationSettings', params: {} });
+  }
+
+  setNotificationSettings(patch: NotificationPatch): Promise<NotificationConfig> {
+    return this.request({ method: 'setNotificationSettings', params: { patch } });
   }
 
   getPreferences(): Promise<AppPreferences> {

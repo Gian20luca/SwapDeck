@@ -24,6 +24,8 @@ import {
   TextField,
   Unavailable,
 } from './common.js';
+import { NotificationsPage } from './NotificationsPage.js';
+import { Tooltip } from '../Tooltip.js';
 
 /** «80, 95» in soglie crescenti da 1 a 100 (da 1 a 4 valori); `null` se il testo non è valido. */
 export function parseThresholds(text: string): number[] | null {
@@ -43,9 +45,27 @@ const THEME_TO_CONFIG: Record<ThemeMode, Theme> = { auto: 'system', light: 'ligh
 /** Impostazioni dell'app (intervallo, notifiche, lingua, tema, avvio al login) e configurazione di cswap. */
 export function SettingsPage() {
   const { t } = useI18n();
+  const backend = useBackend();
+  const [page, setPage] = useState<'main' | 'notifications'>('main');
+  const notifications =
+    typeof backend.getNotificationSettings === 'function' &&
+    typeof backend.setNotificationSettings === 'function';
+  if (page === 'notifications' && notifications)
+    return <NotificationsPage onBack={() => setPage('main')} />;
   return (
     <div className="sd-page">
       <h2>{t('settings.title')}</h2>
+      {notifications && (
+        <Section title={t('notif.title')} hint={t('notif.hint')}>
+          <div className="sd-row">
+            <Tooltip text={t('notif.open.tip')}>
+              <button type="button" className="sd-btn" onClick={() => setPage('notifications')}>
+                {t('notif.open')}
+              </button>
+            </Tooltip>
+          </div>
+        </Section>
+      )}
       <PreferencesSection />
       <AutostartSection />
       <CswapConfigSection />
@@ -94,7 +114,13 @@ function PreferencesSection() {
       </div>
       {supported && (
         <LoadGate state={state} onRetry={() => void reload()}>
-          {(prefs) => <PollForm prefs={prefs} onSave={save} />}
+          {(prefs) => (
+            <PollForm
+              prefs={prefs}
+              onSave={save}
+              withThresholds={typeof backend.getNotificationSettings !== 'function'}
+            />
+          )}
         </LoadGate>
       )}
       <NoticeView notice={notice} />
@@ -105,9 +131,12 @@ function PreferencesSection() {
 function PollForm({
   prefs,
   onSave,
+  withThresholds,
 }: {
   prefs: AppPreferences;
   onSave: (change: Partial<AppPreferences>, text: string) => Promise<boolean>;
+  /** Soglie delle notifiche della versione 1: solo se l'host non ha la pagina Notifiche. */
+  withThresholds: boolean;
 }) {
   const { t } = useI18n();
   const [interval, setInterval] = useState(String(prefs.pollIntervalSeconds));
@@ -123,26 +152,30 @@ function PollForm({
       ? t('settings.interval.invalid')
       : null;
   const parsed = parseThresholds(thresholds);
-  const thresholdsError = parsed === null ? t('settings.thresholds.invalid') : null;
+  const thresholdsError =
+    withThresholds && parsed === null ? t('settings.thresholds.invalid') : null;
   const dirty =
     intervalNumber !== prefs.pollIntervalSeconds ||
-    JSON.stringify(parsed) !== JSON.stringify(prefs.notificationThresholds);
+    (withThresholds && JSON.stringify(parsed) !== JSON.stringify(prefs.notificationThresholds));
 
   return (
     <form
       className="sd-form"
       onSubmit={(event) => {
         event.preventDefault();
-        if (intervalError || !parsed) return;
+        if (intervalError || thresholdsError) return;
         setSaving(true);
         void onSave(
-          { pollIntervalSeconds: intervalNumber, notificationThresholds: parsed },
+          withThresholds && parsed
+            ? { pollIntervalSeconds: intervalNumber, notificationThresholds: parsed }
+            : { pollIntervalSeconds: intervalNumber },
           t('settings.saved'),
         ).finally(() => setSaving(false));
       }}
     >
       <TextField
         label={t('settings.interval')}
+        tip={t('settings.interval.tip')}
         type="number"
         min={60}
         max={3600}
@@ -152,22 +185,27 @@ function PollForm({
         error={intervalError}
         disabled={saving}
       />
-      <TextField
-        label={t('settings.thresholds')}
-        hint={t('settings.thresholds.hint')}
-        value={thresholds}
-        onChange={setThresholds}
-        error={thresholdsError}
-        disabled={saving}
-      />
+      {withThresholds && (
+        <TextField
+          label={t('settings.thresholds')}
+          tip={t('settings.thresholds.tip')}
+          hint={t('settings.thresholds.hint')}
+          value={thresholds}
+          onChange={setThresholds}
+          error={thresholdsError}
+          disabled={saving}
+        />
+      )}
       <div className="sd-row">
-        <button
-          type="submit"
-          className="sd-btn sd-btn--primary"
-          disabled={saving || !dirty || intervalError !== null || parsed === null}
-        >
-          {t('common.save')}
-        </button>
+        <Tooltip text={t('settings.save.tip')}>
+          <button
+            type="submit"
+            className="sd-btn sd-btn--primary"
+            disabled={saving || !dirty || intervalError !== null || thresholdsError !== null}
+          >
+            {t('common.save')}
+          </button>
+        </Tooltip>
       </div>
     </form>
   );
@@ -192,6 +230,7 @@ function AutostartSection() {
     <Section title={t('settings.autostart.title')}>
       <CheckField
         label={t('settings.autostart')}
+        tip={t('settings.autostart.tip')}
         checked={settings.autostart}
         disabled={busy}
         {...(settings.autostartManaged ? {} : { hint: t('settings.autostart.dev') })}
@@ -300,6 +339,7 @@ function ConfigRow({
       {kind.type === 'choice' && (
         <SelectField
           label={label}
+          tip={t('config.field.tip')}
           value={text}
           onChange={setText}
           disabled={busy}
@@ -309,6 +349,7 @@ function ConfigRow({
       {kind.type === 'bool' && (
         <CheckField
           label={label}
+          tip={t('config.field.tip')}
           checked={text === 'true'}
           onChange={(checked) => setText(checked ? 'true' : 'false')}
           disabled={busy}
@@ -317,6 +358,7 @@ function ConfigRow({
       {(kind.type === 'number' || kind.type === 'string') && (
         <TextField
           label={label}
+          tip={t('config.field.tip')}
           type={kind.type === 'number' ? 'number' : 'text'}
           {...(kind.type === 'number' ? { step: 'any' as const } : {})}
           {...(range ? { hint: range } : {})}
@@ -327,25 +369,29 @@ function ConfigRow({
         />
       )}
       <div className="sd-row">
-        <button
-          type="button"
-          className="sd-btn sd-btn--small sd-btn--primary"
-          disabled={busy || error !== null || text === initial}
-          aria-label={t('config.saveLabel', { key: setting.key })}
-          onClick={() => onSet(text)}
-        >
-          {t('common.save')}
-        </button>
-        {setting.isSet && (
+        <Tooltip text={t('config.save.tip')}>
           <button
             type="button"
-            className="sd-btn sd-btn--small"
-            disabled={busy}
-            aria-label={t('config.resetLabel', { key: setting.key })}
-            onClick={onUnset}
+            className="sd-btn sd-btn--small sd-btn--primary"
+            disabled={busy || error !== null || text === initial}
+            aria-label={t('config.saveLabel', { key: setting.key })}
+            onClick={() => onSet(text)}
           >
-            {t('config.resetAction')}
+            {t('common.save')}
           </button>
+        </Tooltip>
+        {setting.isSet && (
+          <Tooltip text={t('config.reset.tip')}>
+            <button
+              type="button"
+              className="sd-btn sd-btn--small"
+              disabled={busy}
+              aria-label={t('config.resetLabel', { key: setting.key })}
+              onClick={onUnset}
+            >
+              {t('config.resetAction')}
+            </button>
+          </Tooltip>
         )}
       </div>
     </li>

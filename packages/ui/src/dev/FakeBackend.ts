@@ -8,6 +8,7 @@ import type {
   EngineProfiles,
   EngineRules,
   ListResponse,
+  NotificationConfig,
   ProfileCommand,
   SetupDiagnosis,
   SetupOutcome,
@@ -29,6 +30,7 @@ import {
   type HistoryPoint,
   type HistoryQuery,
   type HostSettings,
+  type NotificationPatch,
   type MiniWindowControls,
   type PickOptions,
   type SetupBackend,
@@ -41,6 +43,7 @@ import { loadScenario, type ScenarioName } from './fixtures.js';
 import { generateEvents, generateHistory } from './history.js';
 import { FakeSetup, type FakeSetupOptions } from './fakeSetup.js';
 import { applyProfile, fakeCandidate, seedProfiles } from './fakeProfiles.js';
+import { defaultNotifications, patchNotifications } from './fakeNotifications.js';
 
 export interface FakeBackendOptions {
   scenario?: ScenarioName;
@@ -123,6 +126,7 @@ export class FakeBackend implements Backend, SetupBackend {
   private mappings: DirectoryMapping[];
   private rules: EngineRules;
   private profiles: EngineProfiles;
+  private notifications: NotificationConfig = defaultNotifications();
   private readonly conflicts: Conflict[];
   private prefs: AppPreferences = {
     pollIntervalSeconds: 60,
@@ -300,6 +304,21 @@ export class FakeBackend implements Backend, SetupBackend {
     const active = out.profiles.find((p) => p.id === out.activeId);
     if (active) active.rules = structuredClone(this.rules);
     return out;
+  }
+
+  async getNotificationSettings(): Promise<NotificationConfig> {
+    await this.delay();
+    return structuredClone(this.notifications);
+  }
+
+  async setNotificationSettings(patch: NotificationPatch): Promise<NotificationConfig> {
+    await this.delay();
+    try {
+      this.notifications = patchNotifications(this.notifications, patch);
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error), 'ConfigError');
+    }
+    return structuredClone(this.notifications);
   }
 
   async applyEngineProfile(command: ProfileCommand): Promise<EngineState> {

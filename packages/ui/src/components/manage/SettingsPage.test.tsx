@@ -5,8 +5,10 @@ import { FakeBackend } from '../../dev/FakeBackend.js';
 import { bareBackend, renderWith } from '../../dev/testUtils.js';
 import { parseThresholds, SettingsPage } from './SettingsPage.js';
 
+/** Senza la pagina Notifiche (host della versione 1): restano le soglie classiche. */
 async function setup() {
   const backend = new FakeBackend();
+  (backend as { getNotificationSettings?: unknown }).getNotificationSettings = undefined;
   const run = vi.spyOn(backend, 'runAction');
   const setPrefs = vi.spyOn(backend, 'setPreferences');
   const setAutostart = vi.spyOn(backend, 'setAutostart');

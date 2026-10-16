@@ -20,6 +20,7 @@ import { RulesPage } from './manage/RulesPage.js';
 import { SettingsPage } from './manage/SettingsPage.js';
 import { ToolsPage } from './manage/ToolsPage.js';
 import { SetupWizard } from './SetupWizard.js';
+import { Tooltip } from './Tooltip.js';
 
 export type { TabId };
 
@@ -126,22 +127,23 @@ function Tabs({
         {notice}
         <div className="sd-tabs" role="tablist" aria-label={t('tabs.label')} onKeyDown={onKeyDown}>
           {TABS.map(({ id, label }) => (
-            <button
-              key={id}
-              ref={(node) => {
-                refs.current[id] = node;
-              }}
-              type="button"
-              role="tab"
-              id={`${base}-tab-${id}`}
-              aria-selected={tab === id}
-              aria-controls={`${base}-panel-${id}`}
-              tabIndex={tab === id ? 0 : -1}
-              className="sd-tab"
-              onClick={() => setTab(id)}
-            >
-              {t(label)}
-            </button>
+            <Tooltip key={id} text={t(`tabs.${id}.tip`)}>
+              <button
+                ref={(node) => {
+                  refs.current[id] = node;
+                }}
+                type="button"
+                role="tab"
+                id={`${base}-tab-${id}`}
+                aria-selected={tab === id}
+                aria-controls={`${base}-panel-${id}`}
+                tabIndex={tab === id ? 0 : -1}
+                className="sd-tab"
+                onClick={() => setTab(id)}
+              >
+                {t(label)}
+              </button>
+            </Tooltip>
           ))}
         </div>
         <div

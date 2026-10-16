@@ -6,6 +6,7 @@ import { useAccounts } from '../../backend/useAccounts.js';
 import { useI18n } from '../../i18n/index.js';
 import { accountName } from '../../lib/account.js';
 import { CheckField, NoticeView, PathField, Section, SelectField } from './common.js';
+import { Tooltip } from '../Tooltip.js';
 
 const JSON_FILTER = [{ name: 'JSON', extensions: ['json'] }];
 
@@ -38,6 +39,7 @@ export function ToolsPage() {
         <div className="sd-form">
           <SelectField
             label={t('tools.export.scope')}
+            tip={t('tools.export.scope.tip')}
             value={scope}
             onChange={setScope}
             disabled={busy}
@@ -51,6 +53,7 @@ export function ToolsPage() {
           />
           <PathField
             label={t('tools.file')}
+            tip={t('tools.export.file.tip')}
             value={exportPath}
             onChange={setExportPath}
             {...(pickSave
@@ -66,29 +69,31 @@ export function ToolsPage() {
             disabled={busy}
           />
           <div className="sd-row">
-            <button
-              type="button"
-              className="sd-btn"
-              disabled={busy || exportPath.trim() === ''}
-              onClick={() =>
-                void run(
-                  actions.exportTo(
-                    exportPath.trim(),
-                    scope === 'all' ? { full: true } : { account: Number(scope) },
-                  ),
-                  {
-                    copy: {
-                      title: t('tools.export.confirmTitle'),
-                      message: t('tools.export.confirmMessage', { path: exportPath.trim() }),
-                      confirmLabel: t('tools.export.action'),
+            <Tooltip text={t('tools.export.action.tip')}>
+              <button
+                type="button"
+                className="sd-btn"
+                disabled={busy || exportPath.trim() === ''}
+                onClick={() =>
+                  void run(
+                    actions.exportTo(
+                      exportPath.trim(),
+                      scope === 'all' ? { full: true } : { account: Number(scope) },
+                    ),
+                    {
+                      copy: {
+                        title: t('tools.export.confirmTitle'),
+                        message: t('tools.export.confirmMessage', { path: exportPath.trim() }),
+                        confirmLabel: t('tools.export.action'),
+                      },
+                      success: t('tools.export.done', { path: exportPath.trim() }),
                     },
-                    success: t('tools.export.done', { path: exportPath.trim() }),
-                  },
-                )
-              }
-            >
-              {t('tools.export.action')}
-            </button>
+                  )
+                }
+              >
+                {t('tools.export.action')}
+              </button>
+            </Tooltip>
           </div>
         </div>
       </Section>
@@ -97,6 +102,7 @@ export function ToolsPage() {
         <div className="sd-form">
           <PathField
             label={t('tools.file')}
+            tip={t('tools.import.file.tip')}
             value={importPath}
             onChange={setImportPath}
             {...(pickOpen
@@ -112,34 +118,37 @@ export function ToolsPage() {
           />
           <CheckField
             label={t('tools.import.force')}
+            tip={t('tools.import.force.tip')}
             hint={t('tools.import.forceHint')}
             checked={force}
             onChange={setForce}
             disabled={busy}
           />
           <div className="sd-row">
-            <button
-              type="button"
-              className="sd-btn"
-              disabled={busy || importPath.trim() === ''}
-              onClick={() =>
-                void run(actions.importFrom(importPath.trim(), force), {
-                  copy: {
-                    title: t('tools.import.confirmTitle'),
-                    message: t(
-                      force ? 'tools.import.confirmForce' : 'tools.import.confirmMessage',
-                      {
-                        path: importPath.trim(),
-                      },
-                    ),
-                    confirmLabel: t('tools.import.action'),
-                  },
-                  success: t('tools.import.done'),
-                })
-              }
-            >
-              {t('tools.import.action')}
-            </button>
+            <Tooltip text={t('tools.import.action.tip')}>
+              <button
+                type="button"
+                className="sd-btn"
+                disabled={busy || importPath.trim() === ''}
+                onClick={() =>
+                  void run(actions.importFrom(importPath.trim(), force), {
+                    copy: {
+                      title: t('tools.import.confirmTitle'),
+                      message: t(
+                        force ? 'tools.import.confirmForce' : 'tools.import.confirmMessage',
+                        {
+                          path: importPath.trim(),
+                        },
+                      ),
+                      confirmLabel: t('tools.import.action'),
+                    },
+                    success: t('tools.import.done'),
+                  })
+                }
+              >
+                {t('tools.import.action')}
+              </button>
+            </Tooltip>
           </div>
         </div>
       </Section>
@@ -156,24 +165,26 @@ export function ToolsPage() {
                 <span className="sd-card__name sd-path" title={id}>
                   {id}
                 </span>
-                <button
-                  type="button"
-                  className="sd-btn sd-btn--small"
-                  disabled={busy}
-                  aria-label={t('tools.unclaimed.purgeLabel', { id })}
-                  onClick={() =>
-                    void run(actions.unclaimedPurge(id), {
-                      copy: {
-                        title: t('tools.unclaimed.confirmTitle'),
-                        message: t('tools.unclaimed.confirmMessage', { id }),
-                        confirmLabel: t('tools.unclaimed.purge'),
-                      },
-                      success: t('tools.unclaimed.done', { id }),
-                    })
-                  }
-                >
-                  {t('tools.unclaimed.purge')}
-                </button>
+                <Tooltip text={t('tools.unclaimed.purge.tip')}>
+                  <button
+                    type="button"
+                    className="sd-btn sd-btn--small"
+                    disabled={busy}
+                    aria-label={t('tools.unclaimed.purgeLabel', { id })}
+                    onClick={() =>
+                      void run(actions.unclaimedPurge(id), {
+                        copy: {
+                          title: t('tools.unclaimed.confirmTitle'),
+                          message: t('tools.unclaimed.confirmMessage', { id }),
+                          confirmLabel: t('tools.unclaimed.purge'),
+                        },
+                        success: t('tools.unclaimed.done', { id }),
+                      })
+                    }
+                  >
+                    {t('tools.unclaimed.purge')}
+                  </button>
+                </Tooltip>
               </li>
             ))}
           </ul>
@@ -182,23 +193,25 @@ export function ToolsPage() {
 
       <Section title={t('tools.purge')} hint={t('tools.purge.hint')}>
         <div className="sd-row">
-          <button
-            type="button"
-            className="sd-btn sd-btn--danger"
-            disabled={busy}
-            onClick={() =>
-              void run(actions.purge(), {
-                copy: {
-                  title: t('tools.purge.confirmTitle'),
-                  message: t('tools.purge.confirmMessage'),
-                  confirmLabel: t('tools.purge.action'),
-                },
-                success: t('tools.purge.done'),
-              })
-            }
-          >
-            {t('tools.purge.action')}
-          </button>
+          <Tooltip text={t('tools.purge.action.tip')}>
+            <button
+              type="button"
+              className="sd-btn sd-btn--danger"
+              disabled={busy}
+              onClick={() =>
+                void run(actions.purge(), {
+                  copy: {
+                    title: t('tools.purge.confirmTitle'),
+                    message: t('tools.purge.confirmMessage'),
+                    confirmLabel: t('tools.purge.action'),
+                  },
+                  success: t('tools.purge.done'),
+                })
+              }
+            >
+              {t('tools.purge.action')}
+            </button>
+          </Tooltip>
         </div>
       </Section>
       {dialog}

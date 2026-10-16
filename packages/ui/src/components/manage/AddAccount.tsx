@@ -3,6 +3,7 @@ import { actions } from '../../backend/actions.js';
 import { useActionRunner } from '../../backend/useActionRunner.js';
 import { useI18n } from '../../i18n/index.js';
 import { CheckField, NoticeView, TextField } from './common.js';
+import { Tooltip } from '../Tooltip.js';
 
 type Mode = 'current' | 'token';
 
@@ -70,28 +71,32 @@ export function AddAccount() {
   return (
     <section className="sd-section" aria-label={t('manage.add.title')}>
       <div className="sd-toolbar">
-        <button
-          type="button"
-          className="sd-btn"
-          aria-expanded={open}
-          aria-controls={panelId}
-          onClick={() => setOpen((v) => !v)}
-        >
-          {t('manage.add.title')}
-        </button>
+        <Tooltip text={t('manage.add.open.tip')}>
+          <button
+            type="button"
+            className="sd-btn"
+            aria-expanded={open}
+            aria-controls={panelId}
+            onClick={() => setOpen((v) => !v)}
+          >
+            {t('manage.add.title')}
+          </button>
+        </Tooltip>
       </div>
       {open && (
         <div id={panelId} className="sd-form">
           <div role="radiogroup" aria-label={t('manage.add.mode')} className="sd-row">
             {(['current', 'token'] as const).map((value) => (
               <label key={value} className="sd-radio">
-                <input
-                  type="radio"
-                  name={modeName}
-                  value={value}
-                  checked={mode === value}
-                  onChange={() => setMode(value)}
-                />
+                <Tooltip text={t('manage.add.mode.tip')}>
+                  <input
+                    type="radio"
+                    name={modeName}
+                    value={value}
+                    checked={mode === value}
+                    onChange={() => setMode(value)}
+                  />
+                </Tooltip>
                 {t(value === 'current' ? 'manage.add.current' : 'manage.add.token')}
               </label>
             ))}
@@ -105,6 +110,7 @@ export function AddAccount() {
               </ol>
               <TextField
                 label={t('manage.add.alias')}
+                tip={t('manage.add.alias.tip')}
                 value={alias}
                 onChange={setAlias}
                 disabled={busy}
@@ -115,6 +121,7 @@ export function AddAccount() {
               <p className="sd-hint">{t('manage.add.tokenHint')}</p>
               <TextField
                 label={t('manage.add.tokenLabel')}
+                tip={t('manage.add.token.tip')}
                 type="password"
                 secret
                 value={token}
@@ -123,6 +130,7 @@ export function AddAccount() {
               />
               <TextField
                 label={t('manage.add.email')}
+                tip={t('manage.add.email.tip')}
                 value={email}
                 onChange={setEmail}
                 disabled={busy}
@@ -131,6 +139,7 @@ export function AddAccount() {
           )}
           <TextField
             label={t('manage.add.slot')}
+            tip={t('manage.add.slot.tip')}
             type="number"
             min={1}
             value={slot}
@@ -141,19 +150,22 @@ export function AddAccount() {
           />
           <CheckField
             label={t('manage.add.overwrite')}
+            tip={t('manage.add.overwrite.tip')}
             checked={overwrite}
             onChange={setOverwrite}
             disabled={busy}
           />
           <div className="sd-row">
-            <button
-              type="button"
-              className="sd-btn sd-btn--primary"
-              disabled={busy || slotError !== null || (mode === 'token' && token.trim() === '')}
-              onClick={() => void (mode === 'current' ? addCurrent() : addToken())}
-            >
-              {busy ? t('common.working') : t('manage.add.action')}
-            </button>
+            <Tooltip text={t('manage.add.action.tip')}>
+              <button
+                type="button"
+                className="sd-btn sd-btn--primary"
+                disabled={busy || slotError !== null || (mode === 'token' && token.trim() === '')}
+                onClick={() => void (mode === 'current' ? addCurrent() : addToken())}
+              >
+                {busy ? t('common.working') : t('manage.add.action')}
+              </button>
+            </Tooltip>
           </div>
         </div>
       )}
