@@ -25,10 +25,16 @@ Una **mappa** è un insieme di regole del motore (la scheda Regole ne gestisce p
 | ritorno alla principale dopo il reset | `returnToPrimary: true`, `returnHysteresis` |
 | intervallo del giro | `pollIntervalSeconds` (in cima alla config, fuori da `engine`) |
 
-Preset della scheda Regole (applicano solo i campi di `engine`, mai `dryRun`; l'ordine degli account resta il tuo):
+Preset della scheda Regole: ognuno è una mappa, che si sceglie dal selettore «Mappa» (anche nel mini-widget) e si riporta ai valori di partenza con «Ripristina preset». Cambiano criterio e soglie; lista ed esclusi, conflitti ignorati, `enabled` e `dryRun` restano i tuoi. In tutti il ritorno alla principale è acceso, la pausa tra due cambi è di 300 s e i consumi valgono per 900 s.
 
-- **Principale con riserve** (la regola tipica): la prima della lista è la principale; le riserve si scelgono per % settimanale più bassa; soglie 95 (5 ore) e 98 (settimana); ritorno alla principale dopo il reset della sua finestra.
-- **Eco**, **Sport**, **Sicura**: varianti con criteri e soglie diversi; i valori esatti sono visibili nella scheda prima di applicarli.
+| Preset | Criterio (`reserveCriterion`) | 5 ore | 7 giorni | `returnHysteresis` |
+|---|---|---|---|---|
+| **Principale con riserve** (la regola tipica) | Settimanale più bassa (`lowest-weekly`) | 95 | 98 | 45: torna con la 5 ore sotto 50 |
+| **Eco** | Reset settimanale più vicino (`reset-soonest`) | 90 | 98 | 10 |
+| **Sport** | 5 ore più libera (`lowest5h`) | 98 | 98 | 10 |
+| **Sicura** | Ritmo sicuro (`pace-safe`) | 95 | 98 | 10 |
+
+Gli altri criteri sono Migliore (`best`), Ordine fisso (`fixed-order`), Punteggio bilanciato (`balanced-score`), Settimanali livellate (`even-spread`) e Più margine sul modello (`model-headroom`, con il modello in `headroomModel`): il dettaglio è nel [README](../README.md#motore-delle-regole). Nella scheda «Adesso andrebbe a» dice quale utenza sceglierebbe il criterio in questo momento.
 
 Da riga di comando, in un file `preset.json` (sostituisci i numeri con quelli dei tuoi account):
 
@@ -49,7 +55,8 @@ Differenze note rispetto a uno script semplice:
 1. Lascia il vecchio meccanismo com'è: il motore si sospende (passo 0).
 2. Per vedere le decisioni durante la prova, ignora il conflitto solo temporaneamente: aggiungi l'id letto nell'avviso (per esempio `"ignoredConflicts":["task:nome-attività"]`) alla sezione `engine` e tieni `dryRun: true`. In sola osservazione SwapDeck non cambia mai account.
 3. Confronta per qualche giorno: storico e righe del motore (`swapdeck-cli headless --once --dry-run`) dicono cosa SwapDeck avrebbe fatto; il log del vecchio meccanismo dice cosa ha fatto lui. Le decisioni devono coincidere (salvo la pausa tra due cambi).
-4. Finita la prova togli il conflitto da `ignoredConflicts` (passo 4).
+4. Durante la prova il mini-widget mostra la mappa attiva e, nel tooltip del trattino sulla barra, l'utenza a cui andrebbe il motore; nella pagina **Notifiche** (dalle impostazioni) tieni accesi «Preavviso di cambio» e «Motore sospeso o ripreso» per sapere quando l'attiva si avvicina alla soglia o il motore si ferma.
+5. Finita la prova togli il conflitto da `ignoredConflicts` (passo 4).
 
 ## 3. Come far girare il motore
 

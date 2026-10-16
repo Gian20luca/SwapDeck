@@ -24,7 +24,10 @@ use swapdeck_core::conflicts::{ConflictSource, SystemConflicts};
 use swapdeck_core::cswap::{
     ActionOutcome, AutoMessage, CswapAction, CswapClient, CswapError, CswapErrorKind, ListResponse,
 };
-use swapdeck_core::engine::{EngineProfiles, EngineRules, EngineState, EngineView, ProfileCommand};
+use swapdeck_core::engine::{
+    EngineMemory, EngineProfiles, EngineRules, EngineState, EngineView, Observation,
+    ProfileCommand, evaluate,
+};
 use swapdeck_core::history::{History, HistoryEvents, HistoryQuery, HistoryRecord};
 use swapdeck_core::lock;
 use swapdeck_core::notify::{self, NotificationConfig, NotifyPoll};
@@ -454,34 +457,59 @@ fn preferences_set(text: &str) -> Res<AppPreferences> {
     Ok(saved.preferences())
 }
 
-/// Regole della config, vista del motore in esecuzione (ultima decisione dello storico) e
-/// conflitti (letti solo se il motore è acceso o in osservazione: la lettura costa).
+/// Regole della config, vista del motore, conflitti (letti solo se il motore è acceso o in
+/// osservazione: la lettura costa) e avvisi della lista. Come l'app, la vista porta il candidato
+/// attuale calcolato sulla lista di cswap; con il motore in esecuzione decisione e motivo sono
+/// quelli dell'ultimo giro (storico), altrimenti quelli della valutazione di adesso.
 fn engine_state(paths: &AppPaths) -> Res<EngineState> {
     let rules = config::load(&paths.config_file())
         .map_err(config_error)?
         .config
         .engine;
     let running = engine_status(paths).running;
-    let view = if running {
-        let events = History::new(&paths.data_dir)
-            .events(&HistoryQuery::default(), now_unix())
-            .unwrap_or_default();
-        events.decisions.last().map(|d| {
-            EngineView::new(true, &rules, Some(&d.decision)).explained(d.why.clone(), None)
-        })
-    } else {
-        None
-    };
     let conflicts = if rules.enabled || rules.dry_run {
         SystemConflicts::default().detect()
     } else {
         Vec::new()
     };
+    let list = client().and_then(|c| c.list()).ok();
+    let now = now_unix();
+    let evaluation = list.as_ref().map(|list| {
+        let obs = Observation {
+            list,
+            conflicts: &conflicts,
+        };
+        evaluate(obs, &rules, &EngineMemory::default(), now)
+    });
+    let last = if running {
+        History::new(&paths.data_dir)
+            .events(&HistoryQuery::default(), now)
+            .unwrap_or_default()
+            .decisions
+            .pop()
+    } else {
+        None
+    };
+    let view = match (last, evaluation) {
+        (Some(d), eval) => Some(
+            EngineView::new(true, &rules, Some(&d.decision))
+                .explained(d.why, eval.and_then(|e| e.candidate)),
+        ),
+        (None, Some(e)) => Some(
+            EngineView::new(running, &rules, Some(&e.decision))
+                .explained(Some(e.reason), e.candidate),
+        ),
+        (None, None) => None,
+    };
+    let warnings = list
+        .as_ref()
+        .map(|list| rules.list_warnings(list))
+        .unwrap_or_default();
     Ok(EngineState {
         rules,
         view,
         conflicts,
-        warnings: Vec::new(),
+        warnings,
     })
 }
 

@@ -380,7 +380,8 @@ fn management_commands_validate_and_save() {
         json!([1, 3]),
         "regole valide conservate"
     );
-    assert_eq!(v["view"], Value::Null, "motore non in esecuzione");
+    assert_eq!(v["view"]["holder"], false, "motore non in esecuzione: {v}");
+    assert_eq!(v["view"]["suspended"], "disabled", "{v}");
     let (_, v) = env.run(&["config", "get"]);
     assert_eq!(
         v["config"]["pollIntervalSeconds"], 120,
@@ -391,6 +392,41 @@ fn management_commands_validate_and_save() {
     assert_eq!(v, json!({"switches": [], "decisions": []}));
     let (code, _) = env.run(&["history", "events", "--since"]);
     assert_eq!(code, 2);
+}
+
+/// Come l'app: candidato attuale, motivo e avvisi della lista anche senza motore in esecuzione.
+#[test]
+fn engine_state_explains_candidate_and_list_warnings() {
+    let env = Env::new();
+    let rules = r#"{"primary":6,"reserves":[1,3],"reserveCriterion":"model-headroom","headroomModel":"Ghost"}"#;
+    let (code, v) = env.run_stdin(&["engine", "rules", "set", "-"], rules);
+    assert_eq!(code, 0, "{v}");
+    let (code, v) = env.run(&["engine", "state"]);
+    assert_eq!(code, 0, "{v}");
+    let view = &v["view"];
+    assert!(
+        view["reason"].as_str().is_some_and(|r| !r.is_empty()),
+        "{v}"
+    );
+    let to = view["candidate"]["number"].as_u64();
+    assert!(matches!(to, Some(1 | 3)), "candidato tra le riserve: {v}");
+    assert_eq!(
+        v["warnings"],
+        json!(["modello «Ghost» sconosciuto: nessuna utenza lo riporta"]),
+        "{v}"
+    );
+    assert!(
+        !env.fake_calls().contains("\"switch\""),
+        "solo lettura: {}",
+        env.fake_calls()
+    );
+
+    let (code, v) = env.run_stdin(
+        &["engine", "rules", "set", "-"],
+        r#"{"primary":6,"reserves":[1,3]}"#,
+    );
+    assert_eq!(code, 0, "{v}");
+    assert!(v.get("warnings").is_none(), "nessun avviso: {v}");
 }
 
 #[test]
