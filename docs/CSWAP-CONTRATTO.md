@@ -267,11 +267,17 @@ Regole per il client:
 
 - `uv tool install claude-swap` installa `cswap` e `claude-swap` in `~/.local/bin` (Windows `%USERPROFILE%\.local\bin\cswap.exe`) e l'ambiente in `uv tool dir` (Windows `%APPDATA%\uv\tools\claude-swap`). Nessun privilegio di amministratore.
 - Rilevamento in SwapDeck: `SWAPDECK_CSWAP` (assoluto), poi `UV_TOOL_BIN_DIR`, poi il PATH (solo voci assolute), poi `$XDG_BIN_HOME` e `~/.local/bin/cswap[.exe]`; `uv` nel PATH, in `~/.local/bin`, in `~/.cargo/bin` e su macOS in `/opt/homebrew/bin` e `/usr/local/bin`. In alternativa `uv tool list` (riga `claude-swap vX.Y.Z`).
+- Installazione da SwapDeck (`Setup::install`, step 6): se uv manca, scarica lo script ufficiale (`https://astral.sh/uv/install.ps1` o `install.sh`, al massimo 2 MB) con il client interno (solo HTTPS anche nei redirect); se non riesce ripiega su PowerShell `Invoke-WebRequest` con controllo di schema HTTPS e dominio finale, oppure su `curl --proto =https --proto-redir =https --max-filesize 2097152` e poi `wget --https-only`. Lo script si salva in una cartella privata dentro la cartella dati, se ne controlla la dimensione e lo si esegue da file (`powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File`, oppure `/bin/sh`). Poi `uv tool install claude-swap` e la verifica (`--version`, `list --json`).
+- Con `SWAPDECK_CSWAP` impostata installazione e aggiornamento sono rifiutati (`invalidUsage`): toccherebbero il claude-swap reale del profilo, non quello indicato.
 
 ## 9. Aggiornamento
 
 - `cswap upgrade` (alias `update`): rileva uv o pipx da `sys.prefix`. Su Linux e macOS esegue `uv tool upgrade claude-swap` e ne restituisce il codice. **Su Windows non aggiorna**: stampa `To upgrade claude-swap on Windows, run:\n  uv tool upgrade claude-swap` ed esce con 1, perché `cswap.exe` in esecuzione è bloccato.
 - SwapDeck quindi lancia direttamente `uv tool upgrade claude-swap`, **dopo** aver atteso o chiuso i propri processi cswap. Se gira un `cswap auto`, `tui` o `watch` esterno, avvisa: su Windows l'aggiornamento può fallire. Un'uscita non riuscita di uv (che usa 2 per quasi tutti gli errori) è `failed`, oppure `busy` se un file è in uso (`os error 32`, «used by another process»).
+- Prima di aggiornare (`Setup::upgrade`): se il lock del motore (`engine.lock`) è vivo e di un altro processo, rifiuta con `busy` («ferma il motore in quella SwapDeck»). Nello stesso processo l'app ferma `cswap auto` e tiene il turno delle chiamate, così ciclo di lettura e motore restano fermi.
+- Per `upgrade` sono `busy` anche `os error 5`, «access is denied» e «accesso negato» (su Windows `cswap.exe` in esecuzione).
+- Dopo l'aggiornamento si verificano versione e `schemaVersion`. Se lo `schemaVersion` non è supportato, SwapDeck torna da sola alla versione precedente con `uv tool install claude-swap==<precedente> --force` (passo `rollbackCswap`) e restituisce comunque `unsupportedSchema`, con l'esito del ripristino nel messaggio.
+- Controllo della versione su PyPI (`https://pypi.org/pypi/claude-swap/json`, `info.version`): cache di 6 ore in `cswap-update.json` della cartella dati, riletta prima di ogni scrittura. Nel confronto una pre-release (`a`, `b`, `rc`, `dev`) è più vecchia della stabile con lo stesso numero; post-release (`.post1`) e versioni locali (`+x`) valgono come la stabile.
 
 ## 10. Rischi per SwapDeck
 
