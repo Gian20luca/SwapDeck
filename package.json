@@ -14,6 +14,7 @@
     "test:rust": "cargo test --workspace",
     "lint:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings",
     "dist:local": "node scripts/dist-local.mjs",
+    "check:tauri": "node scripts/check-tauri-versions.mjs",
     "gen:types": "pnpm --filter @swapdeck/types gen:types && pnpm --filter swapdeck-vscode gen:types"
   },
   "devDependencies": {

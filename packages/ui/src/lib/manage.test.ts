@@ -20,6 +20,8 @@ describe('engineRules', () => {
       reserves: [1, 3],
       reserveCriterion: 'lowest-weekly',
       fiveHourThreshold: 95,
+      sevenDayThreshold: 98,
+      returnHysteresis: 45,
     });
     const applied = applyGuardPreset(rules({ enabled: true, dryRun: true, excluded: [2] }));
     expect(applied).toMatchObject({

@@ -1,13 +1,18 @@
 import type { EngineRules } from '@swapdeck/types';
 import type { MessageKey } from '../i18n/index.js';
 
-/** Preset «come cswap-guard»: principale 6, riserve [1, 3], settimanale più bassa, soglia 95%, ritorno dopo il reset. */
+/**
+ * Preset «come cswap-guard»: principale 6, riserve [1, 3], settimanale più bassa, soglie 95% (5h) e
+ * 98% (7d), ritorno dopo il reset con 5h sotto il 50% (95 - 45).
+ */
 export const GUARD_PRESET = {
   primary: 6,
   reserves: [1, 3],
   reserveCriterion: 'lowest-weekly',
   fiveHourThreshold: 95,
+  sevenDayThreshold: 98,
   returnToPrimary: true,
+  returnHysteresis: 45,
 } as const satisfies Partial<EngineRules>;
 
 export function applyGuardPreset(rules: EngineRules): EngineRules {

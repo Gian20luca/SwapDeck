@@ -60,6 +60,8 @@ jobs:
           shared-key: ci
 
       - run: pnpm install --frozen-lockfile
+      # Crate e pacchetti npm di Tauri con lo stesso major.minor, come vuole `tauri build`.
+      - run: pnpm check:tauri
       - run: pnpm lint
       # Prima dei test: crea anche apps/desktop/dist, richiesta dal crate Tauri.
       - run: pnpm build

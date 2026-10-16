@@ -153,7 +153,7 @@ export const enManage: Record<keyof typeof itManage, string> = {
   'rules.gap': 'Minimum pause between two switches (seconds)',
   'rules.gap.hint': 'Avoids rapid-fire switching.',
   'rules.preset': 'Preset like cswap-guard',
-  'rules.preset.hint': 'Primary 6, reserves 1 and 3, lowest weekly, 95% threshold.',
+  'rules.preset.hint': 'Primary 6, reserves 1 and 3, lowest weekly, thresholds 95% (5h) and 98% (7d), return below 50%.',
   'rules.preset.applied': 'Preset applied: check the fields and press “Save”.',
   'rules.revert': 'Discard changes',
   'rules.saved': 'Rules saved.',
