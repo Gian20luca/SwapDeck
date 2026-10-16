@@ -105,11 +105,31 @@ impl std::fmt::Display for CswapError {
 impl std::error::Error for CswapError {}
 
 /// Versione di cswap letta da `--version`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, TS)]
+///
+/// `pre_release` conserva il segno di una pre-release PEP 440 (`a`, `b`, `rc`, `dev`):
+/// `X.Y.Z` stabile è più nuova di `X.Y.Zrc1`. Le post-release (`.post1`, `-1`) e le
+/// versioni locali (`+abc`) contano come la stabile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 pub struct CswapVersion {
     pub major: u32,
     pub minor: u32,
     pub patch: u32,
+    #[serde(skip)]
+    #[ts(skip)]
+    pub pre_release: bool,
+}
+
+impl Ord for CswapVersion {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let key = |v: &Self| (v.major, v.minor, v.patch, !v.pre_release);
+        key(self).cmp(&key(other))
+    }
+}
+
+impl PartialOrd for CswapVersion {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl CswapVersion {
@@ -118,23 +138,50 @@ impl CswapVersion {
         major: 0,
         minor: 26,
         patch: 0,
+        pre_release: false,
     };
 
     /// Legge `^\S+ (\d+)\.(\d+)\.(\d+)` (es. `cswap 0.27.2`) dalla prima riga non vuota.
     pub fn parse(output: &str) -> Option<Self> {
+        Self::parse_number(Self::token(output)?)
+    }
+
+    /// Parola della versione così com'è (es. `0.28.0rc1`) dalla prima riga non vuota, se
+    /// è leggibile e fatta solo di caratteri ammessi da PEP 440.
+    pub fn token(output: &str) -> Option<&str> {
         let line = output.lines().map(str::trim).find(|l| !l.is_empty())?;
         let mut words = line.split_whitespace();
         words.next()?;
         let ver = words.next()?;
-        let mut parts = ver.splitn(3, '.');
+        let allowed =
+            |c: char| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+' | '!');
+        (ver.len() <= 64 && ver.chars().all(allowed) && Self::parse_number(ver).is_some())
+            .then_some(ver)
+    }
+
+    /// Versione `X.Y.Z` con eventuale suffisso (es. `0.28.0rc1`, `0.28.0.post1`).
+    pub fn parse_number(ver: &str) -> Option<Self> {
+        let mut parts = ver.trim().splitn(3, '.');
         let num = |s: Option<&str>| -> Option<u32> {
             let digits: String = s?.chars().take_while(char::is_ascii_digit).collect();
             digits.parse().ok()
         };
+        let major = num(parts.next())?;
+        let minor = num(parts.next())?;
+        let rest = parts.next()?;
+        let patch = num(Some(rest))?;
+        let suffix = rest
+            .trim_start_matches(|c: char| c.is_ascii_digit())
+            .trim_start_matches(['.', '-', '_'])
+            .to_ascii_lowercase();
+        let pre_release = ["a", "b", "c", "rc", "pre", "dev"]
+            .iter()
+            .any(|p| suffix.starts_with(p));
         Some(Self {
-            major: num(parts.next())?,
-            minor: num(parts.next())?,
-            patch: num(parts.next())?,
+            major,
+            minor,
+            patch,
+            pre_release,
         })
     }
 
@@ -391,11 +438,20 @@ mod tests {
                 .unwrap()
                 .is_supported()
         );
-        assert!(
-            CswapVersion::parse("cswap 1.0.0rc1")
-                .unwrap()
-                .is_supported()
-        );
+        let rc = CswapVersion::parse("cswap 1.0.0rc1").unwrap();
+        assert!(rc.is_supported() && rc.pre_release);
+        assert_eq!(CswapVersion::token("cswap 1.0.0rc1\n"), Some("1.0.0rc1"));
+        assert!(CswapVersion::token("cswap 1.0.0;rm").is_none());
+        let stable = CswapVersion::parse_number("1.0.0").unwrap();
+        assert!(stable > rc, "la stabile è più nuova della pre-release");
+        for pre in ["1.0.0a1", "1.0.0b2", "1.0.0.dev0", "1.0.0-rc.1"] {
+            assert!(CswapVersion::parse_number(pre).unwrap() < stable, "{pre}");
+        }
+        for post in ["1.0.0.post1", "1.0.0+local", "1.0.0-1"] {
+            let v = CswapVersion::parse_number(post).unwrap();
+            assert!(!v.pre_release && v == stable, "{post}");
+        }
+        assert!(CswapVersion::parse_number("1.0.1rc1").unwrap() > stable);
         assert!(CswapVersion::parse("garbage").is_none());
         assert!(CswapVersion::parse("").is_none());
     }

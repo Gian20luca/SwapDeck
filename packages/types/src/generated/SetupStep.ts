@@ -3,4 +3,4 @@
 /**
  * Passo di installazione o aggiornamento.
  */
-export type SetupStep = "downloadUv" | "installUv" | "installCswap" | "upgradeCswap" | "verifyCswap";
+export type SetupStep = "downloadUv" | "installUv" | "installCswap" | "upgradeCswap" | "verifyCswap" | "rollbackCswap";

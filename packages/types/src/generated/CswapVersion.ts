@@ -2,5 +2,9 @@
 
 /**
  * Versione di cswap letta da `--version`.
+ *
+ * `pre_release` conserva il segno di una pre-release PEP 440 (`a`, `b`, `rc`, `dev`):
+ * `X.Y.Z` stabile è più nuova di `X.Y.Zrc1`. Le post-release (`.post1`, `-1`) e le
+ * versioni locali (`+abc`) contano come la stabile.
  */
 export type CswapVersion = { major: number, minor: number, patch: number, };

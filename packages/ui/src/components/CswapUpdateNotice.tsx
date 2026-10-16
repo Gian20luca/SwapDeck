@@ -52,9 +52,11 @@ function Notice({
   if (!info || phase === 'hidden') return null;
   if (phase === 'idle' && (!info.updateAvailable || info.dismissed)) return null;
 
+  // La versione si ricorda come ignorata solo se l'utente chiude l'avviso senza aver provato:
+  // dopo un aggiornamento riuscito o non riuscito l'avviso deve poter tornare.
   function dismiss() {
     setPhase('hidden');
-    if (info && phase !== 'done')
+    if (info && (phase === 'idle' || phase === 'confirm'))
       void backend.dismissCswapUpdate(info.latest).catch(() => undefined);
   }
 

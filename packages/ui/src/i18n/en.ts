@@ -112,6 +112,7 @@ export const en: Record<MessageKey, string> = {
   'setup.step.installCswap': 'Install claude-swap',
   'setup.step.upgradeCswap': 'Upgrade claude-swap',
   'setup.step.verifyCswap': 'Verify cswap',
+  'setup.step.rollbackCswap': 'Restore the previous version',
   'setup.state.pending': 'Pending',
   'setup.state.running': 'Running',
   'setup.state.done': 'Done',

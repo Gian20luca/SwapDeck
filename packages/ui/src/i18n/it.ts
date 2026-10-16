@@ -110,6 +110,7 @@ export const it = {
   'setup.step.installCswap': 'Installo claude-swap',
   'setup.step.upgradeCswap': 'Aggiorno claude-swap',
   'setup.step.verifyCswap': 'Verifico cswap',
+  'setup.step.rollbackCswap': 'Ripristino la versione precedente',
   'setup.state.pending': 'In attesa',
   'setup.state.running': 'In corso',
   'setup.state.done': 'Fatto',

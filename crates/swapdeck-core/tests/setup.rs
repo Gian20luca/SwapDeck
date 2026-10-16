@@ -65,8 +65,13 @@ impl Env {
             home: Some(self.dir.path().join("home")),
             ..SearchEnv::default()
         };
+        // Vuote: la ricerca di uv non cade mai sulle cartelle dello uv reale.
+        let no_real_uv = ["UV_UNMANAGED_INSTALL", "UV_INSTALL_DIR"]
+            .map(|k| (OsString::from(k), OsString::new()))
+            .to_vec();
         Setup::new(self.dir.path().join("data"))
             .with_search(search)
+            .with_child_env(no_real_uv)
             .with_timeouts(SetupTimeouts {
                 probe: Duration::from_secs(20),
                 install: Duration::from_secs(20),
@@ -234,20 +239,118 @@ fn upgrade_verifies_version_and_schema() {
         Some("0.28.0")
     );
 
-    let schema = Env::new(true, true, Some("list.json"), json!({"upgradeSchema": 2}));
+    // schemaVersion non supportato: ritorno automatico alla versione precedente.
+    let schema = Env::new(
+        true,
+        true,
+        Some("list.json"),
+        json!({"upgradeTo": "0.28.0", "upgradeSchema": 2}),
+    );
     let mut events = Vec::new();
     let e = schema
         .setup()
         .upgrade(&mut collect(&mut events))
         .unwrap_err();
     assert_eq!(e.kind, CswapErrorKind::UnsupportedSchema);
+    assert!(e.message.contains("ripristinata claude-swap 0.27.2"), "{e}");
+    assert!(events.iter().any(|ev| matches!(
+        ev,
+        SetupProgress::StepFailed {
+            step: SetupStep::VerifyCswap,
+            ..
+        }
+    )));
+    assert_eq!(
+        events.last(),
+        Some(&SetupProgress::StepDone {
+            step: SetupStep::RollbackCswap
+        })
+    );
+    let d = schema.setup().diagnose();
+    assert_eq!(d.status, SetupStatus::Ready);
+    assert_eq!(d.cswap.unwrap().version.as_deref(), Some("0.27.2"));
+
+    // Ripristino non riuscito: lo dice il messaggio.
+    let broken = Env::new(
+        true,
+        true,
+        Some("list.json"),
+        json!({"upgradeSchema": 2, "overrides": {"uvRollback": {"exit": 2, "stderr": "error: offline\n"}}}),
+    );
+    let mut events = Vec::new();
+    let e = broken
+        .setup()
+        .upgrade(&mut collect(&mut events))
+        .unwrap_err();
+    assert_eq!(e.kind, CswapErrorKind::UnsupportedSchema);
+    assert!(
+        e.message
+            .contains("ripristino di claude-swap 0.27.2 non riuscito: offline"),
+        "{e}"
+    );
     assert!(matches!(
         events.last(),
         Some(SetupProgress::StepFailed {
-            step: SetupStep::VerifyCswap,
+            step: SetupStep::RollbackCswap,
             ..
         })
     ));
+}
+
+#[test]
+fn upgrade_refuses_while_engine_runs_elsewhere() {
+    let env = Env::new(
+        true,
+        true,
+        Some("list.json"),
+        json!({"upgradeTo": "0.28.0"}),
+    );
+    let data = env.dir.path().join("data");
+    fs::create_dir_all(&data).unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let lock = |heartbeat: u64| {
+        json!({
+            "pid": 4242, "host": "altro-host", "instance": "x", "processStart": null,
+            "acquiredAt": heartbeat, "heartbeatAt": heartbeat, "intervalSecs": 60
+        })
+        .to_string()
+    };
+    fs::write(data.join(swapdeck_core::lock::LOCK_FILE), lock(now)).unwrap();
+    let mut events = Vec::new();
+    let e = env.setup().upgrade(&mut collect(&mut events)).unwrap_err();
+    assert_eq!(e.kind, CswapErrorKind::Busy);
+    assert!(e.message.contains("ferma il motore"), "{e}");
+    assert!(events.is_empty(), "nessun processo avviato: {events:?}");
+    // Lock scaduto: si procede.
+    fs::write(data.join(swapdeck_core::lock::LOCK_FILE), lock(now - 3600)).unwrap();
+    env.setup().upgrade(&mut |_| {}).unwrap();
+}
+
+#[test]
+fn check_update_keeps_pre_release_mark() {
+    let env = Env::new(
+        true,
+        true,
+        Some("list.json"),
+        json!({"version": "cswap 0.28.0rc1"}),
+    );
+    let data = env.dir.path().join("data");
+    fs::create_dir_all(&data).unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    fs::write(
+        data.join(CACHE_FILE),
+        json!({"checkedAt": now - 60, "latest": "0.28.0"}).to_string(),
+    )
+    .unwrap();
+    let info = env.setup().check_update(false).unwrap();
+    assert_eq!(info.installed.as_deref(), Some("0.28.0rc1"));
+    assert!(info.update_available);
 }
 
 #[test]

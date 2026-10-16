@@ -75,6 +75,7 @@ pub fn parse_stable(version: &str) -> Option<CswapVersion> {
         major: num()?,
         minor: num()?,
         patch: num()?,
+        pre_release: false,
     };
     parts.next().is_none().then_some(parsed)
 }
@@ -155,7 +156,7 @@ impl UpdateStore {
         now: u64,
         fetch: impl FnOnce() -> Result<String, CswapError>,
     ) -> Result<(String, u64, Option<String>), CswapError> {
-        let mut cache = self.load();
+        let cache = self.load();
         let fresh = cache.latest.is_some()
             && now >= cache.checked_at
             && now - cache.checked_at < CACHE_TTL.as_secs();
@@ -163,6 +164,8 @@ impl UpdateStore {
             return Ok((latest, cache.checked_at, cache.dismissed));
         }
         let latest = fetch()?;
+        // Riletta dopo la rete: una chiusura dell'avviso registrata nel frattempo resta.
+        let mut cache = self.load();
         cache.latest = Some(latest.clone());
         cache.checked_at = now;
         // La cache è solo un'ottimizzazione: se non si scrive, il controllo vale lo stesso.
@@ -178,15 +181,17 @@ impl UpdateStore {
 }
 
 /// Costruisce l'esito confrontando installata e ultima.
+/// `installed` è la parola della versione così com'è (anche `0.28.0rc1`).
 pub(crate) fn info(
-    installed: Option<CswapVersion>,
+    installed: Option<String>,
     latest: String,
     checked_at: u64,
     dismissed: Option<String>,
 ) -> UpdateInfo {
-    let newer = parse_stable(&latest).is_some_and(|l| installed.is_some_and(|i| l > i));
+    let current = installed.as_deref().and_then(CswapVersion::parse_number);
+    let newer = parse_stable(&latest).is_some_and(|l| current.is_some_and(|i| l > i));
     UpdateInfo {
-        installed: installed.map(|v| v.to_string()),
+        installed: current.and(installed),
         dismissed: dismissed.as_deref() == Some(latest.as_str()),
         update_available: newer,
         latest,
@@ -226,8 +231,18 @@ mod tests {
 
     #[test]
     fn update_info_compares_versions() {
-        let v = |s: &str| parse_stable(s);
+        let v = |s: &str| Some(s.to_owned());
         assert!(info(v("0.27.2"), "0.28.0".into(), 1, None).update_available);
+        // La stabile è più nuova della sua pre-release; la parola installata resta com'è.
+        let rc = info(v("0.28.0rc1"), "0.28.0".into(), 1, None);
+        assert!(rc.update_available);
+        assert_eq!(rc.installed.as_deref(), Some("0.28.0rc1"));
+        assert!(!info(v("0.28.0.post1"), "0.28.0".into(), 1, None).update_available);
+        assert!(
+            info(v("illeggibile"), "0.28.0".into(), 1, None)
+                .installed
+                .is_none()
+        );
         assert!(!info(v("0.27.2"), "0.27.2".into(), 1, None).update_available);
         assert!(!info(v("0.27.2"), "0.28.0rc1".into(), 1, None).update_available);
         assert!(!info(None, "0.28.0".into(), 1, None).update_available);
@@ -275,6 +290,15 @@ mod tests {
         store.dismiss("0.29.2").unwrap();
         let (_, _, dismissed) = store.latest(false, 6, never).unwrap();
         assert_eq!(dismissed.as_deref(), Some("0.29.2"));
+        // Chiusura registrata durante la richiesta: non va persa.
+        let (_, _, dismissed) = store
+            .latest(true, 6, || {
+                store.dismiss("0.29.3").unwrap();
+                Ok("0.29.3".into())
+            })
+            .unwrap();
+        assert_eq!(dismissed.as_deref(), Some("0.29.3"));
+        assert_eq!(store.load().dismissed.as_deref(), Some("0.29.3"));
         // File rovinato: si riparte da zero.
         fs::write(tmp.path().join("data").join(CACHE_FILE), "{rotto").unwrap();
         assert_eq!(

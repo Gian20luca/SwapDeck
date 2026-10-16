@@ -368,6 +368,25 @@ impl Fake {
             }
             return 0;
         }
+        // Ripristino: `tool install claude-swap==X --force` riporta versione e schemaVersion 1.
+        if let [tool, install, spec, force] = args {
+            if let (true, Some(v)) = (
+                tool == "tool" && install == "install" && force == "--force",
+                spec.strip_prefix("claude-swap=="),
+            ) {
+                if let Some(code) = self.overrides("uvRollback") {
+                    return code;
+                }
+                let mut cfg = self.cfg.clone();
+                cfg["version"] = json!(format!("cswap {v}"));
+                fs::write(self.dir.join("fake.json"), cfg.to_string()).unwrap();
+                let mut state = self.state();
+                state["schemaVersion"] = json!(1);
+                self.save(&state);
+                eprintln!("Installed 2 executables: claude-swap, cswap");
+                return 0;
+            }
+        }
         if let Some(code) = self.overrides("uv") {
             return code;
         }

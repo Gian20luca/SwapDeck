@@ -175,6 +175,15 @@ describe('CswapUpdateNotice', () => {
     expect(await screen.findByText('Aggiornamento di cswap non riuscito.')).toBeVisible();
     expect(screen.getByRole('alert')).toHaveTextContent('aggiorna SwapDeck');
     expect(screen.getByRole('button', { name: 'Riprova' })).toBeVisible();
+    // Il ripristino della versione precedente compare come passo in coda.
+    expect(screen.getByText('Ripristino la versione precedente').closest('li')).toHaveAttribute(
+      'data-state',
+      'done',
+    );
+    // Chiudere dopo un errore non ignora la versione: l'avviso deve poter tornare.
+    await userEvent.click(screen.getByRole('button', { name: 'Chiudi l’avviso per la 0.28.0' }));
+    expect(screen.queryByText('Aggiornamento di cswap non riuscito.')).toBeNull();
+    expect(backend.setup.calls).not.toContain('dismiss:0.28.0');
   });
 });
 

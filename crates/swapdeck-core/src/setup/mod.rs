@@ -101,6 +101,8 @@ pub enum SetupStep {
     UpgradeCswap,
     /// `cswap --version` e `list --json` (`schemaVersion`).
     VerifyCswap,
+    /// Ritorno alla versione precedente dopo un `schemaVersion` non supportato.
+    RollbackCswap,
 }
 
 /// Evento di avanzamento.
@@ -228,19 +230,21 @@ impl Setup {
             return diag;
         };
         let version = self.probe(&cswap, &["--version"]).and_then(|out| {
-            CswapVersion::parse(&out.stdout).ok_or_else(|| {
-                CswapError::new(
-                    CswapErrorKind::UnsupportedVersion,
-                    "versione di cswap illeggibile",
-                )
-            })
+            CswapVersion::token(&out.stdout)
+                .and_then(|t| CswapVersion::parse_number(t).map(|v| (v, t.to_owned())))
+                .ok_or_else(|| {
+                    CswapError::new(
+                        CswapErrorKind::UnsupportedVersion,
+                        "versione di cswap illeggibile",
+                    )
+                })
         });
         diag.cswap = Some(ToolInfo {
             path: cswap.to_string_lossy().into_owned(),
-            version: version.as_ref().ok().map(ToString::to_string),
+            version: version.as_ref().ok().map(|(_, token)| token.clone()),
         });
         let version = match version {
-            Ok(v) => v,
+            Ok((v, _)) => v,
             Err(e) => return diag.fail(e),
         };
         if !version.is_supported() {
@@ -287,9 +291,15 @@ impl Setup {
         })
     }
 
-    /// `uv tool upgrade claude-swap`, poi verifica di versione e `schemaVersion`
-    /// (errore `unsupportedSchema` se è cambiato in modo incompatibile).
+    /// `uv tool upgrade claude-swap`, poi verifica di versione e `schemaVersion`.
+    ///
+    /// Rifiuta con `busy` se il motore è attivo in un altro processo (il suo `cswap auto`
+    /// bloccherebbe i file): chi chiama nello stesso processo deve prima fermare ciclo di
+    /// lettura, motore e `cswap auto`. Se il nuovo `schemaVersion` non è supportato torna da
+    /// solo alla versione precedente (`uv tool install claude-swap==<prima> --force`, passo
+    /// `rollbackCswap`) e restituisce comunque l'errore `unsupportedSchema`, che lo dice.
     pub fn upgrade(&self, progress: Progress<'_>) -> Res<SetupOutcome> {
+        self.ensure_engine_stopped()?;
         let uv = self.find_uv().ok_or_else(|| {
             CswapError::new(
                 CswapErrorKind::NotInstalled,
@@ -298,7 +308,12 @@ impl Setup {
         })?;
         let previous = self.installed_version();
         self.uv_tool(&uv, "upgrade", SetupStep::UpgradeCswap, progress)?;
-        let diagnosis = self.verify(progress)?;
+        let diagnosis = match self.verify(progress) {
+            Err(e) if e.kind == CswapErrorKind::UnsupportedSchema => {
+                return Err(self.rollback(&uv, previous.as_deref(), e, progress));
+            }
+            other => other?,
+        };
         Ok(SetupOutcome {
             diagnosis,
             uv_installed: false,
@@ -311,9 +326,7 @@ impl Setup {
     /// Confronta la versione installata con l'ultima su PyPI (cache di 6 ore nella
     /// cartella dati; `force` la ignora).
     pub fn check_update(&self, force: bool) -> Res<UpdateInfo> {
-        let installed = self
-            .installed_version()
-            .and_then(|v| update::parse_stable(&v));
+        let installed = self.installed_version();
         let store = update::UpdateStore::new(&self.data_dir);
         let (latest, checked_at, dismissed) = store.latest(force, update::now_secs(), || {
             update::fetch_latest(&http::agent(self.timeouts.http), &self.pypi_url)
@@ -334,10 +347,79 @@ impl Setup {
 
     // ---- interni ---------------------------------------------------------------
 
+    /// Versione installata così com'è (anche `0.28.0rc1`: il segno di pre-release resta).
     fn installed_version(&self) -> Option<String> {
         let cswap = locate_cswap(&self.search).ok()?;
         let out = self.probe(&cswap, &["--version"]).ok()?;
-        CswapVersion::parse(&out.stdout).map(|v| v.to_string())
+        CswapVersion::token(&out.stdout).map(str::to_owned)
+    }
+
+    /// `busy` se il lock del motore è vivo e di un altro processo.
+    fn ensure_engine_stopped(&self) -> Res<()> {
+        let Ok(Some(info)) = crate::lock::read(&self.data_dir) else {
+            return Ok(());
+        };
+        let now = crate::timeutil::now_unix();
+        if info.pid == std::process::id() || info.is_stale(now, &crate::lock::host_name()) {
+            return Ok(());
+        }
+        Err(CswapError::new(
+            CswapErrorKind::Busy,
+            format!(
+                "il motore di SwapDeck è attivo (PID {} su {}): ferma il motore in quella \
+                 SwapDeck (app o --headless) e riprova",
+                info.pid, info.host
+            ),
+        ))
+    }
+
+    /// Dopo un `schemaVersion` non supportato: reinstalla la versione precedente e
+    /// restituisce l'errore originale con l'esito del ripristino nel messaggio.
+    fn rollback(
+        &self,
+        uv: &Path,
+        previous: Option<&str>,
+        mut error: CswapError,
+        progress: Progress<'_>,
+    ) -> CswapError {
+        let step = SetupStep::RollbackCswap;
+        let Some(previous) = previous else {
+            progress(SetupProgress::StepSkipped { step });
+            error.message = format!(
+                "{}; versione precedente sconosciuta, nessun ripristino",
+                error.message
+            );
+            return error;
+        };
+        progress(SetupProgress::StepStarted { step });
+        let spec = format!("claude-swap=={previous}");
+        let args: Vec<OsString> = ["tool", "install", spec.as_str(), "--force"]
+            .iter()
+            .map(OsString::from)
+            .collect();
+        let result = self
+            .stream(uv, &args, step, progress)
+            .and_then(|out| {
+                if out.success() {
+                    Ok(())
+                } else {
+                    Err(uv_error(&out, "install"))
+                }
+            })
+            .and_then(|()| match self.diagnose() {
+                d if d.status == SetupStatus::Ready => Ok(()),
+                d => Err(d.error.unwrap_or_else(|| {
+                    CswapError::new(CswapErrorKind::Failed, "verifica non riuscita")
+                })),
+            });
+        error.message = match finish(step, result, progress) {
+            Ok(()) => format!("{}; ripristinata claude-swap {previous}", error.message),
+            Err(e) => format!(
+                "{}; ripristino di claude-swap {previous} non riuscito: {}",
+                error.message, e.message
+            ),
+        };
+        error
     }
 
     /// Variabile per i processi figli: prima `child_env`, poi l'ambiente del processo.
@@ -412,7 +494,7 @@ impl Setup {
             if out.success() {
                 Ok(())
             } else {
-                Err(uv_error(&out))
+                Err(uv_error(&out, verb))
             }
         });
         finish(step, result, progress)
@@ -459,9 +541,13 @@ impl Setup {
             step,
             text: url.to_owned(),
         });
-        let dir = tempfile::Builder::new()
-            .prefix("swapdeck-uv-")
-            .tempdir()
+        // Cartella privata dentro la cartella dati (non %TEMP%, condivisa e più esposta).
+        let dir = crate::paths::create_private_dir(&self.data_dir)
+            .and_then(|()| {
+                tempfile::Builder::new()
+                    .prefix("uv-installer-")
+                    .tempdir_in(&self.data_dir)
+            })
             .map_err(|e| {
                 CswapError::new(
                     CswapErrorKind::Failed,
@@ -518,11 +604,13 @@ impl Setup {
                 stream::run_streaming(&program, &args, &env, self.timeouts.install, &mut |text| {
                     progress(SetupProgress::Line { step, text })
                 });
-            if let Ok(out) = run {
-                if out.success() && dest.metadata().is_ok_and(|m| m.len() > 0) {
-                    return Ok(());
-                }
+            // File regolare (non un link), non vuoto e entro il limite, prima di eseguirlo.
+            let size_ok = std::fs::symlink_metadata(dest)
+                .is_ok_and(|m| m.is_file() && m.len() > 0 && m.len() <= MAX_SCRIPT_BYTES);
+            if run.is_ok_and(|out| out.success()) && size_ok {
+                return Ok(());
             }
+            let _ = std::fs::remove_file(dest);
         }
         Err(first)
     }
@@ -609,8 +697,19 @@ fn finish<T>(step: SetupStep, result: Res<T>, progress: Progress<'_>) -> Res<T> 
 }
 
 /// Errore di `uv tool`: `busy` con la spiegazione su cosa fare.
-fn uv_error(out: &RawOutput) -> CswapError {
+/// Per `upgrade` anche un accesso negato (os error 5) vuol dire quasi sempre `cswap.exe`
+/// in esecuzione su Windows.
+fn uv_error(out: &RawOutput, verb: &str) -> CswapError {
     let mut e = classify_uv_failure(out.code, &out.stdout, &out.stderr);
+    if verb == "upgrade" && e.kind == CswapErrorKind::Failed {
+        let text = format!("{}\n{}", out.stderr, out.stdout).to_lowercase();
+        if ["os error 5)", "access is denied", "accesso negato"]
+            .iter()
+            .any(|p| text.contains(p))
+        {
+            e.kind = CswapErrorKind::Busy;
+        }
+    }
     if e.kind == CswapErrorKind::Busy {
         e.message = "un file di cswap è in uso: chiudi i processi cswap (cswap auto, la TUI, \
                      altre finestre) e riprova"
@@ -693,14 +792,33 @@ fn windows_powershell() -> PathBuf {
 /// Programma, argomenti e variabili d'ambiente di uno scaricatore.
 type Downloader = (PathBuf, Vec<OsString>, Vec<(OsString, OsString)>);
 
+/// Dominio di secondo livello dell'host di `url` (`https://astral.sh/x` → `astral.sh`,
+/// `https://releases.astral.sh/x` → `astral.sh`).
+fn base_domain(url: &str) -> String {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    let host = rest.split(['/', '?', '#', ':']).next().unwrap_or_default();
+    let labels: Vec<&str> = host.split('.').collect();
+    labels[labels.len().saturating_sub(2)..]
+        .join(".")
+        .to_ascii_lowercase()
+}
+
 /// Scaricatori di ripiego, nell'ordine.
 fn fallback_downloaders(search: &SearchEnv, url: &str, dest: &Path) -> Vec<Downloader> {
     let os = |s: &str| OsString::from(s);
     let dest = dest.as_os_str().to_owned();
     if cfg!(windows) {
         // URL e destinazione passano per l'ambiente: niente interpolazione nel comando.
-        let cmd = "$ProgressPreference = 'SilentlyContinue'; \
-                   Invoke-RestMethod -Uri $env:SWAPDECK_DL_URL -OutFile $env:SWAPDECK_DL_OUT";
+        // Lo script di uv arriva con un redirect (PowerShell 5.1 non sa limitarli al solo
+        // HTTPS): l'indirizzo finale (`BaseResponse.ResponseUri`) deve essere HTTPS e dello
+        // stesso dominio dell'URL di partenza, altrimenti il file si cancella.
+        let cmd = "$ProgressPreference = 'SilentlyContinue'; $ErrorActionPreference = 'Stop'; \
+                   $out = $env:SWAPDECK_DL_OUT; $d = $env:SWAPDECK_DL_DOMAIN; \
+                   $r = Invoke-WebRequest -UseBasicParsing -Uri $env:SWAPDECK_DL_URL \
+                   -OutFile $out -PassThru -TimeoutSec 120; \
+                   $u = $r.BaseResponse.ResponseUri; \
+                   if ($u.Scheme -ne 'https' -or -not ($u.Host -eq $d -or $u.Host.EndsWith('.' + $d))) \
+                   { Remove-Item -LiteralPath $out -Force; exit 3 }";
         return vec![(
             windows_powershell(),
             vec![
@@ -712,12 +830,26 @@ fn fallback_downloaders(search: &SearchEnv, url: &str, dest: &Path) -> Vec<Downl
             vec![
                 (os("SWAPDECK_DL_URL"), os(url)),
                 (os("SWAPDECK_DL_OUT"), dest),
+                (os("SWAPDECK_DL_DOMAIN"), os(&base_domain(url))),
             ],
         )];
     }
     let mut list = Vec::new();
     if let Some(curl) = locate::locate("curl", search) {
-        let args = ["-LsSf", "--max-time", "120", url, "-o"].map(os);
+        let args = [
+            "-LsSf",
+            "--proto",
+            "=https",
+            "--proto-redir",
+            "=https",
+            "--max-filesize",
+            "2097152",
+            "--max-time",
+            "120",
+            url,
+            "-o",
+        ]
+        .map(os);
         list.push((
             curl,
             [args.to_vec(), vec![dest.clone()]].concat(),
@@ -725,7 +857,7 @@ fn fallback_downloaders(search: &SearchEnv, url: &str, dest: &Path) -> Vec<Downl
         ));
     }
     if let Some(wget) = locate::locate("wget", search) {
-        let mut args = ["-q", "-T", "120", "-O"].map(os).to_vec();
+        let mut args = ["-q", "--https-only", "-T", "120", "-O"].map(os).to_vec();
         args.extend([dest, os(url)]);
         list.push((wget, args, Vec::new()));
     }
@@ -745,7 +877,7 @@ mod tests {
                      utilizzato da un altro processo. (os error 32)"
                 .into(),
         };
-        let e = uv_error(&out);
+        let e = uv_error(&out, "upgrade");
         assert_eq!(e.kind, CswapErrorKind::Busy);
         assert!(e.message.contains("chiudi i processi cswap"));
         let other = RawOutput {
@@ -753,7 +885,26 @@ mod tests {
             stdout: String::new(),
             stderr: "error: No network".into(),
         };
-        assert_eq!(uv_error(&other).kind, CswapErrorKind::Failed);
+        assert_eq!(uv_error(&other, "upgrade").kind, CswapErrorKind::Failed);
+        for denied in [
+            "error: failed to remove file `cswap.exe`: Access is denied. (os error 5)",
+            "error: Accesso negato. (os error 5)",
+        ] {
+            let out = RawOutput {
+                code: Some(2),
+                stdout: String::new(),
+                stderr: denied.into(),
+            };
+            assert_eq!(uv_error(&out, "upgrade").kind, CswapErrorKind::Busy);
+            assert_eq!(uv_error(&out, "install").kind, CswapErrorKind::Failed);
+        }
+        // "os error 50" non è un accesso negato.
+        let out = RawOutput {
+            code: Some(2),
+            stdout: String::new(),
+            stderr: "error: not supported (os error 50)".into(),
+        };
+        assert_eq!(uv_error(&out, "upgrade").kind, CswapErrorKind::Failed);
     }
 
     #[test]
@@ -763,6 +914,45 @@ mod tests {
         assert_eq!(args.last().unwrap(), "x");
         for (p, _, _) in fallback_downloaders(&SearchEnv::default(), "https://e", Path::new("o")) {
             assert!(p.is_absolute());
+        }
+    }
+
+    #[test]
+    fn fallback_downloaders_stay_on_https() {
+        assert_eq!(base_domain(UV_INSTALL_PS1), "astral.sh");
+        assert_eq!(base_domain("https://Releases.Astral.sh:443/x"), "astral.sh");
+        let dirs = tempfile::tempdir().unwrap();
+        let bin = dirs.path();
+        for tool in ["curl", "wget"] {
+            let p = bin.join(exe_name(tool));
+            std::fs::write(&p, b"").unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
+        }
+        let search = SearchEnv {
+            path: Some(bin.as_os_str().to_owned()),
+            ..SearchEnv::default()
+        };
+        let list = fallback_downloaders(&search, UV_INSTALL_SH, Path::new("o"));
+        let joined: Vec<String> = list
+            .iter()
+            .map(|(_, args, env)| {
+                let mut all: Vec<_> = args.iter().map(|a| a.to_string_lossy()).collect();
+                all.extend(env.iter().map(|(_, v)| v.to_string_lossy()));
+                all.join(" ")
+            })
+            .collect();
+        if cfg!(windows) {
+            assert_eq!(joined.len(), 1);
+            assert!(joined[0].contains("ResponseUri") && joined[0].contains("astral.sh"));
+        } else {
+            assert_eq!(joined.len(), 2, "{joined:?}");
+            assert!(joined[0].contains("--proto =https --proto-redir =https"));
+            assert!(joined[0].contains("--max-filesize 2097152"));
+            assert!(joined[1].contains("--https-only"));
         }
     }
 

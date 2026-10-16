@@ -103,8 +103,10 @@ export interface SetupBackend {
   /** Ricorda che l'avviso per `version` è stato chiuso (`UpdateInfo.dismissed`). */
   dismissCswapUpdate(version: string): Promise<void>;
   /**
-   * `uv tool upgrade claude-swap` e verifica di `schemaVersion`. Errori tipici: `busy` (file in uso: chiudere
-   * i processi cswap e riprovare), `unsupportedSchema` (serve una SwapDeck più recente).
+   * `uv tool upgrade claude-swap` e verifica di `schemaVersion`. L'host ferma prima i propri processi cswap
+   * (ciclo di lettura, motore, `cswap auto`) e li riavvia dopo. Errori tipici: `busy` (file in uso, o motore
+   * attivo in un'altra SwapDeck: fermarlo e riprovare), `unsupportedSchema` (serve una SwapDeck più recente;
+   * cswap è già stato riportato da solo alla versione precedente, passo `rollbackCswap`).
    */
   upgradeCswap(onProgress: (event: SetupProgress) => void): Promise<SetupOutcome>;
 }

@@ -117,7 +117,12 @@ export class FakeSetup {
       await this.delay();
       onProgress({ event: 'line', step, text });
     }
-    if (this.failure && (step === 'installCswap' || step === 'upgradeCswap')) {
+    // Come il core: lo schema incompatibile si scopre nella verifica, gli altri errori in uv.
+    const failingStep =
+      this.failure?.kind === 'unsupportedSchema'
+        ? step === 'verifyCswap'
+        : step === 'installCswap' || step === 'upgradeCswap';
+    if (this.failure && failingStep) {
       onProgress({ event: 'stepFailed', step, error: this.failure });
       throw new BackendError(this.failure);
     }
@@ -173,7 +178,16 @@ export class FakeSetup {
     ]);
     this.installed = this.latest;
     this.state = 'ready';
-    await this.step('verifyCswap', onProgress, [`cswap ${this.installed} · schemaVersion 1`]);
+    try {
+      await this.step('verifyCswap', onProgress, [`cswap ${this.installed} · schemaVersion 1`]);
+    } catch (e) {
+      if (this.failure?.kind === 'unsupportedSchema') {
+        // Il core torna da solo alla versione precedente.
+        this.installed = previous;
+        await this.step('rollbackCswap', onProgress, [`Installed claude-swap ${previous}`]);
+      }
+      throw e;
+    }
     return { diagnosis: this.diagnosis(), uvInstalled: false, previousVersion: previous };
   }
 }

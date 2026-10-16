@@ -15,10 +15,12 @@ const MARK = { pending: '○', running: '◌', done: '✓', skipped: '–', fail
 /** Avanzamento a passi di installazione o aggiornamento, con l'output dei processi. */
 export function SetupRun({ steps, run, logOpen = false }: SetupRunProps) {
   const { t } = useI18n();
+  // Passi fuori elenco ma avviati (per esempio il ripristino dopo un aggiornamento) in coda.
+  const extra = (Object.keys(run.steps) as SetupStep[]).filter((s) => !steps.includes(s));
   return (
     <div className="sd-setup__run">
       <ol className="sd-steps">
-        {steps.map((step) => {
+        {[...steps, ...extra].map((step) => {
           const state = run.steps[step] ?? 'pending';
           return (
             <li key={step} data-state={state}>
