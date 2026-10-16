@@ -7,7 +7,7 @@ Si installa in **una** di queste forme (a scelta):
 | Forma | Per chi | Cosa dà |
 |---|---|---|
 | App nell'area di notifica | chi vuole un widget sempre visibile | icona con anello dei consumi, dashboard, mini-widget flottante, notifiche, avvio al login |
-| Estensione VS Code | chi lavora tutto il giorno in VS Code | consumi nella barra di stato, cambio rapido, pannello con la stessa dashboard |
+| Estensione VS Code | chi lavora tutto il giorno in VS Code | consumi nella barra di stato, cambio rapido, pannello con la stessa app a schede del desktop |
 
 Entrambe usano lo stesso motore (Rust) e la stessa config, e coprono i comandi di `cswap` (list, switch, add, remove, alias, swap, map, export/import, run...). Interfaccia in italiano e inglese.
 
@@ -110,7 +110,7 @@ Contengono `config.json`, il lock del motore (`engine.lock`) e lo storico dei co
 | «motore attivo in un'altra istanza» | un'altra finestra o l'app tiene il lock: è voluto |
 | Il motore non cambia mai | spento (`enabled: false`), in sola osservazione (`dryRun: true`) o `primary` mancante |
 | `cswap` non trovato | riapri l'app per l'installazione guidata, oppure imposta `swapdeck.cliPath` / il PATH |
-| Consumi non aggiornati, errori 429 | `cswap list` ha limiti di frequenza: non scendere sotto 15 s di intervallo |
+| Consumi non aggiornati, errori 429 | `cswap list` ha limiti di frequenza: l'intervallo minimo è 60 s |
 | Account con «re-login» | accedi di nuovo con `cswap` a quell'account |
 | `headless` esce con 3 | lock occupato: un altro motore è attivo, è corretto |
 | Estensione inattiva dopo l'installazione | «Ricarica finestra» |

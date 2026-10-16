@@ -108,7 +108,7 @@ L'etichetta non deve contenere `cswap` (stessa ragione di Windows).
 Solo quando la prova combacia.
 
 1. Disattiva il vecchio guard, senza cancellarlo: `schtasks /Change /TN "cswap-guard" /DISABLE` (Windows), oppure disabilita il timer, il cron o il LaunchAgent equivalente. Conserva lo script.
-2. Togli `ignoredConflicts` se ancora presente e riavvia l'app o il processo headless (le regole si rileggono all'avvio): lo stato «sospeso» sparisce.
+2. Togli `ignoredConflicts` se ancora presente (dalla scheda Regole o nella config: l'app e il processo headless rileggono le regole al giro successivo, senza riavvio): lo stato «sospeso» sparisce.
 3. Accendi il motore: `swapdeck-cli config set '{"engine":{"enabled":true,"dryRun":false}}'`.
 4. Verifica dalla dashboard o con `swapdeck-cli engine status` che il motore sia attivo e senza conflitti.
 
