@@ -75,7 +75,7 @@ fn mini_position(v: Option<&Value>) -> Option<(i32, i32)> {
 
 /// Posizioni compressa ed estesa. Migrazione: la posizione unica di prima (`x`, `y`) era
 /// quella della finestra nello stato salvato, quindi vale per quello stato.
-fn mini_positions(v: Option<&Value>) -> (Option<(i32, i32)>, Option<(i32, i32)>) {
+fn mini_positions(v: Option<&Value>) -> (MiniPosition, MiniPosition) {
     let Some(v) = v else {
         return (None, None);
     };
@@ -91,6 +91,9 @@ fn mini_positions(v: Option<&Value>) -> (Option<(i32, i32)>, Option<(i32, i32)>)
         (None, legacy)
     }
 }
+
+/// Angolo in alto a sinistra in pixel fisici, se salvato.
+type MiniPosition = Option<(i32, i32)>;
 
 fn position_json((x, y): (i32, i32)) -> Value {
     json!({ "x": x, "y": y })
