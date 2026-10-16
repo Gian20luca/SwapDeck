@@ -1,0 +1,10 @@
+**
+!package.json
+!package.nls.json
+!package.nls.it.json
+!README.md
+!l10n/**
+!out/extension.js
+!out/webview/main.js
+!out/webview/main.css
+!bin/**

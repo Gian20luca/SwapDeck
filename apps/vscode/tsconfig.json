@@ -1,9 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "dist",
-    "types": ["node"]
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "declaration": false,
+    "types": ["node", "vscode"],
+    "paths": { "@swapdeck/types": ["../../packages/types/src/index.ts"] }
   },
-  "include": ["src"]
+  "include": ["src", "test"]
 }

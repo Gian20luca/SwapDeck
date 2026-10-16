@@ -1,0 +1,5 @@
+/* Il pannello usa lo sfondo dell'editor di VS Code; il resto viene da @swapdeck/ui. */
+body {
+  margin: 0;
+  padding: 0;
+}

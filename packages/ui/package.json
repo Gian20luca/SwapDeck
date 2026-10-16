@@ -9,6 +9,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./fake": "./src/dev/index.ts",
+    "./format": "./src/lib/format.ts",
+    "./account": "./src/lib/account.ts",
     "./styles.css": "./src/styles/index.css"
   },
   "scripts": {

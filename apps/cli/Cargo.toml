@@ -1,0 +1,31 @@
+[package]
+name = "swapdeck-cli"
+description = "Interfaccia a riga di comando di SwapDeck (JSON su stdout), usata dall'estensione VS Code e come modalità senza interfaccia"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "swapdeck-cli"
+path = "src/main.rs"
+
+# Finto cswap dello step 1 (stesso sorgente), per i test di integrazione della CLI e dell'estensione.
+[[bin]]
+name = "swapdeck-fake-cswap"
+path = "../../crates/swapdeck-core/tests/support/fake_cswap.rs"
+test = false
+doc = false
+
+[dependencies]
+ctrlc = "3.5.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+swapdeck-core = { path = "../../crates/swapdeck-core" }
+ts-rs = { version = "12.0.1", features = ["serde-json-impl", "no-serde-warnings"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"

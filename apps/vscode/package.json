@@ -1,24 +1,123 @@
 {
   "name": "swapdeck-vscode",
-  "version": "0.0.0",
+  "displayName": "SwapDeck",
+  "description": "%description%",
+  "version": "0.1.0",
   "private": true,
-  "type": "module",
-  "description": "Estensione VS Code di SwapDeck",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+  "publisher": "swapdeck",
+  "license": "UNLICENSED",
+  "type": "commonjs",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "extensionKind": [
+    "ui"
+  ],
+  "categories": [
+    "Other"
+  ],
+  "main": "./out/extension.js",
+  "l10n": "./l10n",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": true
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "swapdeck.openPanel",
+        "title": "%command.openPanel%",
+        "category": "SwapDeck"
+      },
+      {
+        "command": "swapdeck.refresh",
+        "title": "%command.refresh%",
+        "category": "SwapDeck"
+      },
+      {
+        "command": "swapdeck.switchAccount",
+        "title": "%command.switchAccount%",
+        "category": "SwapDeck"
+      },
+      {
+        "command": "swapdeck.startEngine",
+        "title": "%command.startEngine%",
+        "category": "SwapDeck"
+      },
+      {
+        "command": "swapdeck.stopEngine",
+        "title": "%command.stopEngine%",
+        "category": "SwapDeck"
+      }
+    ],
+    "configuration": {
+      "title": "SwapDeck",
+      "properties": {
+        "swapdeck.refreshIntervalSeconds": {
+          "type": "number",
+          "default": 60,
+          "minimum": 15,
+          "maximum": 3600,
+          "scope": "application",
+          "markdownDescription": "%config.refreshIntervalSeconds%"
+        },
+        "swapdeck.cliPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "%config.cliPath%"
+        },
+        "swapdeck.engine.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "markdownDescription": "%config.engine.enabled%"
+        },
+        "swapdeck.notifications.thresholds": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "maxItems": 5,
+          "default": [
+            80,
+            95
+          ],
+          "scope": "application",
+          "markdownDescription": "%config.notifications.thresholds%"
+        }
+      }
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:ext": "node scripts/build.mjs && node scripts/run-ext-tests.mjs",
+    "package": "node scripts/package.mjs --target win32-x64",
+    "gen:types": "node scripts/gen-types.mjs"
   },
   "devDependencies": {
+    "@swapdeck/types": "workspace:*",
+    "@swapdeck/ui": "workspace:*",
     "@types/node": "catalog:",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/vscode": "~1.95.0",
+    "@vitest/coverage-v8": "^4.1.12",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "~3.9.2",
+    "esbuild": "^0.25.12",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
