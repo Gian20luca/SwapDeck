@@ -24,6 +24,7 @@ use crate::history::{HistoryEvents, HistoryQuery, HistoryRecord};
 use crate::lock::LockInfo;
 use crate::notify::{HeadlessEvent, NotificationConfig, NotifyPoll};
 use crate::setup::{SetupDiagnosis, SetupOutcome, SetupProgress, UpdateInfo};
+use crate::usage::{UsageBreakdown, UsageQuery};
 
 const HEADER: &str =
     "// Generato da swapdeck-core (ts-rs): non modificare a mano. Rigenera con `pnpm gen:types`.\n";
@@ -73,6 +74,8 @@ fn render(dir: &Path) -> BTreeMap<String, String> {
     NotificationConfig::export_all(&cfg).unwrap();
     NotifyPoll::export_all(&cfg).unwrap();
     HeadlessEvent::export_all(&cfg).unwrap();
+    UsageQuery::export_all(&cfg).unwrap();
+    UsageBreakdown::export_all(&cfg).unwrap();
 
     let mut files = BTreeMap::new();
     collect(dir, dir, &mut files);

@@ -214,6 +214,7 @@ describe('TauriBackend: gestione completa', () => {
     await backend.setPreferences({ pollIntervalSeconds: 30 });
     await backend.getHistoryEvents({ sinceSeconds: 5 });
     await backend.getHistoryEvents();
+    await backend.getUsageBreakdown({ window: '7d', groupBy: 'agent', account: 2 });
     expect(calls.map((c) => [c.cmd, c.args])).toEqual([
       ['list_mappings', undefined],
       ['get_engine_state', undefined],
@@ -222,6 +223,7 @@ describe('TauriBackend: gestione completa', () => {
       ['set_preferences', { prefs: { pollIntervalSeconds: 30 } }],
       ['get_history_events', { query: { sinceSeconds: 5 } }],
       ['get_history_events', { query: {} }],
+      ['get_usage_breakdown', { query: { window: '7d', groupBy: 'agent', account: 2 } }],
     ]);
   });
 

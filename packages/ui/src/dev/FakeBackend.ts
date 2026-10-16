@@ -17,7 +17,10 @@ import type {
   SwitchReason,
   SwitchResponse,
   UpdateInfo,
+  UsageBreakdown,
+  UsageQuery,
 } from '@swapdeck/types';
+import { fakeUsageBreakdown } from './fakeUsage.js';
 import {
   BackendError,
   type ActionOutcome,
@@ -238,6 +241,20 @@ export class FakeBackend implements Backend, SetupBackend {
   async getHistoryEvents(query: HistoryQuery = {}): Promise<HistoryEvents> {
     await this.delay();
     return generateEvents(this.list, this.now(), query.sinceSeconds);
+  }
+
+  async getUsageBreakdown(query: UsageQuery): Promise<UsageBreakdown> {
+    await this.delay();
+    try {
+      return fakeUsageBreakdown(query, this.now());
+    } catch (e) {
+      throw new BackendError({
+        kind: 'invalidUsage',
+        message: (e as Error).message,
+        exitCode: 2,
+        errorType: 'InvalidUsage',
+      });
+    }
   }
 
   async listMappings(): Promise<DirectoryMapping[]> {

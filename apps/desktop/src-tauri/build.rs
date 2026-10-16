@@ -28,6 +28,7 @@ fn main() {
             "get_notification_settings",
             "set_notification_settings",
             "get_history_events",
+            "get_usage_breakdown",
             "diagnose_setup",
             "install_cswap",
             "upgrade_cswap",

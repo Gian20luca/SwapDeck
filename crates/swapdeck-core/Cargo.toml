@@ -22,6 +22,7 @@ ts-rs = { version = "12.0.1", features = ["serde-json-impl", "no-serde-warnings"
 # Notifiche di sistema di `--headless` (stessa versione del plugin di Tauri).
 notify-rust = "4.17.0"
 ureq = { version = "3.4.2", default-features = false, features = ["rustls", "platform-verifier"] }
+memchr = "2.8.3"
 zeroize = "1.9.1"
 
 [target."cfg(windows)".dependencies]
