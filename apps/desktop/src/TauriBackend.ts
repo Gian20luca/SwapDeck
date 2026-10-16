@@ -4,8 +4,10 @@ import type {
   Confirmation,
   CswapAction,
   CswapError,
+  EngineProfiles,
   EngineRules,
   ListResponse,
+  ProfileCommand,
   SetupDiagnosis,
   SetupOutcome,
   SetupProgress,
@@ -247,6 +249,14 @@ export class TauriBackend implements Backend, SetupBackend {
 
   setEngineRules(rules: EngineRules): Promise<EngineState> {
     return this.call('set_engine_rules', { rules });
+  }
+
+  getEngineProfiles(): Promise<EngineProfiles> {
+    return this.call('get_engine_profiles');
+  }
+
+  applyEngineProfile(command: ProfileCommand): Promise<EngineState> {
+    return this.call('apply_engine_profile', { command });
   }
 
   getPreferences(): Promise<AppPreferences> {

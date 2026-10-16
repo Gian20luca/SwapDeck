@@ -5,8 +5,10 @@ import type {
   Confirmation,
   Conflict,
   CswapAction,
+  EngineProfiles,
   EngineRules,
   ListResponse,
+  ProfileCommand,
   SetupDiagnosis,
   SetupOutcome,
   SetupProgress,
@@ -38,6 +40,7 @@ import configList from '../../../../fixtures/cswap/config-list.json';
 import { loadScenario, type ScenarioName } from './fixtures.js';
 import { generateEvents, generateHistory } from './history.js';
 import { FakeSetup, type FakeSetupOptions } from './fakeSetup.js';
+import { applyProfile, fakeCandidate, seedProfiles } from './fakeProfiles.js';
 
 export interface FakeBackendOptions {
   scenario?: ScenarioName;
@@ -119,6 +122,7 @@ export class FakeBackend implements Backend, SetupBackend {
   private list: ListResponse;
   private mappings: DirectoryMapping[];
   private rules: EngineRules;
+  private profiles: EngineProfiles;
   private readonly conflicts: Conflict[];
   private prefs: AppPreferences = {
     pollIntervalSeconds: 60,
@@ -149,6 +153,7 @@ export class FakeBackend implements Backend, SetupBackend {
     this.mappings = structuredClone(options.mappings ?? []);
     this.conflicts = structuredClone(options.conflicts ?? []);
     this.rules = { ...structuredClone(DEFAULT_RULES), ...structuredClone(options.rules ?? {}) };
+    this.profiles = seedProfiles(this.rules);
     this.picks = options.picks ?? {};
     if (options.hostConfirms !== undefined) this.hostConfirms = options.hostConfirms;
     if (options.miniWindow !== false) {
@@ -270,6 +275,8 @@ export class FakeBackend implements Backend, SetupBackend {
       };
     } else {
       view = { holder: true, enabled: true, dryRun: rules.dryRun, suspended: null, detail: [] };
+      const candidate = fakeCandidate(rules, this.list.accounts);
+      if (candidate) view.candidate = candidate;
     }
     return { rules, view, conflicts: structuredClone(this.conflicts) };
   }
@@ -284,6 +291,34 @@ export class FakeBackend implements Backend, SetupBackend {
     const problems = Object.keys(validateRules(rules));
     if (problems.length > 0) fail(`Regole non valide: ${problems.join(', ')}`, 'ConfigError');
     this.rules = structuredClone(rules);
+    return this.engineState();
+  }
+
+  async getEngineProfiles(): Promise<EngineProfiles> {
+    await this.delay();
+    const out = structuredClone(this.profiles);
+    const active = out.profiles.find((p) => p.id === out.activeId);
+    if (active) active.rules = structuredClone(this.rules);
+    return out;
+  }
+
+  async applyEngineProfile(command: ProfileCommand): Promise<EngineState> {
+    await this.delay();
+    let next: EngineProfiles;
+    try {
+      next = applyProfile(this.profiles, command, this.rules);
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error), 'ConfigError');
+    }
+    const rules = next.profiles.find((p) => p.id === next.activeId)!.rules;
+    // Le regole della nuova mappa attiva entrano solo se valide (come `apply_profile_command`).
+    if (JSON.stringify(rules) !== JSON.stringify(this.rules)) {
+      const problems = Object.keys(validateRules(rules));
+      if (problems.length > 0) fail(`Regole non valide: ${problems.join(', ')}`, 'ConfigError');
+    }
+    this.profiles = next;
+    this.rules = structuredClone(rules);
+    this.emit();
     return this.engineState();
   }
 

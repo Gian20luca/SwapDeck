@@ -1,8 +1,10 @@
 /** Dizionario italiano (lingua di default). Le chiavi sono la fonte di verità: `en.ts` deve coprirle tutte. */
+import { itFlow } from './it.flow.js';
 import { itManage } from './it.manage.js';
 
 export const it = {
   ...itManage,
+  ...itFlow,
   'app.name': 'SwapDeck',
   'common.cancel': 'Annulla',
   'common.confirm': 'Conferma',

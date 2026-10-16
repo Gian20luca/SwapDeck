@@ -6,11 +6,13 @@ import type {
   AppPreferences,
   CswapError,
   DirectoryMapping,
+  EngineProfiles,
   EngineRules,
   EngineState,
   EngineView,
   HistoryEvents,
   ListResponse,
+  ProfileCommand,
   SetupDiagnosis,
   SetupOutcome,
   SetupProgress,
@@ -66,7 +68,14 @@ export class BackendError extends Error {
  * Formati del Rust (`swapdeck-core`, generati in `@swapdeck/types`): cartelle mappate, stato del
  * motore, preferenze e eventi dello storico.
  */
-export type { AppPreferences, DirectoryMapping, EngineState, HistoryEvents };
+export type {
+  AppPreferences,
+  DirectoryMapping,
+  EngineProfiles,
+  EngineState,
+  HistoryEvents,
+  ProfileCommand,
+};
 /** Stato del motore all'ultimo giro (`EngineView` del Rust). */
 export type EngineViewInfo = EngineView;
 
@@ -130,6 +139,10 @@ export interface Backend {
   getEngineState?(): Promise<EngineState>;
   /** Salva le regole (validate dal Rust) e restituisce lo stato aggiornato. */
   setEngineRules?(rules: EngineRules): Promise<EngineState>;
+  /** Mappe (profili delle regole) e quella attiva. */
+  getEngineProfiles?(): Promise<EngineProfiles>;
+  /** Crea, rinomina, duplica, elimina, ripristina o seleziona una mappa; stato del motore aggiornato. */
+  applyEngineProfile?(command: ProfileCommand): Promise<EngineState>;
   /** Intervallo, soglie delle notifiche, lingua e tema salvati nella config. */
   getPreferences?(): Promise<AppPreferences>;
   /** Salva solo i campi presenti. */

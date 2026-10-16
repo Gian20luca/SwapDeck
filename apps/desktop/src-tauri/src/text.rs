@@ -16,6 +16,7 @@ pub struct Labels {
     pub refresh: &'static str,
     pub quit: &'static str,
     pub no_accounts: &'static str,
+    pub map: &'static str,
 }
 
 pub fn labels(lang: Lang) -> Labels {
@@ -26,6 +27,7 @@ pub fn labels(lang: Lang) -> Labels {
             refresh: "Aggiorna",
             quit: "Esci",
             no_accounts: "Nessun account",
+            map: "Mappa",
         },
         Lang::En => Labels {
             open: "Open",
@@ -33,6 +35,7 @@ pub fn labels(lang: Lang) -> Labels {
             refresh: "Refresh",
             quit: "Quit",
             no_accounts: "No accounts",
+            map: "Map",
         },
     }
 }
@@ -105,6 +108,14 @@ pub fn switch_failed(lang: Lang, err: &CswapError) -> (String, String) {
     let title = match lang {
         Lang::It => "Cambio di account non riuscito",
         Lang::En => "Account switch failed",
+    };
+    (title.into(), err.message.clone())
+}
+
+pub fn map_failed(lang: Lang, err: &CswapError) -> (String, String) {
+    let title = match lang {
+        Lang::It => "Cambio di mappa non riuscito",
+        Lang::En => "Map change failed",
     };
     (title.into(), err.message.clone())
 }

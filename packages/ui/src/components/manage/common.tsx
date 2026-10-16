@@ -2,6 +2,7 @@ import { useId, type ReactNode } from 'react';
 import type { Notice } from '../../backend/useActionRunner.js';
 import { useI18n } from '../../i18n/index.js';
 import type { Loadable } from '../../lib/useLoad.js';
+import { Tooltip } from '../Tooltip.js';
 
 /** Esito di un'azione: riga di stato (alert se è un errore). */
 export function NoticeView({ notice }: { notice: Notice | null }) {
@@ -53,6 +54,8 @@ export interface TextFieldProps {
   error?: string | null;
   /** Campo sensibile: niente completamento, niente correzione. */
   secret?: boolean;
+  /** Tooltip: cosa fa il campo e cosa succede. */
+  tip?: string;
 }
 
 /** Campo di testo con etichetta, suggerimento ed errore collegati per l'accessibilità. */
@@ -69,6 +72,7 @@ export function TextField({
   step,
   error,
   secret,
+  tip,
 }: TextFieldProps) {
   const id = useId();
   const describedBy = [hint ? `${id}-hint` : '', error ? `${id}-err` : '']
@@ -77,22 +81,24 @@ export function TextField({
   return (
     <div className="sd-form__field">
       <label htmlFor={id}>{label}</label>
-      <input
-        id={id}
-        className="sd-input"
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        disabled={disabled}
-        min={min}
-        max={max}
-        step={step}
-        aria-invalid={error ? true : undefined}
-        aria-describedby={describedBy || undefined}
-        autoComplete={secret ? 'off' : undefined}
-        spellCheck={secret ? false : undefined}
-        onChange={(event) => onChange(event.target.value)}
-      />
+      <Tooltip text={tip ?? ''} block>
+        <input
+          id={id}
+          className="sd-input"
+          type={type}
+          value={value}
+          placeholder={placeholder}
+          disabled={disabled}
+          min={min}
+          max={max}
+          step={step}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy || undefined}
+          autoComplete={secret ? 'off' : undefined}
+          spellCheck={secret ? false : undefined}
+          onChange={(event) => onChange(event.target.value)}
+        />
+      </Tooltip>
       {hint && (
         <span id={`${id}-hint`} className="sd-hint">
           {hint}
@@ -115,6 +121,8 @@ export function PathField({
   onBrowse,
   disabled,
   placeholder,
+  tip,
+  browseTip,
 }: {
   label: string;
   value: string;
@@ -122,6 +130,8 @@ export function PathField({
   onBrowse?: () => Promise<string | null>;
   disabled?: boolean;
   placeholder?: string;
+  tip?: string;
+  browseTip?: string;
 }) {
   const { t } = useI18n();
   const id = useId();
@@ -129,30 +139,34 @@ export function PathField({
     <div className="sd-form__field">
       <label htmlFor={id}>{label}</label>
       <div className="sd-row">
-        <input
-          id={id}
-          className="sd-input"
-          value={value}
-          placeholder={placeholder}
-          disabled={disabled}
-          spellCheck={false}
-          onChange={(event) => onChange(event.target.value)}
-        />
-        {onBrowse && (
-          <button
-            type="button"
-            className="sd-btn"
+        <Tooltip text={tip ?? ''}>
+          <input
+            id={id}
+            className="sd-input"
+            value={value}
+            placeholder={placeholder}
             disabled={disabled}
-            onClick={() => {
-              void onBrowse()
-                .then((picked) => {
-                  if (picked) onChange(picked);
-                })
-                .catch(() => undefined);
-            }}
-          >
-            {t('common.browse')}
-          </button>
+            spellCheck={false}
+            onChange={(event) => onChange(event.target.value)}
+          />
+        </Tooltip>
+        {onBrowse && (
+          <Tooltip text={browseTip ?? t('common.browse.tip')}>
+            <button
+              type="button"
+              className="sd-btn"
+              disabled={disabled}
+              onClick={() => {
+                void onBrowse()
+                  .then((picked) => {
+                    if (picked) onChange(picked);
+                  })
+                  .catch(() => undefined);
+              }}
+            >
+              {t('common.browse')}
+            </button>
+          </Tooltip>
         )}
       </div>
     </div>
@@ -165,24 +179,28 @@ export function CheckField({
   onChange,
   disabled,
   hint,
+  tip,
 }: {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
   hint?: string;
+  tip?: string;
 }) {
   const id = useId();
   return (
     <div className="sd-form__check">
-      <input
-        id={id}
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        aria-describedby={hint ? `${id}-hint` : undefined}
-        onChange={(event) => onChange(event.target.checked)}
-      />
+      <Tooltip text={tip ?? ''}>
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          aria-describedby={hint ? `${id}-hint` : undefined}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+      </Tooltip>
       <label htmlFor={id}>{label}</label>
       {hint && (
         <span id={`${id}-hint`} className="sd-hint">
@@ -199,30 +217,43 @@ export function SelectField({
   onChange,
   options,
   disabled,
+  tip,
+  hint,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: { value: string; label: string }[];
   disabled?: boolean;
+  tip?: string;
+  /** Riga sotto il campo (per esempio la descrizione della scelta). */
+  hint?: string;
 }) {
   const id = useId();
   return (
     <div className="sd-form__field">
       <label htmlFor={id}>{label}</label>
-      <select
-        id={id}
-        className="sd-input"
-        value={value}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.value)}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <Tooltip text={tip ?? ''} block>
+        <select
+          id={id}
+          className="sd-input"
+          value={value}
+          disabled={disabled}
+          aria-describedby={hint ? `${id}-hint` : undefined}
+          onChange={(event) => onChange(event.target.value)}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      </Tooltip>
+      {hint && (
+        <span id={`${id}-hint`} className="sd-hint">
+          {hint}
+        </span>
+      )}
     </div>
   );
 }

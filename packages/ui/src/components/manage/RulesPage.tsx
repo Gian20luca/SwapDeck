@@ -1,19 +1,35 @@
-import type { Account, EngineRules, ReserveCriterion } from '@swapdeck/types';
-import { useCallback, useMemo, useState } from 'react';
+import type {
+  Account,
+  EngineProfiles,
+  EngineRules,
+  ProfileCommand,
+  ReserveCriterion,
+  ScoreWeights,
+} from '@swapdeck/types';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { actions } from '../../backend/actions.js';
 import { useBackend } from '../../backend/context.js';
-import type { Notice } from '../../backend/useActionRunner.js';
+import { useActionRunner, type Notice } from '../../backend/useActionRunner.js';
 import { errorMessage, useAccounts } from '../../backend/useAccounts.js';
 import type { EngineState } from '../../backend/types.js';
 import { useI18n, type MessageKey } from '../../i18n/index.js';
-import { accountName } from '../../lib/account.js';
 import {
-  applyGuardPreset,
+  CRITERIA,
+  flowRows,
   fromDraft,
+  materialize,
+  missingAccounts,
+  moveRow,
+  setIncluded,
   toDraft,
   validateRules,
   type RulesDraft,
 } from '../../lib/engineRules.js';
+import { shortEmail } from '../../lib/format.js';
 import { useLoad } from '../../lib/useLoad.js';
+import { Tooltip } from '../Tooltip.js';
+import { FlowList } from './FlowList.js';
+import { MapSelector } from './MapSelector.js';
 import {
   CheckField,
   LoadGate,
@@ -24,8 +40,6 @@ import {
   Unavailable,
 } from './common.js';
 
-const CRITERIA: ReserveCriterion[] = ['lowest-weekly', 'best', 'fixed-order'];
-
 const SUSPEND_KEYS = {
   disabled: 'rules.suspend.disabled',
   invalidRules: 'rules.suspend.invalidRules',
@@ -34,50 +48,116 @@ const SUSPEND_KEYS = {
   noViableTarget: 'rules.suspend.noViableTarget',
 } as const satisfies Record<string, MessageKey>;
 
-/** Editor delle regole del motore (`EngineRules`): stato, conflitti, account, soglie e preset. */
+const WEIGHTS: readonly (keyof ScoreWeights)[] = ['fiveHour', 'sevenDay', 'reset', 'pace'];
+
+interface RulesData {
+  engine: EngineState;
+  /** `null` se l'host non gestisce le mappe. */
+  profiles: EngineProfiles | null;
+}
+
+/** Scheda Regole: mappa attiva, lista delle utenze (flusso), criterio, soglie, stato e conflitti. */
 export function RulesPage() {
   const backend = useBackend();
+  const { t } = useI18n();
   const supported =
     typeof backend.getEngineState === 'function' && typeof backend.setEngineRules === 'function';
-  const load = useCallback(
-    () => (backend.getEngineState ? backend.getEngineState() : Promise.reject(new Error('n/d'))),
-    [backend],
-  );
-  const { state, reload, set } = useLoad<EngineState>(load, [load]);
+  const load = useCallback(async (): Promise<RulesData> => {
+    if (!backend.getEngineState) throw new Error('n/d');
+    const [engine, profiles] = await Promise.all([
+      backend.getEngineState(),
+      backend.getEngineProfiles ? backend.getEngineProfiles() : Promise.resolve(null),
+    ]);
+    return { engine, profiles };
+  }, [backend]);
+  const { state, reload, set } = useLoad<RulesData>(load, [load]);
   const { state: accountsState } = useAccounts();
-  const accounts = accountsState.status === 'ready' ? accountsState.data.accounts : [];
+
+  // Un cambio di stato (giro del motore, mappa scelta dal menu dell'icona) rilegge regole e candidato.
+  useEffect(() => backend.onStateChanged(() => void reload()), [backend, reload]);
+
   if (!supported) return <Unavailable />;
+  if (accountsState.status === 'loading')
+    return (
+      <div className="sd-state" role="status">
+        {t('common.loading')}
+      </div>
+    );
+  const accounts = accountsState.status === 'ready' ? accountsState.data.accounts : [];
   return (
     <LoadGate state={state} onRetry={() => void reload()}>
-      {(data) => <RulesEditor data={data} accounts={accounts} onSaved={set} />}
+      {(data) => (
+        <RulesEditor
+          key={data.profiles?.activeId ?? 'rules'}
+          data={data}
+          accounts={accounts}
+          accountsKnown={accountsState.status === 'ready'}
+          onSaved={set}
+        />
+      )}
     </LoadGate>
   );
 }
 
 interface EditorProps {
-  data: EngineState;
+  data: RulesData;
   accounts: Account[];
-  onSaved: (state: EngineState) => void;
+  /** La lista degli account è stata letta (senza, niente avviso sulle utenze mancanti). */
+  accountsKnown: boolean;
+  onSaved: (data: RulesData) => void;
 }
 
-function RulesEditor({ data, accounts, onSaved }: EditorProps) {
+function initialDraft(rules: EngineRules, accounts: readonly Account[]): RulesDraft {
+  const draft = toDraft(rules);
+  return draft.order.length === 0 && accounts.length > 0 ? materialize(draft, accounts) : draft;
+}
+
+function RulesEditor({ data, accounts, accountsKnown, onSaved }: EditorProps) {
   const { t } = useI18n();
   const backend = useBackend();
-  const [draft, setDraft] = useState<RulesDraft>(() => toDraft(data.rules));
+  const runner = useActionRunner();
+  const rulesNow = data.engine.rules;
+  const [base, setBase] = useState<RulesDraft>(() => initialDraft(rulesNow, accounts));
+  const [draft, setDraft] = useState<RulesDraft>(base);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [reserveToAdd, setReserveToAdd] = useState('');
 
-  const rules = useMemo(() => fromDraft(draft, data.rules), [draft, data.rules]);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(base);
+  // Regole cambiate fuori (altra finestra, CLI): senza modifiche in corso la bozza si riallinea.
+  const seen = useRef(JSON.stringify(rulesNow));
+  useEffect(() => {
+    const json = JSON.stringify(rulesNow);
+    if (json === seen.current) return;
+    seen.current = json;
+    if (!dirty) {
+      const next = initialDraft(rulesNow, accounts);
+      setBase(next);
+      setDraft(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rulesNow]);
+
+  const rules = useMemo(() => fromDraft(draft, rulesNow), [draft, rulesNow]);
   const errors = useMemo(() => validateRules(rules), [rules]);
   const hasErrors = Object.keys(errors).length > 0;
-  const dirty = JSON.stringify(rules) !== JSON.stringify(data.rules);
+  const rows = useMemo(() => flowRows(draft, accounts), [draft, accounts]);
+  const missing = accountsKnown ? missingAccounts(draft.order, accounts) : [];
+  const busy = saving || runner.busy;
 
   const nameOf = (n: number) => {
     const found = accounts.find((a) => a.number === n);
-    return found ? `${accountName(found, t)} (#${n})` : `#${n}`;
+    if (!found) return `#${n}`;
+    return found.alias ? found.alias : shortEmail(found.email, 22);
   };
   const patch = (changes: Partial<RulesDraft>) => setDraft((d) => ({ ...d, ...changes }));
+
+  function adopt(engine: EngineState, profiles: EngineProfiles | null) {
+    seen.current = JSON.stringify(engine.rules);
+    onSaved({ engine, profiles });
+    const next = initialDraft(engine.rules, accounts);
+    setBase(next);
+    setDraft(next);
+  }
 
   /** Salva; con `keepDraft` la bozza resta com'è, salvo l'elenco dei conflitti ignorati. */
   async function persist(next: EngineRules, doneText: string, keepDraft = false) {
@@ -86,9 +166,14 @@ function RulesEditor({ data, accounts, onSaved }: EditorProps) {
     setNotice(null);
     try {
       const saved = await backend.setEngineRules(next);
-      onSaved(saved);
-      if (keepDraft) patch({ ignoredConflicts: [...saved.rules.ignoredConflicts] });
-      else setDraft(toDraft(saved.rules));
+      const profiles = backend.getEngineProfiles ? await backend.getEngineProfiles() : null;
+      if (keepDraft) {
+        seen.current = JSON.stringify(saved.rules);
+        onSaved({ engine: saved, profiles });
+        const ignoredConflicts = [...saved.rules.ignoredConflicts];
+        setBase((b) => ({ ...b, ignoredConflicts }));
+        patch({ ignoredConflicts });
+      } else adopt(saved, profiles);
       setNotice({ tone: 'info', text: doneText });
     } catch (error) {
       setNotice({
@@ -100,51 +185,76 @@ function RulesEditor({ data, accounts, onSaved }: EditorProps) {
     }
   }
 
+  async function profileCommand(command: ProfileCommand): Promise<boolean> {
+    if (!backend.applyEngineProfile || !backend.getEngineProfiles) return false;
+    setSaving(true);
+    setNotice(null);
+    try {
+      const engine = await backend.applyEngineProfile(command);
+      const profiles = await backend.getEngineProfiles();
+      const active = profiles.profiles.find((p) => p.id === profiles.activeId);
+      const name = active?.name ?? '';
+      const text =
+        command.op === 'select'
+          ? t('maps.changed', { name })
+          : command.op === 'create'
+            ? t('maps.created', { name: command.name })
+            : command.op === 'rename'
+              ? t('maps.renamed', { name: command.name })
+              : command.op === 'duplicate'
+                ? t('maps.duplicated')
+                : command.op === 'delete'
+                  ? t('maps.deleted')
+                  : t('maps.restored');
+      if (profiles.activeId === data.profiles?.activeId) adopt(engine, profiles);
+      else onSaved({ engine, profiles }); // nuova mappa attiva: l'editor riparte (key)
+      setNotice({ tone: 'info', text });
+      return true;
+    } catch (error) {
+      setNotice({
+        tone: 'danger',
+        text: t('common.actionFailed', { message: errorMessage(error) }),
+      });
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
   /** Ignora (o smette di ignorare) un conflitto: salva subito solo quell'elenco, senza toccare il resto della bozza. */
   async function setIgnored(id: string, ignore: boolean) {
-    const current = data.rules.ignoredConflicts;
+    const current = rulesNow.ignoredConflicts;
     const next = ignore
       ? current.some((c) => c.toLowerCase() === id.toLowerCase())
         ? current
         : [...current, id]
       : current.filter((c) => c.toLowerCase() !== id.toLowerCase());
     await persist(
-      { ...data.rules, ignoredConflicts: next },
+      { ...rulesNow, ignoredConflicts: next },
       t(ignore ? 'rules.conflict.ignored' : 'rules.conflict.unignored'),
       true,
     );
   }
 
-  const others = accounts.filter((a) => a.number !== draft.primary);
-  const reserveChoices = others.filter(
-    (a) => !draft.reserves.includes(a.number) && !draft.excluded.includes(a.number),
-  );
-  const addReserve = reserveToAdd || (reserveChoices[0] ? String(reserveChoices[0].number) : '');
-
-  function move(index: number, by: -1 | 1) {
-    const list = [...draft.reserves];
-    const target = index + by;
-    if (target < 0 || target >= list.length) return;
-    [list[index], list[target]] = [list[target]!, list[index]!];
-    patch({ reserves: list });
-  }
-
-  function toggleExcluded(n: number, excluded: boolean) {
-    patch({
-      excluded: excluded ? [...draft.excluded, n] : draft.excluded.filter((x) => x !== n),
-      reserves: excluded ? draft.reserves.filter((x) => x !== n) : draft.reserves,
-    });
-  }
-
-  const view = data.view;
+  const view = data.engine.view;
   const suspended = view?.suspended ?? null;
-  const ignored = data.rules.ignoredConflicts.map((c) => c.toLowerCase());
-  const conflictById = new Map(data.conflicts.map((c) => [c.id.toLowerCase(), c]));
+  const ignored = rulesNow.ignoredConflicts.map((c) => c.toLowerCase());
+  const conflictById = new Map(data.engine.conflicts.map((c) => [c.id.toLowerCase(), c]));
+  const candidate = view?.candidate;
 
   return (
     <div className="sd-page">
       <h2>{t('rules.title')}</h2>
       <p className="sd-hint">{t('rules.hint')}</p>
+
+      {data.profiles && (
+        <MapSelector
+          profiles={data.profiles}
+          busy={busy}
+          dirty={dirty}
+          onCommand={profileCommand}
+        />
+      )}
 
       {view && (
         <div
@@ -181,10 +291,19 @@ function RulesEditor({ data, accounts, onSaved }: EditorProps) {
         </div>
       )}
 
-      {data.conflicts.length > 0 && (
+      {candidate && (
+        <p className="sd-flow__next" data-testid="flow-next">
+          <strong>{t('flow.next', { name: nameOf(candidate.number) })}</strong>
+          {' — '}
+          {candidate.fallback ? `${t('flow.next.fallback')}: ` : ''}
+          {candidate.why}
+        </p>
+      )}
+
+      {data.engine.conflicts.length > 0 && (
         <Section title={t('rules.conflicts')} hint={t('rules.conflicts.hint')}>
           <ul className="sd-list" aria-label={t('rules.conflicts')}>
-            {data.conflicts.map((c) => {
+            {data.engine.conflicts.map((c) => {
               const isIgnored = ignored.includes(c.id.toLowerCase());
               return (
                 <li key={c.id} className="sd-card sd-card--row" data-ignored={isIgnored}>
@@ -195,20 +314,22 @@ function RulesEditor({ data, accounts, onSaved }: EditorProps) {
                       {isIgnored ? ` · ${t('rules.conflict.ignoredTag')}` : ''}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    className="sd-btn sd-btn--small"
-                    disabled={saving}
-                    aria-label={t(
-                      isIgnored ? 'rules.conflict.unignoreLabel' : 'rules.conflict.ignoreLabel',
-                      {
-                        label: c.label,
-                      },
-                    )}
-                    onClick={() => void setIgnored(c.id, !isIgnored)}
+                  <Tooltip
+                    text={t(isIgnored ? 'rules.conflict.unignore.tip' : 'rules.conflict.ignore.tip')}
                   >
-                    {t(isIgnored ? 'rules.conflict.unignore' : 'rules.conflict.ignore')}
-                  </button>
+                    <button
+                      type="button"
+                      className="sd-btn sd-btn--small"
+                      disabled={busy}
+                      aria-label={t(
+                        isIgnored ? 'rules.conflict.unignoreLabel' : 'rules.conflict.ignoreLabel',
+                        { label: c.label },
+                      )}
+                      onClick={() => void setIgnored(c.id, !isIgnored)}
+                    >
+                      {t(isIgnored ? 'rules.conflict.unignore' : 'rules.conflict.ignore')}
+                    </button>
+                  </Tooltip>
                 </li>
               );
             })}
@@ -226,142 +347,109 @@ function RulesEditor({ data, accounts, onSaved }: EditorProps) {
         <Section title={t('rules.engine')}>
           <CheckField
             label={t('rules.enabled')}
+            tip={t('rules.enabled.tip')}
             checked={draft.enabled}
             onChange={(enabled) => patch({ enabled })}
-            disabled={saving}
+            disabled={busy}
           />
           <CheckField
             label={t('rules.dryRun')}
             hint={t('rules.dryRun.hint')}
+            tip={t('rules.dryRun.tip')}
             checked={draft.dryRun}
             onChange={(dryRun) => patch({ dryRun })}
-            disabled={saving}
+            disabled={busy}
           />
         </Section>
 
-        <Section title={t('rules.accounts')}>
-          <div className="sd-form__field">
-            <SelectField
-              label={t('rules.primary')}
-              value={draft.primary === null ? '' : String(draft.primary)}
-              onChange={(value) =>
-                patch({
-                  primary: value === '' ? null : Number(value),
-                  ...(value === ''
-                    ? {}
-                    : {
-                        reserves: draft.reserves.filter((n) => n !== Number(value)),
-                        excluded: draft.excluded.filter((n) => n !== Number(value)),
-                      }),
-                })
-              }
-              disabled={saving}
-              options={[
-                { value: '', label: t('rules.primary.none') },
-                ...(draft.primary !== null && !accounts.some((a) => a.number === draft.primary)
-                  ? [{ value: String(draft.primary), label: nameOf(draft.primary) }]
-                  : []),
-                ...accounts.map((a) => ({ value: String(a.number), label: nameOf(a.number) })),
-              ]}
-            />
-            {errors.primary && <span className="sd-field-error">{t(errors.primary)}</span>}
-          </div>
-
-          <div className="sd-form__field">
-            <span id="rules-reserves-label" className="sd-label">
-              {t('rules.reserves')}
-            </span>
-            <span className="sd-hint">{t('rules.reserves.hint')}</span>
-            {draft.reserves.length > 0 && (
-              <ol className="sd-order" aria-labelledby="rules-reserves-label">
-                {draft.reserves.map((n, index) => (
-                  <li key={n} className="sd-order__item">
-                    <span>{nameOf(n)}</span>
-                    <span className="sd-row">
-                      <button
-                        type="button"
-                        className="sd-btn sd-btn--small"
-                        disabled={saving || index === 0}
-                        aria-label={t('rules.reserve.up', { name: nameOf(n) })}
-                        onClick={() => move(index, -1)}
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        className="sd-btn sd-btn--small"
-                        disabled={saving || index === draft.reserves.length - 1}
-                        aria-label={t('rules.reserve.down', { name: nameOf(n) })}
-                        onClick={() => move(index, 1)}
-                      >
-                        ↓
-                      </button>
-                      <button
-                        type="button"
-                        className="sd-btn sd-btn--small"
-                        disabled={saving}
-                        aria-label={t('rules.reserve.remove', { name: nameOf(n) })}
-                        onClick={() => patch({ reserves: draft.reserves.filter((x) => x !== n) })}
-                      >
-                        ×
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ol>
-            )}
-            {draft.reserves.length === 0 && (
-              <span className="sd-hint">{t('rules.reserves.all')}</span>
-            )}
-            {reserveChoices.length > 0 && (
-              <div className="sd-row">
-                <select
-                  className="sd-input"
-                  aria-label={t('rules.reserve.addSelect')}
-                  value={addReserve}
-                  disabled={saving}
-                  onChange={(event) => setReserveToAdd(event.target.value)}
-                >
-                  {reserveChoices.map((a) => (
-                    <option key={a.number} value={a.number}>
-                      {nameOf(a.number)}
-                    </option>
-                  ))}
-                </select>
+        <Section title={t('flow.title')} hint={t('flow.hint')}>
+          {missing.length > 0 && (
+            <div className="sd-notice" data-tone="warn" role="status">
+              {t('flow.missingWarn', { list: missing.map((n) => `#${n}`).join(', ') })}{' '}
+              <Tooltip text={t('flow.removeMissing.tip')}>
                 <button
                   type="button"
-                  className="sd-btn"
-                  disabled={saving || addReserve === ''}
-                  onClick={() => {
-                    patch({ reserves: [...draft.reserves, Number(addReserve)] });
-                    setReserveToAdd('');
-                  }}
+                  className="sd-btn sd-btn--small"
+                  disabled={busy}
+                  onClick={() =>
+                    patch({
+                      order: draft.order.filter((n) => !missing.includes(n)),
+                      excluded: draft.excluded.filter((n) => !missing.includes(n)),
+                    })
+                  }
                 >
-                  {t('rules.reserve.add')}
+                  {t('flow.removeMissing')}
                 </button>
-              </div>
-            )}
-          </div>
-
-          <fieldset className="sd-fieldset">
-            <legend>{t('rules.excluded')}</legend>
-            <span className="sd-hint">{t('rules.excluded.hint')}</span>
-            {others.length === 0 && <span className="sd-hint">{t('rules.excluded.none')}</span>}
-            {others.map((a) => (
-              <CheckField
-                key={a.number}
-                label={nameOf(a.number)}
-                checked={draft.excluded.includes(a.number)}
-                onChange={(checked) => toggleExcluded(a.number, checked)}
-                disabled={saving}
-              />
-            ))}
-          </fieldset>
+              </Tooltip>
+            </div>
+          )}
+          <FlowList
+            rows={rows}
+            nameOf={nameOf}
+            disabled={busy}
+            onMove={(from, to) => setDraft((d) => moveRow(d, accounts, from, to))}
+            onToggle={(n, included) => setDraft((d) => setIncluded(d, accounts, n, included))}
+            onUseNow={(n) =>
+              void runner.run(actions.switchTo(n), {
+                success: t('flow.useNow.done', { name: nameOf(n) }),
+              })
+            }
+          />
+          {errors.order && (
+            <span className="sd-field-error" role="alert">
+              {t(errors.order)}
+            </span>
+          )}
+          <NoticeView notice={runner.notice} />
         </Section>
 
         <Section title={t('rules.thresholds')}>
+          <SelectField
+            label={t('rules.criterion')}
+            tip={t('flow.criterion.tip')}
+            hint={t(`flow.criterion.hint.${draft.reserveCriterion}`)}
+            value={draft.reserveCriterion}
+            onChange={(value) => patch({ reserveCriterion: value as ReserveCriterion })}
+            disabled={busy}
+            options={CRITERIA.map((c) => ({ value: c, label: t(`rules.criterion.${c}`) }))}
+          />
+          {draft.reserveCriterion === 'balanced-score' && (
+            <fieldset className="sd-fieldset">
+              <legend>{t('flow.weights')}</legend>
+              <span className="sd-hint">{t('flow.weights.hint')}</span>
+              <div className="sd-weights">
+                {WEIGHTS.map((w) => (
+                  <TextField
+                    key={w}
+                    label={t(`flow.weight.${w}`)}
+                    tip={t('flow.weight.tip')}
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="any"
+                    value={draft.weights[w]}
+                    onChange={(value) => patch({ weights: { ...draft.weights, [w]: value } })}
+                    disabled={busy}
+                  />
+                ))}
+              </div>
+              {errors.weights && <span className="sd-field-error">{t(errors.weights)}</span>}
+            </fieldset>
+          )}
+          {draft.reserveCriterion === 'model-headroom' && (
+            <TextField
+              label={t('flow.model')}
+              hint={t('flow.model.hint')}
+              tip={t('flow.model.tip')}
+              value={draft.headroomModel}
+              onChange={(headroomModel) => patch({ headroomModel })}
+              error={errors.model ? t(errors.model) : null}
+              disabled={busy}
+            />
+          )}
           <TextField
             label={t('rules.fiveHour')}
+            tip={t('rules.fiveHour.tip')}
             type="number"
             min={1}
             max={100}
@@ -369,10 +457,11 @@ function RulesEditor({ data, accounts, onSaved }: EditorProps) {
             value={draft.fiveHourThreshold}
             onChange={(value) => patch({ fiveHourThreshold: value })}
             error={errors.fiveHour ? t(errors.fiveHour) : null}
-            disabled={saving}
+            disabled={busy}
           />
           <TextField
             label={t('rules.sevenDay')}
+            tip={t('rules.sevenDay.tip')}
             type="number"
             min={1}
             max={100}
@@ -380,23 +469,18 @@ function RulesEditor({ data, accounts, onSaved }: EditorProps) {
             value={draft.sevenDayThreshold}
             onChange={(value) => patch({ sevenDayThreshold: value })}
             error={errors.sevenDay ? t(errors.sevenDay) : null}
-            disabled={saving}
-          />
-          <SelectField
-            label={t('rules.criterion')}
-            value={draft.reserveCriterion}
-            onChange={(value) => patch({ reserveCriterion: value as ReserveCriterion })}
-            disabled={saving}
-            options={CRITERIA.map((c) => ({ value: c, label: t(`rules.criterion.${c}`) }))}
+            disabled={busy}
           />
           <CheckField
             label={t('rules.return')}
+            tip={t('rules.return.tip')}
             checked={draft.returnToPrimary}
             onChange={(returnToPrimary) => patch({ returnToPrimary })}
-            disabled={saving}
+            disabled={busy}
           />
           <TextField
             label={t('rules.hysteresis')}
+            tip={t('rules.hysteresis.tip')}
             type="number"
             min={0}
             max={50}
@@ -404,54 +488,48 @@ function RulesEditor({ data, accounts, onSaved }: EditorProps) {
             value={draft.returnHysteresis}
             onChange={(value) => patch({ returnHysteresis: value })}
             error={errors.hysteresis ? t(errors.hysteresis) : null}
-            disabled={saving}
+            disabled={busy}
           />
           <TextField
             label={t('rules.gap')}
+            tip={t('rules.gap.tip')}
             type="number"
             min={0}
             hint={t('rules.gap.hint')}
             value={draft.minSwitchGapSecs}
             onChange={(value) => patch({ minSwitchGapSecs: value })}
             error={errors.gap ? t(errors.gap) : null}
-            disabled={saving}
+            disabled={busy}
           />
         </Section>
 
         <NoticeView notice={notice} />
         <div className="sd-row sd-row--end">
-          <button
-            type="button"
-            className="sd-btn"
-            disabled={saving}
-            title={t('rules.preset.hint')}
-            onClick={() => {
-              setDraft(toDraft(applyGuardPreset(rules)));
-              setNotice({ tone: 'info', text: t('rules.preset.applied') });
-            }}
-          >
-            {t('rules.preset')}
-          </button>
-          <button
-            type="button"
-            className="sd-btn"
-            disabled={saving || !dirty}
-            onClick={() => {
-              setDraft(toDraft(data.rules));
-              setNotice(null);
-            }}
-          >
-            {t('rules.revert')}
-          </button>
-          <button
-            type="submit"
-            className="sd-btn sd-btn--primary"
-            disabled={saving || hasErrors || !dirty}
-          >
-            {saving ? t('common.working') : t('common.save')}
-          </button>
+          <Tooltip text={t('rules.revert.tip')}>
+            <button
+              type="button"
+              className="sd-btn"
+              disabled={busy || !dirty}
+              onClick={() => {
+                setDraft(base);
+                setNotice(null);
+              }}
+            >
+              {t('rules.revert')}
+            </button>
+          </Tooltip>
+          <Tooltip text={t('rules.save.tip')}>
+            <button
+              type="submit"
+              className="sd-btn sd-btn--primary"
+              disabled={busy || hasErrors || !dirty}
+            >
+              {saving ? t('common.working') : t('common.save')}
+            </button>
+          </Tooltip>
         </div>
       </form>
+      {runner.dialog}
     </div>
   );
 }

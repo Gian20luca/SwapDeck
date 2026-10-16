@@ -1,9 +1,11 @@
+import { enFlow } from './en.flow.js';
 import { enManage } from './en.manage.js';
 import type { MessageKey } from './it.js';
 
 /** English dictionary: must cover every key of the Italian one. */
 export const en: Record<MessageKey, string> = {
   ...enManage,
+  ...enFlow,
   'app.name': 'SwapDeck',
   'common.cancel': 'Cancel',
   'common.confirm': 'Confirm',
