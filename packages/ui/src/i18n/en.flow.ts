@@ -93,6 +93,8 @@ export const enFlow: Record<keyof typeof itFlow, string> = {
   'rules.err.weights': 'Weights from 0 to 100, at least one above 0.',
   'rules.err.model': 'Enter the model.',
   'rules.err.firstExcluded': 'The first account in the list must be included.',
+  'rules.turnOn.tip':
+    'Turns the engine on: it will switch account by itself following the saved list and thresholds.',
   'rules.enabled.tip':
     'On: the engine switches account by itself following the list and thresholds.',
   'rules.dryRun.tip':

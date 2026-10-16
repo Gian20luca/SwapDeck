@@ -300,10 +300,49 @@ describe('RulesPage: mappe', () => {
 });
 
 describe('RulesPage: stato sospeso e conflitti', () => {
-  it('motore spento: spiega che è spento', async () => {
+  it('motore spento: riga neutra (non rossa) con «Accendi»', async () => {
     await setup();
-    expect(screen.getByRole('alert', { name: 'Stato del motore' })).toHaveTextContent(
-      'Il motore è spento.',
+    expect(screen.queryByRole('alert')).toBeNull();
+    const row = screen.getByRole('status', { name: 'Stato del motore' });
+    expect(row).toHaveTextContent('Motore spento: nessun cambio automatico');
+    expect(row).not.toHaveTextContent('Motore sospeso');
+    expect(row).not.toHaveAttribute('data-tone');
+    expect(within(row).getByRole('button', { name: 'Accendi' })).toBeEnabled();
+  });
+
+  it('«Accendi» salva le regole con il motore acceso', async () => {
+    const { save, user } = await setup({ rules: { enabled: false, primary: 6, reserves: [1, 3] } });
+    await user.click(screen.getByRole('button', { name: 'Accendi' }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0]![0].enabled).toBe(true);
+    await waitFor(() =>
+      expect(screen.getByRole('status', { name: 'Stato del motore' })).toHaveTextContent(
+        'Motore acceso',
+      ),
+    );
+    expect(screen.queryByRole('button', { name: 'Accendi' })).toBeNull();
+    expect(screen.getByLabelText('Motore acceso')).toBeChecked();
+    expect(screen.getByText('Motore acceso.', { exact: true })).toBeInTheDocument();
+  });
+
+  it('acceso: nessuna riga di osservazione né rossa', async () => {
+    await setup({ rules: { enabled: true, primary: 6, reserves: [1, 3] } });
+    expect(screen.getByRole('status', { name: 'Stato del motore' })).toHaveTextContent(
+      'Motore acceso',
+    );
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByTestId('engine-observe')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Accendi' })).toBeNull();
+  });
+
+  it('sola osservazione: riga informativa propria, senza rosso', async () => {
+    await setup({ rules: { enabled: true, dryRun: true, primary: 6, reserves: [1, 3] } });
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByTestId('engine-observe')).toHaveTextContent(
+      'In sola osservazione: registra le decisioni senza cambiare utenza',
+    );
+    expect(screen.getByRole('status', { name: 'Stato del motore' })).toHaveTextContent(
+      'Motore acceso',
     );
   });
 
@@ -314,6 +353,7 @@ describe('RulesPage: stato sospeso e conflitti', () => {
     });
     const status = screen.getByRole('alert', { name: 'Stato del motore' });
     expect(status).toHaveTextContent('Motore sospeso.');
+    expect(screen.queryByRole('button', { name: 'Accendi' })).toBeNull();
     expect(status).toHaveTextContent('Attività pianificata cswap-guard');
     expect(within(status).queryByText('cswap tui')).toBeNull();
     await user.click(

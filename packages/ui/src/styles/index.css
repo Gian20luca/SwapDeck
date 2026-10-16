@@ -487,6 +487,13 @@ body {
   font-size: 12px;
   background: var(--sd-surface-2);
 }
+.sd-engine-off {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .sd-notice[data-tone='danger'] {
   border-color: var(--sd-danger);
   color: var(--sd-danger);

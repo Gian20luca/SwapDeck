@@ -245,8 +245,16 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
     );
   }
 
+  /** Accende il motore con le regole salvate (stesso comando del salvataggio); della bozza cambia solo l'interruttore. */
+  async function turnOn() {
+    await persist({ ...rulesNow, enabled: true }, t('rules.turnedOn'), true);
+    setBase((b) => ({ ...b, enabled: true }));
+    patch({ enabled: true });
+  }
+
   const view = data.engine.view;
   const suspended = view?.suspended ?? null;
+  const isOff = view ? suspended === 'disabled' || !view.enabled : false;
   const ignored = rulesNow.ignoredConflicts.map((c) => c.toLowerCase());
   const conflictById = new Map(data.engine.conflicts.map((c) => [c.id.toLowerCase(), c]));
   const candidate = view?.candidate;
@@ -266,14 +274,14 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
       )}
 
       {view && (
-        <div
-          className="sd-notice"
-          data-tone={suspended ? 'danger' : undefined}
-          role={suspended ? 'alert' : 'status'}
-          aria-label={t('rules.status')}
-        >
-          {suspended ? (
-            <>
+        <>
+          {suspended && suspended !== 'disabled' ? (
+            <div
+              className="sd-notice"
+              data-tone="danger"
+              role="alert"
+              aria-label={t('rules.status')}
+            >
               <strong>{t('rules.suspended')}</strong> {t(SUSPEND_KEYS[suspended])}
               {suspended === 'invalidRules' && view.detail.length > 0 && (
                 <ul>
@@ -289,15 +297,40 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
                   ))}
                 </ul>
               )}
-            </>
+            </div>
+          ) : isOff ? (
+            <div
+              className="sd-notice sd-engine-off"
+              data-testid="engine-off"
+              role="status"
+              aria-label={t('rules.status')}
+            >
+              <span>{t('rules.off')}</span>
+              <Tooltip text={t('rules.turnOn.tip')}>
+                <button
+                  type="button"
+                  className="sd-btn sd-btn--small"
+                  disabled={busy}
+                  onClick={() => void turnOn()}
+                >
+                  {t('rules.turnOn')}
+                </button>
+              </Tooltip>
+            </div>
           ) : (
             <>
-              {t(view.enabled ? 'rules.active' : 'rules.off')}
-              {view.enabled && view.dryRun && ` · ${t('rules.dryRunOn')}`}
-              {view.enabled && !view.holder && ` · ${t('rules.observer')}`}
+              <div className="sd-notice" role="status" aria-label={t('rules.status')}>
+                {t('rules.active')}
+                {!view.holder && ` · ${t('rules.observer')}`}
+              </div>
+              {view.dryRun && (
+                <div className="sd-notice" data-testid="engine-observe" role="status">
+                  {t('rules.dryRunOn')}
+                </div>
+              )}
             </>
           )}
-        </div>
+        </>
       )}
 
       {candidate && (

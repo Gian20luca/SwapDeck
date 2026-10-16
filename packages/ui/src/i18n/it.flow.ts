@@ -91,6 +91,8 @@ export const itFlow = {
   'rules.err.weights': 'Pesi da 0 a 100, almeno uno sopra 0.',
   'rules.err.model': 'Indica il modello.',
   'rules.err.firstExcluded': 'La prima utenza della lista deve essere inclusa.',
+  'rules.turnOn.tip':
+    'Accende il motore: cambierà utenza da solo secondo la lista e le soglie salvate.',
   'rules.enabled.tip': 'Acceso: il motore cambia utenza da solo secondo la lista e le soglie.',
   'rules.dryRun.tip': 'Il motore decide e lo scrive nello storico, ma non cambia mai utenza.',
   'rules.fiveHour.tip':

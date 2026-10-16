@@ -139,3 +139,30 @@ test('regole: preset «Principale con riserve», salvataggio e conflitto ignorat
   );
   await page.screenshot({ path: `${SHOTS}/regole-420x640.png`, fullPage: true });
 });
+
+test('motore spento: riga neutra con «Accendi»; sola osservazione e sospensione a parte', async ({
+  page,
+}) => {
+  await open(page);
+  await page.getByLabel('Motore (demo)').selectOption('off');
+  await tab(page, 'Regole');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  const status = page.getByRole('status', { name: 'Stato del motore' });
+  await expect(status).toContainText('Motore spento: nessun cambio automatico');
+  await noHorizontalScroll(page);
+  await page.screenshot({ path: `${SHOTS}/regole-spento-420x640.png` });
+  await status.getByRole('button', { name: 'Accendi' }).click();
+  await expect(status).toContainText('Motore acceso');
+  await expect(page.getByRole('button', { name: 'Accendi' })).toHaveCount(0);
+
+  await page.getByLabel('Motore (demo)').selectOption('observe');
+  await expect(
+    page.getByText('In sola osservazione: registra le decisioni senza cambiare utenza'),
+  ).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+
+  await page.getByLabel('Motore (demo)').selectOption('conflict');
+  await expect(page.getByRole('alert', { name: 'Stato del motore' })).toContainText(
+    'Motore sospeso.',
+  );
+});
