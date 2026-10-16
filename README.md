@@ -111,7 +111,7 @@ Contengono `config.json`, il lock del motore (`engine.lock`, nella cartella dati
 
 | Sintomo                                  | Causa probabile e rimedio                                                             |
 | ---------------------------------------- | ------------------------------------------------------------------------------------- |
-| Motore «sospeso»                         | c'è `cswap auto` o un altro motore attivo: ferma l'altro automatismo (guida sopra)           |
+| Motore «sospeso»                         | c'è `cswap auto` o un altro motore attivo: ferma l'altro automatismo (guida sopra)    |
 | «motore attivo in un'altra istanza»      | un'altra finestra o l'app tiene il lock: è voluto                                     |
 | Il motore non cambia mai                 | spento (`enabled: false`), in sola osservazione (`dryRun: true`) o `primary` mancante |
 | `cswap` non trovato                      | riapri l'app per l'installazione guidata, oppure imposta `swapdeck.cliPath` / il PATH |

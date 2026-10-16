@@ -204,7 +204,7 @@ const lines = [
   '  "engine": { "enabled": true }   oppure   "engine": { "dryRun": true }  (prova senza cambi).',
   "- Con un altro motore attivo (cswap auto o un'attività pianificata) il motore risulta «sospeso» (icona nella",
   '  variante sospesa e avviso sopra la dashboard): è voluto, per non cambiare account in',
-  '  concorrenza con l\'altro motore.',
+  "  concorrenza con l'altro motore.",
   '- Le azioni fatte a mano dalla dashboard (cambio di account e simili) agiscono sul cswap',
   '  reale e chiedono conferma.',
   '- Gli aggiornamenti automatici sono spenti finché il repo è privato.',
