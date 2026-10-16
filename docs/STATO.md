@@ -8,7 +8,7 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 | 1 swapdeck-core: client cswap | chiuso | 2e24a84 | 10 rilievi corretti, copertura 91,6% |
 | 2 Motore, lock, storico, headless | verifica (10 rilievi) | | |
 | 3 packages/ui | chiuso | 99ac73c | 118 test unitari, 10 E2E, copertura 97,6% |
-| 4 App Tauri | in corso | | |
+| 4 App Tauri | revisione | | motore da agganciare dopo lo step 2 |
 | 5 Gestione completa in UI | | | |
 | 6 Installazione cswap | in corso | | |
 | 7 Estensione VS Code | | | |
@@ -29,3 +29,5 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 - Chiave di firma dell'updater: generarla, parte privata in un segreto del repo (gh) e copia nel profilo utente.
 - Si possono avviare l'app e installare l'estensione sul PC per le prove, ma **mai switch reali** né altre scritture sul cswap reale (regola nel CLAUDE.md).
 - A fine lavoro: release in bozza su GitHub con installer e .vsix.
+- **Disco C: del PC quasi pieno** (99%, 4 GB liberi nella notte; liberati 3,4 GB eliminando la target condivisa e ridotto il debuginfo dev). Le build Tauri richiedono vari GB: conviene liberare spazio.
+- `swapdeck --headless` nella build di rilascio Windows non ha console (app GUI). Provvisorio per lo step 8: un piccolo binario console separato `swapdeck-cli` per la modalità senza interfaccia, invece di `AttachConsole` (vietato da `unsafe_code`).
