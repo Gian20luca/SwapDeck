@@ -45,7 +45,7 @@ Test: `tests/fixtures_parse.rs` (tutte le fixture), `tests/cswap_client.rs` (ogn
 | `lock.rs` | `engine.lock` nella cartella dati: `try_acquire` (`create_new`, subentro con `engine.lock.takeover`), `LockGuard::heartbeat`, rilascio al `Drop`. Stesso host: scaduto solo con PID morto o riusato (ora di avvio diversa); host diversi o avvio ignoto: 3 intervalli senza battito |
 | `history.rs` | `History` (`history/AAAA-MM-GG.jsonl`, UTC): `read_range`, `prune` (30 giorni, al massimo `MAX_PRUNE_PER_CALL` file per giro contro i salti dell'orologio); `HistoryWriter` (solo con `LockGuard`): `append` (rotazione fallita annotata in `take_prune_error`, non propagata), `record_samples` |
 | `conflicts.rs` | `SystemConflicts`: processi via sysinfo (riga illeggibile di `cswap` = `process:unreadable`, avviso), attività su nome e comando via `Get-ScheduledTask` (Windows), `crontab -l` e `systemctl --user list-timers` (Linux), `launchctl list` (macOS); esito dei comandi verificato, lettura fallita = `tasks:unverified` che sospende (ignorabile); cache 10 min, risultato verificato tenuto al massimo 30 min. Id stabili per `ignoredConflicts` (`cron:<hash>`, mai il testo della riga) |
-| `headless.rs` | trait `CswapPort` (implementato da `CswapClient`) e `Clock`, `run(RunOptions, Runtime)` (conflitti letti prima di `list`), `cli_main` per `swapdeck --headless [--once] [--dry-run]` (cartelle da `AppPaths::from_env_or_system`, `SWAPDECK_HOME` per le prove; uscite 0/1/2/3). Test con finto cswap in `headless/tests.rs` |
+| `headless.rs` | trait `CswapPort` (implementato da `CswapClient`) e `Clock`, `run(RunOptions, Runtime)` (conflitti letti prima di `list`; con `RunOptions.config_file` regole e intervallo riletti prima di ogni giro, config illeggibile = regole di prima), `Engine` a giri singoli per l'app (`set_rules`, `set_interval` senza riavvio), `cli_main` per `swapdeck --headless [--once] [--dry-run]` (cartelle da `AppPaths::from_env_or_system`, `SWAPDECK_HOME` per le prove; uscite 0/1/2/3). Test con finto cswap in `headless/tests.rs` |
 | `timeutil.rs` | secondi Unix, parsing RFC 3339 di cswap, giorni UTC |
 
 ### `apps/cli` (step 7)
@@ -54,7 +54,7 @@ Successo: JSON su stdout, uscita 0. Errore: `{"error": CswapError}` su stdout, u
 
 | File | Contenuto |
 |---|---|
-| `src/lib.rs` | `main_with`/`dispatch`: `version`, `state` (lista + errore + stato del motore, sempre uscita 0), `status`, `cswap-config [KEY]`, `confirm - [--active N|none]`, `action -` (azioni **solo da stdin**: gli argomenti sono visibili agli altri processi), `history`, `config get`, `config set <json|->` (merge patch RFC 7386), `engine status`, `headless [--once] [--dry-run] [--stop-on-stdin-eof]`. Errori di parsing con sola riga e colonna; nel messaggio d'uso solo il primo argomento |
+| `src/lib.rs` | `main_with`/`dispatch`: `version`, `state` (lista + errore + stato del motore, sempre uscita 0), `status`, `cswap-config [KEY]`, `confirm - [--active N|none]`, `action -` (azioni **solo da stdin**: gli argomenti sono visibili agli altri processi), `history`, `history events [--since S] [--account N]`, `mappings`, `config get`, `config set <json|->` (merge patch RFC 7386), `preferences get|set <json|->` (`PreferencesPatch`, campi sconosciuti rifiutati), `engine status`, `engine state` (regole, vista dall'ultima decisione se il motore gira, conflitti solo a motore acceso), `engine rules set <json|->` (validate, il motore le rilegge al giro dopo), `headless [--once] [--dry-run] [--stop-on-stdin-eof]`. Errori di parsing con sola riga e colonna; nel messaggio d'uso solo il primo argomento |
 | `src/output.rs` | `CliState`, `EngineStatus` (config + lock), `CliVersion` (`PROTOCOL`), `ConfigView`, `CliErrorEnvelope` |
 | `src/ts_export.rs` (test) | tipi in `apps/vscode/src/generated/` (`pnpm gen:types`), con import dei tipi del core da `@swapdeck/types` |
 | `tests/cli.rs` | integrazione col finto cswap (bin di test `swapdeck-fake-cswap`) e `SWAPDECK_HOME` temporanea |
@@ -92,15 +92,15 @@ Build di sviluppo: `pnpm --filter @swapdeck/desktop build`, poi `cargo build -p 
 
 | Percorso | Ruolo |
 |---|---|
-| `src/TauriBackend.ts` | `Backend` con `invoke` ed evento `state-changed` (`Snapshot`: lista, errore, `engine`, `engineSuspended`, `autoRunning`); comandi dell'app (`getSnapshot`, `getAppSettings`, `setAutostart`, `showMain`); step 5: metodi di gestione (`list_mappings`, `get_engine_state`, `set_engine_rules`, `get_preferences`, `set_preferences`, `get_history_events`: comandi Rust ancora da scrivere) e selettori con `tauri-plugin-dialog` (permessi `dialog:allow-open/save` solo nella finestra `main`) |
+| `src/TauriBackend.ts` | `Backend` con `invoke` ed evento `state-changed` (`Snapshot`: lista, errore, `engine`, `engineSuspended`, `autoRunning`); comandi dell'app (`getSnapshot`, `getAppSettings`, `setAutostart`, `showMain`); step 5: metodi di gestione (`list_mappings`, `get_engine_state`, `set_engine_rules`, `get_preferences`, `set_preferences`, `get_history_events`) e selettori con `tauri-plugin-dialog` (permessi `dialog:allow-open/save` solo nella finestra `main`) |
 | `src/EngineStatus.tsx` | righe di stato sopra la dashboard: motore sospeso (motivo e conflitti), sola osservazione, `cswap auto` in esecuzione |
 | `src/main.tsx` | `SwapDeckApp` nella finestra `main` (lingua e tema iniziali da `get_preferences`, se c'è), `MiniWidget` trascinabile nella finestra `mini` (scelta dall'etichetta della finestra) |
 | `src-tauri/src/api.rs` | interfaccia sottile `CswapApi`; `ClientApi` sopra `CswapClient` (ricerca pigra, una chiamata alla volta, `cswap auto` in un Job Object con `KILL_ON_JOB_CLOSE`, `auto_poll`, `shutdown` all'uscita); finto per i test |
 | `src-tauri/src/auto_watch.rs` | controllo di `cswap auto` ogni 2 s: eventi, cambi, fine o errore (stato nella UI e notifica) |
-| `src-tauri/src/engine_loop.rs` | motore nel ciclo di lettura (`headless::Engine`): con il lock storico, battito, decisione e cambio; senza solo osservazione; `EngineView` per la UI; conflitti letti solo a motore acceso |
+| `src-tauri/src/engine_loop.rs` | motore nel ciclo di lettura (`headless::Engine`): con il lock storico, battito, decisione e cambio; senza solo osservazione; `EngineView` per la UI; conflitti letti solo a motore acceso; regole e intervallo riletti dalle impostazioni a ogni giro (cambio dalla UI senza riavvio) |
 | `src-tauri/src/poller.rs` | ciclo di lettura: un thread, lettura (con il motore) a ogni intervallo e a richiesta, richieste unite; `run_paced` anticipa la lettura dopo |
 | `src-tauri/src/state.rs` | `Shared` (api, `Snapshot`, impostazioni, notifiche), evento `state-changed` |
-| `src-tauri/src/commands.rs` | comandi `invoke` (elenco in `build.rs`, permessi in `capabilities/`); `get_history` dai campioni dello storico (un punto per account per intervallo, atteso sulle 5 ore dal reset) |
+| `src-tauri/src/commands.rs` | comandi `invoke` (elenco in `build.rs`, permessi in `capabilities/`); `get_history` dai campioni dello storico (un punto per account per intervallo, atteso sulle 5 ore dal reset); gestione: `list_mappings`, `get_engine_state`, `set_engine_rules` (valida, salva e chiede subito un giro), `get_preferences`/`set_preferences` (patch validata, nuovo intervallo dal giro dopo), `get_history_events`; argomenti JSON non validi = `invalidUsage` |
 | `src-tauri/src/tray.rs`, `ring.rs` | icona ad anello disegnata a runtime, tooltip, menu con il cambio rapido |
 | `src-tauri/src/notify.rs`, `text.rs` | soglie e cambi di account (una volta per finestra di reset), testi it/en |
 | `src-tauri/src/windows.rs` | principale nascosta alla chiusura, mini-widget con posizione ricordata |
@@ -116,11 +116,11 @@ Host in Node (bundle esbuild `out/extension.js`), webview React con `@swapdeck/u
 |---|---|
 | `extension.ts` | `activate`: barra di stato, polling (`Refresher`), cambio rapido, comandi, conferme con dialoghi modali (`askConfirmation`; parola digitata per `purge`), notifiche, motore (`syncEngine`; con lock occupato attende e ritenta quando lo `state` lo dà libero). Restituisce `SwapDeckApi` per i test |
 | `cli.ts` | `createCliRunner` (spawn senza shell, stdin, timeout, limite dell'output), `resolveCliPath` (solo percorsi assoluti), `CliError` |
-| `bridge.ts` | richieste del webview → CLI: metodi ammessi, `ACTION_KINDS` chiuso (controllo di completezza a compilazione), `run` solo con `SAFE_CLAUDE_ARGS`, conferma imposta dall'host prima di `action`, `describeAction` |
+| `bridge.ts` | richieste del webview → CLI: metodi ammessi, `ACTION_KINDS` chiuso (controllo di completezza a compilazione), `run` solo con `SAFE_CLAUDE_ARGS`, conferma imposta dall'host prima di `action`, `describeAction`; gestione: `listMappings`, `getEngineState`, `setEngineRules` e `setPreferences` (oggetti JSON via stdin), `getPreferences`, `getHistoryEvents` |
 | `refresher.ts` | lettura condivisa con contatore di generazione: una lettura partita prima di un'azione non sovrascrive lo stato |
 | `engine.ts` | `EngineProcess` (`headless --stop-on-stdin-eof`, stop con stdin chiuso poi kill), `LineSplitter` (righe per stream, UTF-8), `shouldRetryEngine`, `LOCK_BUSY_EXIT` |
 | `panel.ts`, `protocol.ts` | webview con CSP a nonce e `localResourceRoots` = `out/webview`; messaggi host ↔ webview |
-| `webview/` | `VsCodeBackend` (`Backend` via `postMessage`, `hostConfirms = true`), `main.tsx` |
+| `webview/` | `VsCodeBackend` (`Backend` via `postMessage`, `hostConfirms = true`, metodi di gestione), `main.tsx` (`SwapDeckApp` completa a schede) |
 | `statusBar.ts`, `notifier.ts` | logica pura di barra (testo, tooltip, livello) e notifiche (soglie e cambio dell'account attivo) |
 | `generated/` | tipi della CLI (ts-rs) |
 
