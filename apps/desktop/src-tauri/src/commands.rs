@@ -488,8 +488,24 @@ mod tests {
         s.update_config(|c| c.set_engine_rules(rules.clone()))
             .unwrap();
         let state = engine_state(&s);
+        let mut rules = rules;
+        rules.sync_order();
         assert_eq!(state.rules, rules, "regole in memoria per il giro dopo");
         assert!(state.view.is_none() && state.conflicts.is_empty());
+        // Cambio di mappa: le sue regole arrivano in memoria senza riavvio.
+        let select = ProfileCommand::Select { id: "eco".into() };
+        s.update_config(|c| c.apply_profile_command(&select))
+            .unwrap();
+        assert_eq!(lock(&s.settings).engine_profiles.active_id, "eco");
+        assert_eq!(
+            engine_state(&s).rules.reserve_criterion,
+            swapdeck_core::engine::ReserveCriterion::ResetSoonest
+        );
+        let back = ProfileCommand::Select {
+            id: "personal".into(),
+        };
+        s.update_config(|c| c.apply_profile_command(&back)).unwrap();
+        assert_eq!(engine_state(&s).rules, rules);
         let invalid = EngineRules {
             enabled: true,
             ..EngineRules::default()

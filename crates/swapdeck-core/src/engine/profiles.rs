@@ -21,7 +21,8 @@ pub const PERSONAL_ID: &str = "personal";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum PresetKind {
-    /// Principale 6, poi 1 e 3; settimanale più bassa, 5h 95, 7d 98, ritorno dopo il reset.
+    /// Principale 6, poi 1 e 3; settimanale più bassa, 5h 95, 7d 98, ritorno dopo il reset con
+    /// la 5h sotto il 50% (isteresi 45), come il preset dell'interfaccia.
     /// Esempio: i numeri che non esistono in cswap si saltano.
     CswapGuard,
     /// Reset settimanale più vicino, 5h 90.
@@ -70,6 +71,7 @@ impl PresetKind {
             Self::CswapGuard => {
                 r.order = Some(vec![6, 1, 3]);
                 r.excluded = Vec::new();
+                r.return_hysteresis = 45.0;
             }
             Self::Eco => {
                 r.reserve_criterion = ReserveCriterion::ResetSoonest;
@@ -389,6 +391,7 @@ mod tests {
         let guard = &p.profiles[1].rules;
         let expected = EngineRules {
             order: Some(vec![6, 1, 3]),
+            return_hysteresis: 45.0,
             ..guard_like()
         };
         assert_eq!(guard, &expected, "«Come cswap-guard» = la regola attuale");

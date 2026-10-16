@@ -235,6 +235,9 @@ pub(crate) fn guard_rule_sets() -> [EngineRules; 2] {
         ..EngineRules::default()
     };
     let mut preset = PresetKind::CswapGuard.rules(&on);
+    // I casi usano l'isteresi di default: qui conta la forma (lista contro principale e
+    // riserve, memoria vecchia). I valori del preset sono verificati in `profiles`.
+    preset.return_hysteresis = user.return_hysteresis;
     preset.excluded = vec![2];
     [user, preset]
 }
