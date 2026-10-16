@@ -4,6 +4,7 @@ use super::*;
 use crate::conflicts::ConflictKind;
 use crate::cswap::{AccountRef, CswapErrorKind, SwitchReason, SwitchStrategyUsed};
 use crate::engine::tests::{acc, list, user_rules};
+use crate::notify::Severity;
 
 const T0: i64 = 1_800_000_000;
 
@@ -410,10 +411,25 @@ fn parses_cli_flags() {
         parse_flags(&a(&["--once", "--dry-run"])),
         Ok(CliFlags {
             once: true,
-            dry_run: true
+            dry_run: true,
+            notify: NotifyChannel::Os
         })
     );
     assert!(parse_flags(&a(&["--twice"])).is_err());
+    assert_eq!(
+        parse_flags(&a(&["--notify=stdout", "--once"])).map(|f| (f.notify, f.once)),
+        Ok((NotifyChannel::Stdout, true))
+    );
+    assert_eq!(
+        parse_flags(&a(&["--notify=both"])).map(|f| f.notify),
+        Ok(NotifyChannel::Both)
+    );
+    assert!(parse_flags(&a(&["--notify=popup"])).is_err());
+    assert!(parse_flags(&a(&["--notify"])).is_err());
+    assert_eq!(
+        cli_main(&a(&["--notify="]), &AtomicBool::new(false)),
+        exit_code::USAGE
+    );
     assert_eq!(
         cli_main(&a(&["--bad"]), &AtomicBool::new(false)),
         exit_code::USAGE
@@ -630,4 +646,110 @@ fn legacy_memory_is_absorbed_once_when_loaded() {
         [(6, Some(7))],
         "riferita alla principale della config al caricamento"
     );
+}
+
+/// Finto notificatore di sistema: registra i testi e restituisce l'esito scelto.
+struct FakeOs {
+    shown: std::rc::Rc<std::cell::RefCell<Vec<(String, Severity)>>>,
+    result: Result<OsOutcome, String>,
+}
+
+impl OsNotifier for FakeOs {
+    fn show(&mut self, title: &str, body: &str, severity: Severity) -> Result<OsOutcome, String> {
+        assert!(!body.is_empty());
+        self.shown.borrow_mut().push((title.to_owned(), severity));
+        self.result.clone()
+    }
+}
+
+/// Un giro col finto notificatore; (uscita, titoli mostrati, righe JSON su stdout).
+fn run_os(
+    channel: NotifyChannel,
+    result: Result<OsOutcome, String>,
+) -> (RunOutcome, Vec<(String, Severity)>, String) {
+    let dir = tempfile::tempdir().unwrap();
+    let mut opts = RunOptions::new(dir.path().to_path_buf(), user_rules());
+    opts.once = true;
+    opts.notify = channel;
+    let shown = std::rc::Rc::default();
+    let os = FakeOs {
+        shown: std::rc::Rc::clone(&shown),
+        result,
+    };
+    let mut port = at_limit();
+    let mut out = Vec::new();
+    let stop = AtomicBool::new(false);
+    let outcome = super::run_with(
+        &opts,
+        Runtime {
+            port: &mut port,
+            conflicts: &mut FakeConflicts(Vec::new()),
+            clock: &mut FakeClock(T0),
+            out: &mut out,
+            stop: &stop,
+        },
+        Some(Box::new(os)),
+    )
+    .unwrap();
+    let shown = shown.borrow().clone();
+    (outcome, shown, String::from_utf8(out).unwrap())
+}
+
+fn json_lines(out: &str) -> usize {
+    out.lines().filter(|l| l.starts_with('{')).count()
+}
+
+#[test]
+fn notify_channel_routes_to_os_stdout_or_both() {
+    let (_, shown, out) = run_os(NotifyChannel::Os, Ok(OsOutcome::Shown));
+    assert!(shown.len() >= 2, "{shown:?}");
+    assert_eq!(json_lines(&out), 0, "{out}");
+    assert!(!out.contains("notific"), "{out}");
+
+    let (_, shown, out) = run_os(NotifyChannel::Both, Ok(OsOutcome::Shown));
+    assert_eq!(json_lines(&out), shown.len(), "{out}");
+    // Stessi avvisi, con titolo nella lingua della config (italiano di default) e gravità.
+    let events: Vec<serde_json::Value> = out
+        .lines()
+        .filter(|l| l.starts_with('{'))
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    for (e, (title, severity)) in events.iter().zip(&shown) {
+        assert_eq!(e["notification"]["title"]["it"], title.as_str());
+        assert_eq!(e["notification"]["severity"], serde_json::to_value(severity).unwrap());
+    }
+
+    let (_, shown, out) = run_os(NotifyChannel::Stdout, Ok(OsOutcome::Shown));
+    assert!(shown.is_empty());
+    assert!(json_lines(&out) >= 2, "{out}");
+}
+
+#[test]
+fn os_failures_are_logged_once_and_never_stop_the_engine() {
+    let finished = RunOutcome::Finished {
+        ticks: 1,
+        switches: 1,
+    };
+    let (outcome, shown, out) = run_os(NotifyChannel::Os, Err("servizio assente".to_owned()));
+    assert_eq!(outcome, finished);
+    assert!(shown.len() >= 2);
+    assert_eq!(
+        out.matches("notifica di sistema non mostrata: servizio assente")
+            .count(),
+        1,
+        "{out}"
+    );
+
+    let (outcome, shown, out) = run_os(
+        NotifyChannel::Both,
+        Ok(OsOutcome::Skipped("nessuna sessione grafica")),
+    );
+    assert_eq!(outcome, finished);
+    assert_eq!(
+        out.matches("notifiche di sistema saltate: nessuna sessione grafica")
+            .count(),
+        1,
+        "{out}"
+    );
+    assert_eq!(json_lines(&out), shown.len(), "{out}");
 }

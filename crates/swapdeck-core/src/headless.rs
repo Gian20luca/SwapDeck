@@ -1,4 +1,4 @@
-//! Runner senza interfaccia (F10): `swapdeck --headless [--once] [--dry-run]`.
+//! Runner senza interfaccia (F10): `swapdeck --headless [--once] [--dry-run] [--notify=…]`.
 //!
 //! A ogni giro: battito del lock, `cswap list`, campioni nello storico, conflitti,
 //! decisione del motore e, se acceso e non in osservazione, il cambio. Solo chi tiene il
@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::config::{self, MAX_POLL_INTERVAL_SECONDS, MIN_POLL_INTERVAL_SECONDS};
+use crate::config::{self, Language, MAX_POLL_INTERVAL_SECONDS, MIN_POLL_INTERVAL_SECONDS};
 use crate::conflicts::{Conflict, ConflictSource, SystemConflicts};
 use crate::cswap::{CswapClient, CswapError, CswapErrorKind, ListResponse, SwitchResponse};
 use crate::engine::{
@@ -22,10 +22,14 @@ use crate::history::{
 };
 use crate::lock::{self, Acquire, LockGuard, LockInfo};
 use crate::notify::{
-    EngineContext, HeadlessEvent, NotificationConfig, Notifier, SwitchDone, SwitchPreview,
+    EngineContext, HeadlessEvent, Notification, NotificationConfig, Notifier, SwitchDone,
+    SwitchPreview,
 };
 use crate::paths::{AppPaths, create_private_dir};
 use crate::timeutil::{format_iso, now_unix};
+
+pub mod os_notify;
+pub use os_notify::{NotifyChannel, OsNotifier, OsOutcome, SystemNotifier};
 
 /// Memoria del motore nella cartella dati.
 pub const MEMORY_FILE: &str = "engine-memory.json";
@@ -105,6 +109,9 @@ pub struct RunOptions {
     /// Config riletta prima di ogni giro di [`run`]: regole e intervallo cambiati dalla UI
     /// valgono senza riavvio. `None` = regole fisse.
     pub config_file: Option<PathBuf>,
+    /// Canale delle notifiche di [`run_with`]: righe JSON su `out`, sistema operativo o
+    /// entrambi (il sistema solo se c'è un [`OsNotifier`]). Default `Stdout`.
+    pub notify: NotifyChannel,
 }
 
 impl RunOptions {
@@ -118,6 +125,7 @@ impl RunOptions {
             retention_days: DEFAULT_RETENTION_DAYS,
             max_ticks: None,
             config_file: None,
+            notify: NotifyChannel::Stdout,
         }
     }
 }
@@ -224,6 +232,11 @@ struct Runner<'o, 'r> {
     notify_rules: NotificationConfig,
     /// Nome della mappa attiva (per le notifiche di cambio).
     profile: Option<String>,
+    /// Notifiche di sistema (solo [`run_with`]); lingua dei testi dalla config.
+    os: Option<Box<dyn OsNotifier>>,
+    language: Language,
+    /// Ultimo problema delle notifiche di sistema già scritto nel log (niente righe ripetute).
+    os_issue: Option<String>,
 }
 
 impl Runner<'_, '_> {
@@ -397,13 +410,37 @@ impl Runner<'_, '_> {
             .tick(list, Some(engine), &self.notify_rules, now, &mut || {
                 port.installed_version()
             });
+        let channel = self.opts.notify;
         for notification in notes {
-            let event = HeadlessEvent::Notification { notification };
-            if let Ok(line) = serde_json::to_string(&event) {
-                let _ = writeln!(self.rt.out, "{line}");
+            if channel.to_os() {
+                self.show_os(now, &notification);
+            }
+            if channel.to_stdout() {
+                let event = HeadlessEvent::Notification { notification };
+                if let Ok(line) = serde_json::to_string(&event) {
+                    let _ = writeln!(self.rt.out, "{line}");
+                }
             }
         }
         let _ = self.rt.out.flush();
+    }
+
+    /// Notifica di sistema: un errore o un salto diventa una riga di log (una volta finché il
+    /// problema resta lo stesso), mai un errore del motore.
+    fn show_os(&mut self, now: i64, n: &Notification) {
+        let Some(os) = self.os.as_mut() else {
+            return;
+        };
+        let lang = self.language;
+        let issue = match os.show(n.title.get(lang), n.body.get(lang), n.severity) {
+            Ok(OsOutcome::Shown) => None,
+            Ok(OsOutcome::Skipped(why)) => Some(format!("notifiche di sistema saltate: {why}")),
+            Err(e) => Some(format!("notifica di sistema non mostrata: {e}")),
+        };
+        if issue.is_some() && issue != self.os_issue {
+            self.log(now, issue.as_deref().unwrap_or_default());
+        }
+        self.os_issue = issue;
     }
 
     fn report_prune_error(&mut self, now: i64) {
@@ -493,6 +530,9 @@ impl<'o, 'r> Runner<'o, 'r> {
             notifier: Notifier::new(Some(&opts.data_dir)),
             notify_rules: NotificationConfig::default(),
             profile: None,
+            os: None,
+            language: Language::default(),
+            os_issue: None,
         })
     }
 
@@ -558,6 +598,7 @@ impl<'o, 'r> Runner<'o, 'r> {
             Ok(loaded) => {
                 self.reload_failed = false;
                 self.notify_rules = loaded.config.notifications.clone();
+                self.language = loaded.config.language;
                 self.profile = loaded
                     .config
                     .engine_profiles
@@ -654,7 +695,17 @@ impl Drop for Engine<'_, '_> {
 
 /// Ciclo del motore senza interfaccia. Rilascia il lock all'uscita.
 pub fn run(opts: &RunOptions, rt: Runtime<'_>) -> io::Result<RunOutcome> {
+    run_with(opts, rt, None)
+}
+
+/// Come [`run`], con le notifiche di sistema di `os` se `opts.notify` le prevede.
+pub fn run_with(
+    opts: &RunOptions,
+    rt: Runtime<'_>,
+    os: Option<Box<dyn OsNotifier>>,
+) -> io::Result<RunOutcome> {
     let mut r = Runner::new(opts, rt)?;
+    r.os = os;
     let mut ticks = 0u64;
     loop {
         let now = r.rt.clock.now();
@@ -692,14 +743,20 @@ pub fn run(opts: &RunOptions, rt: Runtime<'_>) -> io::Result<RunOutcome> {
 pub struct CliFlags {
     pub once: bool,
     pub dry_run: bool,
+    pub notify: NotifyChannel,
 }
 
-pub const USAGE: &str = "uso: swapdeck --headless [--once] [--dry-run]";
+pub const USAGE: &str = "uso: swapdeck --headless [--once] [--dry-run] [--notify=os|stdout|both]";
 
 /// Opzioni dopo `--headless`.
 pub fn parse_flags(args: &[String]) -> Result<CliFlags, String> {
     let mut f = CliFlags::default();
     for a in args {
+        if let Some(value) = a.strip_prefix("--notify=") {
+            f.notify = NotifyChannel::parse(value)
+                .ok_or_else(|| format!("valore di --notify non valido: {value}\n{USAGE}"))?;
+            continue;
+        }
         match a.as_str() {
             "--once" => f.once = true,
             "--dry-run" => f.dry_run = true,
@@ -753,9 +810,10 @@ pub fn cli_main(args: &[String], stop: &AtomicBool) -> i32 {
     opts.interval_secs = loaded.config.poll_interval_seconds;
     opts.once = flags.once;
     opts.dry_run = flags.dry_run;
+    opts.notify = flags.notify;
     opts.config_file = Some(paths.config_file());
     let mut stdout = io::stdout();
-    let result = run(
+    let result = run_with(
         &opts,
         Runtime {
             port: &mut client,
@@ -764,6 +822,7 @@ pub fn cli_main(args: &[String], stop: &AtomicBool) -> i32 {
             out: &mut stdout,
             stop,
         },
+        Some(Box::new(SystemNotifier)),
     );
     match result {
         Ok(RunOutcome::Finished { .. }) => exit_code::OK,

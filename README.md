@@ -88,12 +88,21 @@ Se la riserva scelta è al limite si passa alla successiva. L'isteresi vale solo
 Per attività pianificate, server e WSL: `swapdeck-cli headless` (accanto all'app installata, nel `.vsix` in `bin/` e come file separato nelle release). L'app accetta anche `swapdeck --headless` con le stesse opzioni: su Windows non apre console né stampa nulla, quindi va bene per un'attività pianificata che non deve far comparire finestre.
 
 ```
-swapdeck-cli headless [--once] [--dry-run]
+swapdeck-cli headless [--once] [--dry-run] [--notify=os|stdout|both]
 ```
 
 - senza opzioni: ciclo continuo, si ferma con Ctrl+C;
 - `--once`: un solo giro e poi esce (adatto a uno scheduler);
-- `--dry-run`: solo osservazione.
+- `--dry-run`: solo osservazione;
+- `--notify`: dove vanno le notifiche (sezione `notifications` di `config.json`). `os` (default) le mostra a schermo come notifiche di sistema, anche senza app né VS Code aperti; `stdout` le scrive come righe JSON `{"event":"notification",…}` per chi ha avviato il motore (l'estensione VS Code usa questa, così non ci sono doppioni); `both` fa entrambe le cose.
+
+Notifiche di sistema per piattaforma:
+
+- **Windows**: toast. Se SwapDeck è installato (collegamento `SwapDeck.lnk` nel menu Start dell'utente o di tutti gli utenti) usano l'identificativo dell'app (`com.swapdeck.desktop`) e compaiono col nome SwapDeck; altrimenti, per esempio dallo zip portatile, usano l'identificativo di Windows PowerShell e compaiono sotto quel nome.
+- **Linux**: D-Bus (`org.freedesktop.Notifications`). Senza bus di sessione o senza sessione grafica (cron, SSH, server) si saltano senza errori.
+- **macOS**: Centro notifiche, col nome dell'app se `SwapDeck.app` è in `/Applications` o `~/Applications`.
+
+Una notifica che non si riesce a mostrare lascia una riga nel log (una sola finché il problema resta lo stesso) e non ferma mai il motore.
 
 Codici di uscita: 0 ok, 1 errore, 2 uso errato, 3 lock occupato (un altro motore sta già girando). Il motore deve comunque essere acceso in config (`enabled` o `dryRun`).
 

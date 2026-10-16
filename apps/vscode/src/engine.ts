@@ -1,4 +1,7 @@
-/** Motore come processo figlio: `swapdeck-cli headless --stop-on-stdin-eof` (rispetta il lock). */
+/**
+ * Motore come processo figlio: `swapdeck-cli headless --stop-on-stdin-eof --notify=stdout`
+ * (rispetta il lock). Le notifiche arrivano come righe JSON e le mostra l'estensione.
+ */
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
 import type { Readable } from 'node:stream';
@@ -9,6 +12,8 @@ export const STOP_GRACE_MS = 15_000;
 export const DEACTIVATE_GRACE_MS = 4000;
 /** `headless::exit_code::LOCK_BUSY` del core: il motore gira già altrove (altra finestra o app). */
 export const LOCK_BUSY_EXIT = 3;
+/** Argomenti del motore: `--notify=stdout` evita il doppione con le notifiche di sistema. */
+export const ENGINE_ARGS: readonly string[] = ['headless', '--stop-on-stdin-eof', '--notify=stdout'];
 /** Riga più lunga inoltrata al log (il resto si scarta). */
 const MAX_LINE = 4096;
 
@@ -77,7 +82,7 @@ export class EngineProcess {
   start(cliPath: string, env: NodeJS.ProcessEnv = process.env): void {
     if (this.child) return;
     this.stopping = false;
-    const child = spawn(cliPath, ['headless', '--stop-on-stdin-eof'], {
+    const child = spawn(cliPath, [...ENGINE_ARGS], {
       shell: false,
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],

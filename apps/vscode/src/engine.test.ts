@@ -2,7 +2,13 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
-import { EngineProcess, LineSplitter, LOCK_BUSY_EXIT, shouldRetryEngine } from './engine.js';
+import {
+  ENGINE_ARGS,
+  EngineProcess,
+  LineSplitter,
+  LOCK_BUSY_EXIT,
+  shouldRetryEngine,
+} from './engine.js';
 import { preloadEnv, PROCESS_TEST_TIMEOUT_MS } from './testing.js';
 
 describe('LineSplitter', () => {
@@ -28,6 +34,12 @@ describe('LineSplitter', () => {
     expect(lines[0]).toHaveLength(4097);
     expect(lines[0]!.endsWith('…')).toBe(true);
     expect(lines[1]).toBe('ok');
+  });
+});
+
+describe('ENGINE_ARGS', () => {
+  it('chiede le notifiche su stdout: le mostra l’estensione, senza doppioni dal sistema', () => {
+    expect(ENGINE_ARGS).toEqual(['headless', '--stop-on-stdin-eof', '--notify=stdout']);
   });
 });
 

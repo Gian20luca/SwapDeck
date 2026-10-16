@@ -65,7 +65,7 @@ pub const USAGE: &str = "uso: swapdeck-cli <comando>
   setup diagnose|install|upgrade      (install e upgrade: eventi JSON per riga, poi l'esito)
   setup check-update [--force]
   setup dismiss-update <VERSIONE>
-  headless [--once] [--dry-run] [--stop-on-stdin-eof]";
+  headless [--once] [--dry-run] [--stop-on-stdin-eof] [--notify=os|stdout|both]";
 
 /// Dimensione massima del JSON letto da argomento o stdin.
 const MAX_INPUT_BYTES: u64 = 1024 * 1024;

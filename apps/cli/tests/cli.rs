@@ -255,7 +255,7 @@ fn headless_once_writes_history() {
     assert_eq!(code, 0);
     assert_eq!(h, json!([]));
     let out = env
-        .command(&["headless", "--once", "--dry-run"])
+        .command(&["headless", "--once", "--dry-run", "--notify=stdout"])
         .output()
         .unwrap();
     assert_eq!(
@@ -287,10 +287,22 @@ fn headless_once_writes_history() {
 }
 
 #[test]
+fn headless_rejects_unknown_notify_channel() {
+    let env = Env::new();
+    let out = env
+        .command(&["headless", "--once", "--notify=popup"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2));
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("--notify=os|stdout|both"), "{err}");
+}
+
+#[test]
 fn headless_stops_when_stdin_closes() {
     let env = Env::new();
     let mut child = env
-        .command(&["headless", "--dry-run", "--stop-on-stdin-eof"])
+        .command(&["headless", "--dry-run", "--stop-on-stdin-eof", "--notify=stdout"])
         .stdin(Stdio::piped())
         .spawn()
         .unwrap();
