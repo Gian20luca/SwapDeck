@@ -78,7 +78,13 @@ export function placeTip(
 /** Un solo tooltip aperto alla volta: aprirne uno chiude il precedente. */
 let closeOpen: (() => void) | null = null;
 
+/** Istante dell'ultimo clic o tocco: un focus subito dopo viene dal mouse, non dalla tastiera. */
+let lastPointer = 0;
+if (typeof document !== 'undefined')
+  document.addEventListener('pointerdown', () => (lastPointer = Date.now()), true);
+
 function focusVisible(el: EventTarget): boolean {
+  if (Date.now() - lastPointer < 800) return false;
   try {
     return (el as Element).matches(':focus-visible');
   } catch {
