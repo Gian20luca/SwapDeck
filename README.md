@@ -57,7 +57,7 @@ Aggiornamenti automatici: spenti di default finché il repo è privato; si scari
   - _Consumi e reset_: soglie sulle 5 ore e sui 7 giorni (fino a 5 per finestra, default 80 e 95), esaurimento previsto, reset imminente, reset avvenuto, limite per modello;
   - _Stato e manutenzione_: motore sospeso o ripreso, login da rifare o in scadenza, dati non aggiornati, aggiornamenti di `cswap` o di SwapDeck.
 
-  In più: utenze da seguire (solo l'attiva o tutte), **Non disturbare** a orari (anche a cavallo della mezzanotte, con i critici che possono passare) e un **riepilogo giornaliero** all'ora scelta. Le regole stanno nella sezione `notifications` di `config.json` e valgono dalla lettura successiva.
+  Per gli avvisi su consumi e reset si sceglie se seguire solo l'utenza attiva o tutte. In più: **Non disturbare** a orari (anche a cavallo della mezzanotte, con i critici che possono passare) e un **riepilogo giornaliero** all'ora scelta. Le regole stanno nella sezione `notifications` di `config.json` e valgono dalla lettura successiva.
 
 - **Conferme:** le azioni delicate (`remove`, `import`, `export`, `swap`/`move`, `unmap`, `disable` dell'account attivo, `purge`) chiedono conferma; `purge` chiede di digitare una parola. Il cambio di account non chiede nulla.
 
