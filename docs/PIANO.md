@@ -27,6 +27,7 @@ Stato: **piano, in attesa del via**. Prontezza circa 95% (il contratto di `cswap
 | F16 | Mappe (16/10): profili con nome come le mappe delle centraline, ognuno con lista, criterio e soglie; scelta solo manuale da app, menu dell'icona, mini-widget e VS Code; preset Come cswap-guard, Eco, Sport, Sicura | confermata |
 | F17 | Tooltip informativi (16/10) su ogni pulsante, campo e voce dell'app principale | confermata |
 | F18 | Notifiche personalizzabili (16/10): preavviso di switch, switch avvenuto, ritorno alla prima, nessuna riserva, soglie 5h/7d, esaurimento previsto, reset imminente/avvenuto, limite per modello, motore sospeso/ripreso, login da rifare o in scadenza, dati non aggiornati, aggiornamenti; parametri per avviso, non disturbare a orari, solo attiva o tutte, riepilogo giornaliero; un solo mittente (chi tiene il lock) | confermata |
+| F19 | Gestione di una singola utenza (16/10): «Gestisci utenza» apre una pagina di dettaglio solo per quell'account (alias, attiva/disattiva, rimuovi, slot, terminale, link allo storico) con «Indietro»; la scheda Account resta un elenco snello | confermata |
 | — | Conferma a video prima delle azioni delicate | confermata |
 
 Esclusa: esportazione dello storico in CSV (punto 12).
