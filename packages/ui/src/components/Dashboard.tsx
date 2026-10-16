@@ -6,9 +6,10 @@ import { errorMessage, useAccounts } from '../backend/useAccounts.js';
 import { useI18n } from '../i18n/index.js';
 import { accountName } from '../lib/account.js';
 import { formatAge } from '../lib/format.js';
+import { useEngineMarks } from '../lib/useEngineMarks.js';
 import { useNow } from '../lib/useNow.js';
 import { AccountCard } from './AccountCard.js';
-import { HistoryPanel } from './HistoryPanel.js';
+import { useNavigate } from './navigation.js';
 import { AccountActions } from './manage/AccountActions.js';
 import { AddAccount } from './manage/AddAccount.js';
 import { QuickSwitch, type QuickStrategy } from './QuickSwitch.js';
@@ -39,9 +40,10 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
   const backend = useBackend();
   const { state, refresh } = useAccounts();
   const now = useNow();
+  const engineMarks = useEngineMarks();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [historyFor, setHistoryFor] = useState<number | null>(null);
+  const navigate = useNavigate();
 
   const accounts = useMemo(
     () => (state.status === 'ready' ? sortAccounts(state.data.accounts) : []),
@@ -165,13 +167,15 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
                 key={account.number}
                 account={account}
                 now={now}
+                engine={engineMarks}
                 busy={busy}
                 onSwitch={onSwitch}
-                historyOpen={historyFor === account.number}
-                onToggleHistory={(a) =>
-                  setHistoryFor((cur) => (cur === a.number ? null : a.number))
-                }
-                history={<HistoryPanel account={account.number} />}
+                {...(navigate
+                  ? {
+                      onOpenHistory: (a: Account) =>
+                        navigate({ tab: 'history', account: a.number }),
+                    }
+                  : {})}
                 {...(manage
                   ? { extra: <AccountActions account={account} accounts={accounts} /> }
                   : {})}

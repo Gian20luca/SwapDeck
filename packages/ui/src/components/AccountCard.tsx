@@ -1,7 +1,8 @@
 import type { Account } from '@swapdeck/types';
 import type { ReactNode } from 'react';
 import { accountName, displayUsage, statusBadge, switchBlockedReason } from '../lib/account.js';
-import { formatAge, isStale, shortEmail } from '../lib/format.js';
+import type { EngineMarks } from '../lib/engineMarks.js';
+import { formatAge, formatClock, isStale, shortEmail } from '../lib/format.js';
 import { useI18n } from '../i18n/index.js';
 import { PaceIndicator } from './PaceIndicator.js';
 import { UsageBar } from './UsageBar.js';
@@ -13,12 +14,12 @@ export interface AccountCardProps {
   /** Cambio in corso: disabilita il pulsante. */
   busy?: boolean;
   onSwitch: (account: Account) => void;
-  historyOpen?: boolean;
-  onToggleHistory?: (account: Account) => void;
-  /** Contenuto dello storico, mostrato quando `historyOpen`. */
-  history?: ReactNode;
+  /** Apre lo storico di questo account (scheda Storico); senza, il pulsante non c'è. */
+  onOpenHistory?: (account: Account) => void;
   /** Azioni di gestione (alias, slot, rimozione, ...), sotto i pulsanti della scheda. */
   extra?: ReactNode;
+  /** Trattini alle soglie del motore: solo sulle barre dell'account attivo. */
+  engine?: EngineMarks | null | undefined;
 }
 
 /** Scheda di un account: identità, stato, barre 5h e 7d, ritmo, limiti per modello, età del dato, azioni. */
@@ -27,10 +28,9 @@ export function AccountCard({
   now,
   busy = false,
   onSwitch,
-  historyOpen = false,
-  onToggleHistory,
-  history,
+  onOpenHistory,
   extra,
+  engine,
 }: AccountCardProps) {
   const { t } = useI18n();
   const name = accountName(account, t);
@@ -50,6 +50,8 @@ export function AccountCard({
   if (shown && shown.ageSeconds !== null) {
     const age = formatAge(shown.ageSeconds);
     ageText = stale ? t('usage.stale', { age }) : t('usage.age', { age });
+    const clock = formatClock(shown.fetchedAt);
+    if (clock) ageText += ' · ' + t('usage.atTime', { time: clock });
   }
 
   return (
@@ -90,6 +92,7 @@ export function AccountCard({
               pct={usage.fiveHour.pct}
               resetsAt={usage.fiveHour.resetsAt}
               now={now}
+              engineMark={account.active ? engine?.fiveHour : undefined}
             />
           )}
           {usage.sevenDay && (
@@ -100,6 +103,7 @@ export function AccountCard({
               resetsAt={usage.sevenDay.resetsAt}
               expectedPct={usage.sevenDay.expectedPct}
               now={now}
+              engineMark={account.active ? (engine?.sevenDay ?? undefined) : undefined}
             />
           )}
           {usage.sevenDay && (
@@ -124,6 +128,7 @@ export function AccountCard({
               pct={window.pct}
               resetsAt={window.resetsAt}
               expectedPct={window.expectedPct}
+              exhaustionAt={window.projectedExhaustionAt}
               now={now}
               compact
             />
@@ -137,13 +142,12 @@ export function AccountCard({
           {ageText}
         </span>
         <span className="sd-card__actions">
-          {onToggleHistory && usage && (
+          {onOpenHistory && usage && (
             <button
               type="button"
               className="sd-btn sd-btn--small"
-              aria-expanded={historyOpen}
-              aria-label={t(historyOpen ? 'account.historyHide' : 'account.historyLabel', { name })}
-              onClick={() => onToggleHistory(account)}
+              aria-label={t('account.historyOpen', { name })}
+              onClick={() => onOpenHistory(account)}
             >
               {t('account.history')}
             </button>
@@ -162,8 +166,6 @@ export function AccountCard({
       </div>
 
       {extra}
-
-      {historyOpen && history && <div className="sd-card__history">{history}</div>}
     </li>
   );
 }

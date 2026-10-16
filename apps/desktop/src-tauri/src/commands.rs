@@ -361,6 +361,32 @@ pub fn show_main(app: AppHandle) {
     windows::show_main(&app);
 }
 
+/// Nasconde il mini-widget (l'app resta nell'area di notifica).
+#[tauri::command]
+pub async fn mini_hide(app: AppHandle) {
+    windows::hide_mini(&app);
+}
+
+/// Comprime il mini-widget in una striscia (o lo riespande) e ricorda la scelta.
+#[tauri::command]
+pub async fn mini_set_compact(app: AppHandle, compact: bool) -> Res<()> {
+    windows::set_mini_compact(&app, compact)
+        .map_err(|e| CswapError::new(CswapErrorKind::Failed, e.to_string()))
+}
+
+/// Il mini-widget è ridotto a una striscia (stato salvato).
+#[tauri::command]
+pub fn mini_is_compact(shared: State<'_, Arc<Shared>>) -> bool {
+    lock(&shared.settings).mini_compact
+}
+
+/// Adatta l'altezza del mini-widget esteso al contenuto, in pixel logici.
+#[tauri::command]
+pub async fn mini_fit_height(app: AppHandle, height: f64) -> Res<()> {
+    windows::fit_mini_height(&app, height)
+        .map_err(|e| CswapError::new(CswapErrorKind::Failed, e.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

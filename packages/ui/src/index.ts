@@ -5,6 +5,7 @@ export { clampPercent } from './lib/clamp.js';
 export { Dashboard, type DashboardProps } from './components/Dashboard.js';
 export { SwapDeckApp, type SwapDeckAppProps, type TabId } from './components/SwapDeckApp.js';
 export { MiniWidget } from './components/MiniWidget.js';
+export { WindowTheme } from './components/WindowTheme.js';
 export { AccountCard, type AccountCardProps } from './components/AccountCard.js';
 export { UsageBar, type UsageBarProps } from './components/UsageBar.js';
 export { PaceIndicator, type PaceIndicatorProps } from './components/PaceIndicator.js';
@@ -44,6 +45,7 @@ export {
   type HistoryPoint,
   type HistoryQuery,
   type HostSettings,
+  type MiniWindowControls,
   type PickOptions,
   type Unsubscribe,
 } from './backend/types.js';

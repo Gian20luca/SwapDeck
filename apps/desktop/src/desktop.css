@@ -9,14 +9,19 @@ html[data-window='mini'] body {
 .sd-desktop-mini {
   height: 100vh;
   box-sizing: border-box;
-  border: 1px solid var(--sd-border);
+  /* Contorno interno: non pesa nel layout, così l'altezza del widget è quella della finestra. */
+  outline: 1px solid var(--sd-border);
+  outline-offset: -1px;
   cursor: default;
   user-select: none;
 }
 .sd-desktop-mini .sd-mini {
   max-width: none;
-  height: 100%;
   box-sizing: border-box;
+}
+/* La striscia riempie la finestra: Windows non la fa scendere sotto la sua altezza minima (circa 34 px logici). */
+.sd-desktop-mini .sd-mini--compact {
+  height: 100%;
 }
 /* Stato del motore e di cswap auto sopra la dashboard. */
 .sd-desktop-engine {

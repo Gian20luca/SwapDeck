@@ -155,6 +155,54 @@ describe('TauriBackend', () => {
   });
 });
 
+describe('TauriBackend: finestre', () => {
+  function withWindow(label: string) {
+    const { backend: _unused, calls } = setup({ mini_is_compact: true });
+    const setTheme = vi.fn(async () => undefined);
+    const invoke = vi.fn(async (cmd: string, args?: Record<string, unknown>) => {
+      calls.push({ cmd, args });
+      return cmd === 'mini_is_compact' ? true : undefined;
+    }) as unknown as InvokeFn;
+    const listen = vi.fn(async () => () => undefined) as unknown as ListenFn;
+    return {
+      backend: new TauriBackend(invoke, listen, undefined, { label, setTheme }),
+      calls,
+      setTheme,
+    };
+  }
+
+  it('la finestra mini ha i controlli, mappati sui comandi del Rust', async () => {
+    const { backend, calls } = withWindow('mini');
+    const win = backend.miniWindow!;
+    await win.hide();
+    await win.setCompact(true);
+    await expect(win.isCompact()).resolves.toBe(true);
+    await win.fitHeight!(212);
+    expect(calls.map((c) => [c.cmd, c.args])).toEqual([
+      ['mini_hide', undefined],
+      ['mini_set_compact', { compact: true }],
+      ['mini_is_compact', undefined],
+      ['mini_fit_height', { height: 212 }],
+    ]);
+  });
+
+  it('la finestra principale non ha i controlli del mini-widget', () => {
+    expect(withWindow('main').backend.miniWindow).toBeUndefined();
+  });
+
+  it('il tema della cornice passa a setTheme della finestra (null = sistema)', async () => {
+    const { backend, setTheme } = withWindow('main');
+    await backend.setWindowTheme!('dark');
+    await backend.setWindowTheme!(null);
+    expect(setTheme.mock.calls).toEqual([['dark'], [null]]);
+  });
+
+  it('senza la finestra (test, anteprima) il metodo non c’è', () => {
+    expect(setup().backend.setWindowTheme).toBeUndefined();
+    expect(setup().backend.miniWindow).toBeUndefined();
+  });
+});
+
 describe('TauriBackend: gestione completa', () => {
   it('mappa i metodi di gestione sui comandi del Rust', async () => {
     const { backend, calls } = setup({});

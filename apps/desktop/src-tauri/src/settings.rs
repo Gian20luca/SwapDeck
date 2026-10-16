@@ -33,6 +33,8 @@ pub struct Settings {
     pub autostart_saved: bool,
     /// Ultima posizione del mini-widget, in pixel fisici.
     pub mini_position: Option<(i32, i32)>,
+    /// Il mini-widget è ridotto a una striscia (chiave `miniWidget.compact`).
+    pub mini_compact: bool,
     /// Aggiornamenti dalle GitHub Releases (`updates.enabled`): spenti di default finché il
     /// repo è privato. Letti all'avvio e mai riscritti dall'app.
     pub updates_enabled: bool,
@@ -46,6 +48,10 @@ impl Default for Settings {
     fn default() -> Self {
         Self::from_config(&AppConfig::default())
     }
+}
+
+fn mini_compact(v: Option<&Value>) -> bool {
+    v.and_then(|v| v.get("compact")).and_then(Value::as_bool) == Some(true)
 }
 
 fn mini_position(v: Option<&Value>) -> Option<(i32, i32)> {
@@ -73,6 +79,7 @@ impl Settings {
                 .and_then(Value::as_bool)
                 .is_some(),
             mini_position: mini_position(c.extra.get(KEY_MINI)),
+            mini_compact: mini_compact(c.extra.get(KEY_MINI)),
             updates_enabled: c
                 .extra
                 .get(KEY_UPDATES)
@@ -133,13 +140,18 @@ impl Settings {
     pub fn patch(&self, c: &mut AppConfig) {
         c.extra
             .insert(KEY_AUTOSTART.into(), Value::Bool(self.autostart));
-        match self.mini_position {
-            Some((x, y)) => {
-                c.extra.insert(KEY_MINI.into(), json!({ "x": x, "y": y }));
-            }
-            None => {
-                c.extra.remove(KEY_MINI);
-            }
+        let mut mini = serde_json::Map::new();
+        if let Some((x, y)) = self.mini_position {
+            mini.insert("x".into(), json!(x));
+            mini.insert("y".into(), json!(y));
+        }
+        if self.mini_compact {
+            mini.insert("compact".into(), Value::Bool(true));
+        }
+        if mini.is_empty() {
+            c.extra.remove(KEY_MINI);
+        } else {
+            c.extra.insert(KEY_MINI.into(), Value::Object(mini));
         }
     }
 }
@@ -244,6 +256,7 @@ mod tests {
         assert_eq!(s.thresholds, [80.0, 95.0]);
         assert!(s.autostart);
         assert_eq!(s.mini_position, None);
+        assert!(!s.mini_compact);
         assert!(!s.updates_enabled, "aggiornamenti spenti di default");
     }
 
@@ -302,6 +315,42 @@ mod tests {
         store.save(&s).unwrap();
         let text = std::fs::read_to_string(paths.config_file()).unwrap();
         assert_eq!(text, "{ non json");
+    }
+
+    #[test]
+    fn compact_state_is_saved_with_the_position() {
+        let dir = tempfile::tempdir().unwrap();
+        let paths = AppPaths::from_root(dir.path());
+        paths.ensure().unwrap();
+        std::fs::write(
+            paths.config_file(),
+            r#"{"schemaVersion":1,"miniWidget":{"x":10,"y":20},"futureKey":1}"#,
+        )
+        .unwrap();
+        let (store, mut s, _) = SettingsStore::at(paths.clone()).read();
+        assert!(!s.mini_compact, "chiave assente: espanso");
+        s.mini_compact = true;
+        store.save(&s).unwrap();
+        let (_, again, _) = SettingsStore::at(paths.clone()).read();
+        assert!(again.mini_compact);
+        assert_eq!(again.mini_position, Some((10, 20)), "posizione conservata");
+        let v: Value =
+            serde_json::from_str(&std::fs::read_to_string(paths.config_file()).unwrap()).unwrap();
+        assert_eq!(v["miniWidget"]["compact"], true);
+        assert_eq!(v["futureKey"], 1);
+        // Compresso senza posizione salvata: la chiave c'è comunque e si rilegge.
+        let mut s2 = again.clone();
+        s2.mini_position = None;
+        store.save(&s2).unwrap();
+        let (_, back, _) = SettingsStore::at(paths.clone()).read();
+        assert!(back.mini_compact);
+        assert_eq!(back.mini_position, None);
+        // Di nuovo espanso: resta solo la posizione, niente chiave `compact`.
+        let mut s3 = again;
+        s3.mini_compact = false;
+        store.save(&s3).unwrap();
+        let text = std::fs::read_to_string(paths.config_file()).unwrap();
+        assert!(!text.contains("compact"), "{text}");
     }
 
     #[test]

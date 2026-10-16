@@ -38,18 +38,26 @@ export interface DisplayUsage {
   /** `true` se viene da `lastGoodUsage`: un dato vecchio, da mostrare ma non da usare per decidere. */
   lastKnown: boolean;
   ageSeconds: number | null;
+  /** Quando cswap ha letto il dato (ISO 8601), se lo dice. */
+  fetchedAt: string | null;
 }
 
 /** Il dato da mostrare: i consumi attuali, altrimenti l'ultimo dato noto. */
 export function displayUsage(account: Account): DisplayUsage | null {
   if (account.usage) {
-    return { usage: account.usage, lastKnown: false, ageSeconds: account.usageAgeSeconds ?? null };
+    return {
+      usage: account.usage,
+      lastKnown: false,
+      ageSeconds: account.usageAgeSeconds ?? null,
+      fetchedAt: account.usageFetchedAt ?? null,
+    };
   }
   if (account.lastGoodUsage) {
     return {
       usage: account.lastGoodUsage,
       lastKnown: true,
       ageSeconds: account.lastGoodAgeSeconds ?? null,
+      fetchedAt: account.lastGoodFetchedAt ?? null,
     };
   }
   return null;

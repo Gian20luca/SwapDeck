@@ -75,3 +75,63 @@ export const STALE_AGE_SECONDS = 600;
 export function isStale(ageSeconds: number | null | undefined): boolean {
   return ageSeconds !== null && ageSeconds !== undefined && ageSeconds > STALE_AGE_SECONDS;
 }
+
+/** Ora locale `HH:MM:SS` (24 ore, indipendente dalla lingua) di un istante ISO 8601; `null` se manca o non è valido. */
+export function formatClock(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) return null;
+  const d = new Date(ms);
+  const two = (n: number) => String(n).padStart(2, '0');
+  return `${two(d.getHours())}:${two(d.getMinutes())}:${two(d.getSeconds())}`;
+}
+
+/** Parole che dipendono dalla lingua per [`formatWhen`]. */
+export interface WhenWords {
+  today: string;
+  tomorrow: string;
+}
+
+/** Numero del giorno di calendario di un istante nel fuso dato (locale se assente). */
+function dayNumber(ms: number, timeZone: string | undefined): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    ...(timeZone ? { timeZone } : {}),
+  }).formatToParts(ms);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return Date.UTC(get('year'), get('month') - 1, get('day')) / 86_400_000;
+}
+
+/**
+ * Data e ora esatte di un istante ISO 8601 nel fuso locale, con `Intl.DateTimeFormat`:
+ * `oggi 15:12`, `domani 09:00`, altrimenti `ven 16/10 15:12` (`Fri 10/16 15:12` in inglese).
+ * `null` se manca o non è valido. `timeZone` (IANA) serve ai test; di norma vale il fuso locale.
+ */
+export function formatWhen(
+  iso: string | null | undefined,
+  now: number,
+  locale: string,
+  words: WhenWords,
+  timeZone?: string,
+): string | null {
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  if (Number.isNaN(ms)) return null;
+  const tz = timeZone ? { timeZone } : {};
+  const time = new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    ...tz,
+  }).format(ms);
+  const days = dayNumber(ms, timeZone) - dayNumber(now, timeZone);
+  if (days === 0) return `${words.today} ${time}`;
+  if (days === 1) return `${words.tomorrow} ${time}`;
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'short', ...tz }).format(ms);
+  const date = new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit', ...tz }).format(
+    ms,
+  );
+  return `${weekday} ${date} ${time}`;
+}

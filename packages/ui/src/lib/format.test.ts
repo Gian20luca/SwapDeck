@@ -3,6 +3,8 @@ import {
   countdownTo,
   displayPct,
   formatAge,
+  formatClock,
+  formatWhen,
   formatCountdown,
   isStale,
   levelFor,
@@ -91,5 +93,52 @@ describe('formatAge e isStale', () => {
     expect(isStale(599)).toBe(false);
     expect(isStale(601)).toBe(true);
     expect(isStale(null)).toBe(false);
+  });
+});
+
+describe('formatClock', () => {
+  it('ore, minuti e secondi nel fuso locale', () => {
+    const d = new Date(2026, 9, 16, 9, 42, 15);
+    expect(formatClock(d.toISOString())).toBe('09:42:15');
+    expect(formatClock(new Date(2026, 9, 16, 0, 5, 3).toISOString())).toBe('00:05:03');
+  });
+  it('dato assente o non valido', () => {
+    expect(formatClock(undefined)).toBeNull();
+    expect(formatClock('')).toBeNull();
+    expect(formatClock('non è una data')).toBeNull();
+  });
+});
+
+describe('formatWhen', () => {
+  const words = { today: 'oggi', tomorrow: 'domani' };
+  const rome = 'Europe/Rome'; // UTC+2 il 16 ottobre 2026
+  const now = Date.parse('2026-10-16T10:00:00Z');
+
+  it('oggi: solo «oggi» e l’ora', () => {
+    expect(formatWhen('2026-10-16T13:12:00Z', now, 'it', words, rome)).toBe('oggi 15:12');
+  });
+  it('domani', () => {
+    expect(formatWhen('2026-10-17T07:00:00Z', now, 'it', words, rome)).toBe('domani 09:00');
+  });
+  it('un altro giorno: giorno della settimana, data e ora', () => {
+    expect(formatWhen('2026-10-19T16:59:00Z', now, 'it', words, rome)).toBe('lun 19/10 18:59');
+    expect(
+      formatWhen('2026-10-16T10:00:00Z', Date.parse('2026-10-20T10:00:00Z'), 'it', words, rome),
+    ).toBe('ven 16/10 12:00');
+  });
+  it('in inglese data nell’ordine del mese e 24 ore', () => {
+    const en = { today: 'today', tomorrow: 'tomorrow' };
+    expect(formatWhen('2026-10-19T13:12:00Z', now, 'en', en, rome)).toBe('Mon 10/19 15:12');
+    expect(formatWhen('2026-10-16T13:12:00Z', now, 'en', en, rome)).toBe('today 15:12');
+  });
+  it('il fuso decide che giorno è: stesso istante, giorni diversi', () => {
+    const late = Date.parse('2026-10-16T22:30:00Z'); // a Roma è già il 17, a New York ancora il 16
+    const target = '2026-10-17T10:00:00Z';
+    expect(formatWhen(target, late, 'it', words, rome)).toBe('oggi 12:00');
+    expect(formatWhen(target, late, 'it', words, 'America/New_York')).toBe('domani 06:00');
+  });
+  it('dato assente o non valido', () => {
+    expect(formatWhen(null, now, 'it', words)).toBeNull();
+    expect(formatWhen('x', now, 'it', words)).toBeNull();
   });
 });

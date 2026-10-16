@@ -1,6 +1,7 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import { BackendError } from '../backend/types.js';
 import { FakeBackend } from '../dev/FakeBackend.js';
 import { bareBackend, renderWith } from '../dev/testUtils.js';
 import { SwapDeckApp } from './SwapDeckApp.js';
@@ -72,6 +73,52 @@ describe('SwapDeckApp', () => {
   it('può partire da un’altra scheda', async () => {
     setup('tools');
     expect(await screen.findByRole('heading', { name: 'Strumenti' })).toBeInTheDocument();
+  });
+});
+
+describe('SwapDeckApp: Storico dalla scheda di un account', () => {
+  async function openHistoryOf(name: string, backend = new FakeBackend()) {
+    renderWith(<SwapDeckApp />, backend);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: `Apri lo storico di ${name}` }));
+    return user;
+  }
+
+  it('il clic su «Storico» passa alla scheda Storico con quell’account aperto e col focus', async () => {
+    await openHistoryOf('alias3');
+    expect(screen.getByRole('tab', { name: 'Storico' })).toHaveAttribute('aria-selected', 'true');
+    expect(await screen.findByRole('heading', { name: 'Storico' })).toBeInTheDocument();
+    const toggle = await screen.findByRole('button', { name: 'Nascondi lo storico di alias3' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await waitFor(() => expect(toggle).toHaveFocus());
+    // Gli altri account restano chiusi, anche l'attivo.
+    expect(screen.getByRole('button', { name: 'Mostra lo storico di alias6' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  it('nella scheda Account non c’è più lo storico in linea', async () => {
+    renderWith(<SwapDeckApp />, new FakeBackend());
+    await screen.findByRole('button', { name: 'Apri lo storico di alias6' });
+    expect(screen.queryByRole('button', { name: /^Mostra lo storico/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Nascondi lo storico/ })).toBeNull();
+  });
+
+  it('storico: errore dal backend', async () => {
+    const backend = new FakeBackend();
+    vi.spyOn(backend, 'getHistory').mockRejectedValue(
+      new BackendError({ kind: 'failed', message: 'file illeggibile' }),
+    );
+    await openHistoryOf('alias6', backend);
+    expect(await screen.findByText(/Impossibile leggere lo storico/)).toBeInTheDocument();
+  });
+
+  it('storico: vuoto', async () => {
+    const backend = new FakeBackend();
+    vi.spyOn(backend, 'getHistory').mockResolvedValue([]);
+    await openHistoryOf('alias6', backend);
+    expect((await screen.findAllByText('Nessun dato nello storico.')).length).toBeGreaterThan(0);
   });
 });
 

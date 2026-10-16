@@ -143,6 +143,28 @@ export interface Backend {
   pickOpenFile?(options?: PickOptions): Promise<string | null>;
   pickSaveFile?(options?: PickOptions): Promise<string | null>;
   pickFolder?(options?: PickOptions): Promise<string | null>;
+  /**
+   * Controllo della finestra del mini-widget (solo app desktop): senza, `MiniWidget` non mostra i
+   * pulsanti «Nascondi» e «Comprimi» (per esempio nel webview di VS Code).
+   */
+  readonly miniWindow?: MiniWindowControls;
+  /**
+   * Tema della cornice nativa della finestra (barra del titolo): `'light'`, `'dark'` o `null` per
+   * seguire il sistema. Solo app desktop; `WindowTheme` lo chiama a ogni cambio di tema.
+   */
+  setWindowTheme?(theme: 'light' | 'dark' | null): Promise<void>;
+}
+
+/** Finestra del mini-widget gestita dall'host: nascondere, ridurre a striscia, ricordare lo stato. */
+export interface MiniWindowControls {
+  /** Nasconde la finestra; l'app resta attiva e il mini-widget si riapre dal menu dell'icona. */
+  hide(): Promise<void>;
+  /** Riduce a una striscia sottile o riespande; l'host ricorda la scelta per il prossimo avvio. */
+  setCompact(compact: boolean): Promise<void>;
+  /** Stato salvato: `true` se il mini-widget è ridotto a striscia. */
+  isCompact(): Promise<boolean>;
+  /** Altezza (px logici) che serve al contenuto: l'host adatta la finestra estesa, senza farla uscire dallo schermo. */
+  fitHeight?(height: number): Promise<void>;
 }
 
 /**

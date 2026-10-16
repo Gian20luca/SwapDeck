@@ -1,5 +1,5 @@
 import type { Account, Decision, IdleReason, SuspendReason, SwitchCause } from '@swapdeck/types';
-import { useCallback, useId, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useBackend } from '../../backend/context.js';
 import { useAccounts } from '../../backend/useAccounts.js';
 import { useI18n, type MessageKey, type Translate } from '../../i18n/index.js';
@@ -65,7 +65,7 @@ export function decisionText(decision: Decision, t: Translate): string {
 }
 
 /** Storico: grafici per account con scelta dell'intervallo, cambi di account e decisioni del motore. */
-export function HistoryPage() {
+export function HistoryPage({ target }: { target?: { account: number; key: number } | null }) {
   const { t } = useI18n();
   const { state } = useAccounts();
   const [hours, setHours] = useState<number>(168);
@@ -73,6 +73,21 @@ export function HistoryPage() {
   const accounts: Account[] = state.status === 'ready' ? state.data.accounts : [];
   const open = openAccounts ?? new Set(accounts.filter((a) => a.active).map((a) => a.number));
   const rangeId = useId();
+  const toggles = useRef<Map<number, HTMLButtonElement>>(new Map());
+  const [placed, setPlaced] = useState<number | null>(null);
+
+  // Arrivo da «Storico» di un account: solo il suo pannello aperto, scorrimento fin lì e focus al pulsante.
+  useEffect(() => {
+    if (target) setOpenAccounts(new Set([target.account]));
+  }, [target]);
+  useEffect(() => {
+    if (!target || placed === target.key) return;
+    const button = toggles.current.get(target.account);
+    if (!button) return;
+    setPlaced(target.key);
+    button.scrollIntoView?.({ block: 'start' });
+    button.focus();
+  }, [target, placed, accounts.length]);
 
   function toggle(n: number) {
     const next = new Set(open);
@@ -127,6 +142,10 @@ export function HistoryPage() {
                   <span className="sd-card__name">{name}</span>
                   <button
                     type="button"
+                    ref={(node) => {
+                      if (node) toggles.current.set(account.number, node);
+                      else toggles.current.delete(account.number);
+                    }}
                     className="sd-btn sd-btn--small"
                     aria-expanded={isOpen}
                     aria-label={t(isOpen ? 'account.historyHide' : 'account.historyLabel', {

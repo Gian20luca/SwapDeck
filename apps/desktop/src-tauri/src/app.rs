@@ -180,6 +180,10 @@ pub fn run(api: Arc<dyn CswapApi>) {
             commands::get_app_settings,
             commands::set_autostart,
             commands::show_main,
+            commands::mini_hide,
+            commands::mini_set_compact,
+            commands::mini_is_compact,
+            commands::mini_fit_height,
             commands::get_snapshot,
             commands::list_mappings,
             commands::get_engine_state,
@@ -241,6 +245,7 @@ pub fn run(api: Arc<dyn CswapApi>) {
                     on_auto_poll(&cb, p);
                 });
             app.manage(watcher);
+            windows::apply_saved_theme(&handle);
             if !start_hidden {
                 windows::show_main(&handle);
             }

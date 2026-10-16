@@ -27,6 +27,7 @@ import {
   type HistoryPoint,
   type HistoryQuery,
   type HostSettings,
+  type MiniWindowControls,
   type PickOptions,
   type SetupBackend,
   type Unsubscribe,
@@ -56,6 +57,8 @@ export interface FakeBackendOptions {
   picks?: { openFile?: string | null; saveFile?: string | null; folder?: string | null };
   /** Simula un host che conferma da sé (come VS Code): la UI non deve mostrare il suo dialogo. */
   hostConfirms?: boolean;
+  /** Simula l'host desktop con la finestra del mini-widget (default `true`; `false` = come VS Code). */
+  miniWindow?: boolean;
   /** Stato simulato di cswap e uv per la procedura di primo avvio e l'aggiornamento. */
   setup?: FakeSetupOptions;
 }
@@ -106,6 +109,13 @@ function usable(account: Account): boolean {
  */
 export class FakeBackend implements Backend, SetupBackend {
   readonly hostConfirms?: boolean;
+  /** Finestra del mini-widget simulata (assente con `miniWindow: false`). */
+  readonly miniWindow?: MiniWindowControls;
+  /** Chiamate a `miniWindow`, utili ai test: `hide`, `compact`, `expand`. */
+  readonly miniLog: string[] = [];
+  /** Altezze chieste con `fitHeight`. */
+  readonly miniHeights: number[] = [];
+  private miniCompact = false;
   private list: ListResponse;
   private mappings: DirectoryMapping[];
   private rules: EngineRules;
@@ -141,6 +151,21 @@ export class FakeBackend implements Backend, SetupBackend {
     this.rules = { ...structuredClone(DEFAULT_RULES), ...structuredClone(options.rules ?? {}) };
     this.picks = options.picks ?? {};
     if (options.hostConfirms !== undefined) this.hostConfirms = options.hostConfirms;
+    if (options.miniWindow !== false) {
+      this.miniWindow = {
+        hide: async () => {
+          this.miniLog.push('hide');
+        },
+        setCompact: async (compact) => {
+          this.miniCompact = compact;
+          this.miniLog.push(compact ? 'compact' : 'expand');
+        },
+        isCompact: async () => this.miniCompact,
+        fitHeight: async (height) => {
+          this.miniHeights.push(height);
+        },
+      };
+    }
     this.setup = new FakeSetup(
       options.setup ?? {},
       () => this.list.accounts.length,

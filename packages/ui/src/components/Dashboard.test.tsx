@@ -253,39 +253,9 @@ describe('Dashboard: aggiornamento e storico', () => {
     ).toBeInTheDocument();
   });
 
-  it('mostra e nasconde lo storico di un account', async () => {
+  it('senza le schede il pulsante Storico non c’è (si apre dalla scheda Storico)', async () => {
     renderDashboard(fake());
-    const [active] = await cards();
-    const toggle = within(active!).getByRole('button', { name: 'Mostra lo storico di alias6' });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    await userEvent.click(toggle);
-    const charts = await within(active!).findAllByRole('img');
-    expect(charts).toHaveLength(2);
-    expect(charts[0]).toHaveAccessibleName(/Consumo nel tempo · 5 ore/);
-    expect(charts[1]).toHaveAccessibleName(/Consumo nel tempo · 7 giorni/);
-    await userEvent.click(
-      within(active!).getByRole('button', { name: 'Nascondi lo storico di alias6' }),
-    );
-    expect(within(active!).queryAllByRole('img')).toHaveLength(0);
-  });
-
-  it('storico: errore dal backend', async () => {
-    const backend = fake();
-    vi.spyOn(backend, 'getHistory').mockRejectedValueOnce(
-      new BackendError({ kind: 'failed', message: 'file illeggibile' }),
-    );
-    renderDashboard(backend);
-    const [active] = await cards();
-    await userEvent.click(within(active!).getByRole('button', { name: /Mostra lo storico/ }));
-    expect(await within(active!).findByText(/Impossibile leggere lo storico/)).toBeInTheDocument();
-  });
-
-  it('storico: vuoto', async () => {
-    const backend = fake();
-    vi.spyOn(backend, 'getHistory').mockResolvedValueOnce([]);
-    renderDashboard(backend);
-    const [active] = await cards();
-    await userEvent.click(within(active!).getByRole('button', { name: /Mostra lo storico/ }));
-    expect(await within(active!).findByText('Nessun dato nello storico.')).toBeInTheDocument();
+    await cards();
+    expect(screen.queryByRole('button', { name: /storico/i })).toBeNull();
   });
 });

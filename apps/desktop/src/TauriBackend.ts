@@ -24,6 +24,7 @@ import {
   type HistoryEvents,
   type HistoryPoint,
   type HistoryQuery,
+  type MiniWindowControls,
   type PickOptions,
   type SetupBackend,
   type Unsubscribe,
@@ -111,13 +112,40 @@ export function toBackendError(error: unknown): BackendError {
   return new BackendError({ kind: 'failed', message });
 }
 
+/** Parte di `Window` di `@tauri-apps/api/window` che usa l'app (iniettabile per i test). */
+export interface WindowApi {
+  setTheme(theme: 'light' | 'dark' | null): Promise<void>;
+  /** Etichetta della finestra: `main` o `mini`. */
+  label: string;
+}
+
 /** `Backend` dell'app desktop: comandi `invoke` di Tauri ed evento `state-changed`. */
 export class TauriBackend implements Backend, SetupBackend {
   constructor(
     private readonly invoke: InvokeFn,
     private readonly listen: ListenFn,
     private readonly dialog?: DialogApi,
-  ) {}
+    windowApi?: WindowApi,
+  ) {
+    if (windowApi) {
+      this.setWindowTheme = (theme) => windowApi.setTheme(theme);
+      if (windowApi.label === 'mini') this.miniWindow = this.miniControls();
+    }
+  }
+
+  /** Tema della cornice nativa (barra del titolo di Windows), se la finestra lo permette. */
+  readonly setWindowTheme?: (theme: 'light' | 'dark' | null) => Promise<void>;
+  /** Finestra del mini-widget: solo dentro la finestra `mini`. */
+  readonly miniWindow?: MiniWindowControls;
+
+  private miniControls(): MiniWindowControls {
+    return {
+      hide: () => this.call('mini_hide'),
+      setCompact: (compact) => this.call('mini_set_compact', { compact }),
+      isCompact: () => this.call('mini_is_compact'),
+      fitHeight: (height) => this.call('mini_fit_height', { height }),
+    };
+  }
 
   private async call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
     try {

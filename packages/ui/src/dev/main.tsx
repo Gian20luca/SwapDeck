@@ -15,6 +15,10 @@ import { SCENARIO_NAMES, type ScenarioName } from './fixtures.js';
 
 type View = 'full' | 'mini';
 
+/** Stati del motore per provare i trattini sulle barre: `conflict` è quello di partenza (cswap-guard attivo). */
+const ENGINE_DEMOS = ['conflict', 'on', 'off', 'observe'] as const;
+type EngineDemo = (typeof ENGINE_DEMOS)[number];
+
 /** Stati di cswap per provare il primo avvio e l'avviso di aggiornamento. */
 const SETUP_DEMOS: Record<string, FakeSetupOptions> = {
   ok: {},
@@ -78,6 +82,8 @@ function Preview() {
   const viewId = useId();
   const scenarioId = useId();
   const setupId = useId();
+  const engineId = useId();
+  const [engineDemo, setEngineDemo] = useState<EngineDemo>('conflict');
   const [setupDemo, setSetupDemo] = useState('ok');
   const backend = useMemo(
     () =>
@@ -89,19 +95,32 @@ function Preview() {
           { path: String.raw`C:\Progetti\cliente-a`, account: 1, email: 'user1@example.com' },
           { path: String.raw`C:\Progetti\cliente-b`, account: 3, email: 'user3@example.com' },
         ],
-        conflicts: [
-          {
-            id: 'task:cswap-guard',
-            kind: 'scheduledTask',
-            label: 'Attività pianificata cswap-guard',
-            certain: true,
-          },
-          { id: 'process:tui', kind: 'process', label: 'cswap tui in esecuzione', certain: false },
-        ],
-        rules: { enabled: true, primary: 6, reserves: [1, 3] },
+        conflicts:
+          engineDemo !== 'conflict'
+            ? []
+            : [
+                {
+                  id: 'task:cswap-guard',
+                  kind: 'scheduledTask',
+                  label: 'Attività pianificata cswap-guard',
+                  certain: true,
+                },
+                {
+                  id: 'process:tui',
+                  kind: 'process',
+                  label: 'cswap tui in esecuzione',
+                  certain: false,
+                },
+              ],
+        rules: {
+          enabled: engineDemo !== 'off',
+          dryRun: engineDemo === 'observe',
+          primary: 6,
+          reserves: [1, 3],
+        },
         setup: SETUP_DEMOS[setupDemo] ?? {},
       }),
-    [scenario, setupDemo],
+    [scenario, setupDemo, engineDemo],
   );
 
   // Simula gli aggiornamenti periodici del motore.
@@ -157,6 +176,21 @@ function Preview() {
               onChange={(event) => setSetupDemo(event.target.value)}
             >
               {Object.keys(SETUP_DEMOS).map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </span>
+          <span className="sd-field">
+            <label htmlFor={engineId}>Motore (demo)</label>
+            <select
+              id={engineId}
+              className="sd-input sd-input--inline"
+              value={engineDemo}
+              onChange={(event) => setEngineDemo(event.target.value as EngineDemo)}
+            >
+              {ENGINE_DEMOS.map((name) => (
                 <option key={name} value={name}>
                   {name}
                 </option>

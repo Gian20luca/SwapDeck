@@ -116,8 +116,8 @@ test('tema scuro', async ({ page }) => {
   await page.screenshot({ path: `${SHOTS}/dashboard-scura.png`, fullPage: true });
 });
 
-test('mini-widget a 280×160 senza overflow', async ({ page }) => {
-  await page.setViewportSize({ width: 280, height: 160 });
+test('mini-widget a 280 px di larghezza, senza overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 280, height: 300 });
   await page.goto('/');
   await page.getByLabel('Vista').selectOption('mini');
   const mini = page.getByRole('region', { name: 'Mini-widget account attivo' });
@@ -125,7 +125,7 @@ test('mini-widget a 280×160 senza overflow', async ({ page }) => {
   await expect(mini.getByText('alias6')).toBeVisible();
   const box = await mini.boundingBox();
   expect(box!.width).toBeLessThanOrEqual(280);
-  expect(box!.height).toBeLessThanOrEqual(160);
+  expect(box!.height).toBeLessThanOrEqual(300);
   const inner = await mini.evaluate((el) => ({
     x: el.scrollWidth - el.clientWidth,
     y: el.scrollHeight - el.clientHeight,

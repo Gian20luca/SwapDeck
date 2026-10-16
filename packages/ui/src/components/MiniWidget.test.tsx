@@ -18,7 +18,7 @@ function renderMini(backend: Backend) {
 }
 
 describe('MiniWidget', () => {
-  it('mostra l’account attivo con le due barre', async () => {
+  it('mostra l’account attivo con le barre', async () => {
     renderMini(new FakeBackend());
     expect(await screen.findByText('alias6')).toBeInTheDocument();
     expect(screen.getByText('Attivo')).toBeInTheDocument();
@@ -26,7 +26,8 @@ describe('MiniWidget', () => {
     expect(
       screen.getByRole('progressbar', { name: '7 giorni di alias6: 77%' }),
     ).toBeInTheDocument();
-    expect(screen.getAllByRole('progressbar')).toHaveLength(2);
+    // 5 ore, 7 giorni e il limite per modello (Fable).
+    expect(screen.getAllByRole('progressbar')).toHaveLength(3);
     expect(screen.getByRole('region', { name: 'Mini-widget account attivo' })).toBeInTheDocument();
   });
 
