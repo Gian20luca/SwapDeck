@@ -13,7 +13,7 @@ Stato: **piano, in attesa del via**. Prontezza circa 95% (il contratto di `cswap
 | F0 | Tutti i comandi di `cswap` in GUI: list/status, switch (diretto, `best`, `next-available`, `--model`), add, add-token, remove, disable/enable, alias, swap, move, map/unmap, config, auto, unclaimed, export/import, run (apre un terminale come account), upgrade, purge | cswap 0.26.0 |
 | F1 | Storico dei consumi con grafici, più la curva del ritmo atteso (`expectedPct`, `projectedExhaustionAt`) | confermata |
 | F2 | Notifiche di sistema alle soglie (default 80% e 95%) e a ogni cambio di account | confermata |
-| F3 | Motore di regole che generalizza `cswap-guard` | confermata (punti 3 e 9) |
+| F3 | Motore di regole generico per tutti (cambio automatico tra utenze con soglie e riserve) | confermata (punti 3 e 9) |
 | F4 | Mini-widget flottante sempre in primo piano, oltre all'icona nell'area di notifica. Due pulsanti (richiesta del 16/10): nascondi nell'area di notifica e comprimi in una striscia con la %, stato ricordato; pulsante di aggiornamento, ora dell'ultimo aggiornamento (HH:MM:SS) e limiti per modello (Fable) anche nel mini-widget; trattini alle soglie del motore sulle barre (rossi se il motore è acceso, grigi se spento o sospeso) con tooltip che spiega il cambio di utenza; data e ora esatte del reset accanto al conto alla rovescia e data prevista di esaurimento ; il pulsante Storico della scheda account porta alla scheda Storico con quell'account aperto | confermata |
 | F5 | Rileva `cswap` e, se manca, installa `uv` e `claude-swap` per utente. Controlla la versione installata contro l'ultima su PyPI, avvisa se ce n'è una nuova e la aggiorna con conferma (`uv tool upgrade claude-swap`; `cswap upgrade` su Windows non funziona). Dopo l'aggiornamento verifica `schemaVersion` | confermata |
 | F6 | Avvio automatico al login (per utente) | confermata |
@@ -24,7 +24,7 @@ Stato: **piano, in attesa del via**. Prontezza circa 95% (il contratto di `cswap
 | F13 | Interfaccia in italiano e in inglese | confermata |
 | F14 | Flusso a lista (16/10): utenze in ordine con trascinamento (icona ⋮⋮), si usa sempre la prima disponibile, si passa alla successiva alle soglie 5h/7d e si torna alla prima libera dopo il reset; «Usa ora» per il cambio immediato e interruttore per includere o escludere | confermata |
 | F15 | Criteri intelligenti (16/10): oltre a settimanale più bassa, best e ordine, anche reset più vicino, ritmo previsto, 5 ore più bassa, punteggio bilanciato (pesi regolabili), distribuzione uniforme, margine sul modello | confermata |
-| F16 | Mappe (16/10): profili con nome come le mappe delle centraline, ognuno con lista, criterio e soglie; scelta solo manuale da app, menu dell'icona, mini-widget e VS Code; preset Come cswap-guard, Eco, Sport, Sicura | confermata |
+| F16 | Mappe (16/10): profili con nome come le mappe delle centraline, ognuno con lista, criterio e soglie; scelta solo manuale da app, menu dell'icona, mini-widget e VS Code; preset Principale con riserve, Eco, Sport, Sicura | confermata |
 | F17 | Tooltip informativi (16/10) su ogni pulsante, campo e voce dell'app principale | confermata |
 | F18 | Notifiche personalizzabili (16/10): preavviso di switch, switch avvenuto, ritorno alla prima, nessuna riserva, soglie 5h/7d, esaurimento previsto, reset imminente/avvenuto, limite per modello, motore sospeso/ripreso, login da rifare o in scadenza, dati non aggiornati, aggiornamenti; parametri per avviso, non disturbare a orari, solo attiva o tutte, riepilogo giornaliero; un solo mittente (chi tiene il lock); in modalità senza interfaccia le notifiche vanno a schermo come notifiche di sistema (16/10) | confermata |
 | F19 | Gestione di una singola utenza (16/10): «Gestisci utenza» apre una pagina di dettaglio solo per quell'account (alias, attiva/disattiva, rimuovi, slot, terminale, link allo storico) con «Indietro»; la scheda Account resta un elenco snello | confermata |
@@ -38,9 +38,9 @@ Esclusa: esportazione dello storico in CSV (punto 12).
 - Criterio di scelta della riserva: settimanale più bassa, più margine (`best`) oppure ordine fisso. Se la riserva scelta è al limite si passa alla successiva.
 - Ritorno al principale dopo il suo reset, con isteresi.
 - Intervallo di controllo (default 60 s) e pausa minima tra due cambi.
-- La regola che usi oggi diventa la configurazione: principale 6, riserve [1, 3], criterio «settimanale più bassa», soglia 95%, ritorno dopo il reset.
+- Preset generico «Principale con riserve» (16/10, al posto di quello personale): prima della lista come principale, riserve per settimanale più bassa, soglie 95/98, ritorno dopo il reset; nessun numero di account fisso. SwapDeck non contiene nulla di specifico del guard personale dell'utente, che lo dismetterà.
 - Flusso a lista (decisione dell'utente): le utenze sono una lista con priorità, la prima è la principale. Con il criterio «ordine» si usa sempre la prima libera, anche al ritorno dopo un reset (con l'isteresi sulla finestra che l'aveva fatta lasciare); con gli altri criteri il ritorno va alla principale. Criteri in più: reset settimanale più vicino, ritmo sicuro, 5h più libera, punteggio bilanciato (pesi regolabili), settimanali livellate, margine su un modello. Dati mancanti = candidata esclusa, a parità vale l'ordine. Ogni decisione ha un motivo leggibile e il motore espone il candidato attuale.
-- Mappe (profili con nome, scelta solo manuale): la regola attuale diventa la mappa «Personale»; preset «Come cswap-guard» (6, 1, 3: numeri assenti saltati), «Eco», «Sport», «Sicura», modificabili, duplicabili e ripristinabili. Acceso, osservazione e conflitti ignorati valgono per tutte le mappe.
+- Mappe (profili con nome, scelta solo manuale): la regola attuale diventa la mappa «Personale»; preset «Principale con riserve» (generico, senza numeri fissi), «Eco», «Sport», «Sicura», modificabili, duplicabili e ripristinabili. Acceso, osservazione e conflitti ignorati valgono per tutte le mappe.
 
 ### Azioni con conferma
 - `remove`, `import` (sovrascrive), `export` (il file contiene credenziali), `swap`/`move`, `unmap`, `disable` dell'account attivo, `unclaimed --purge`, installazione di uv/cswap: conferma semplice.
@@ -94,7 +94,7 @@ Gli agenti si scelgono secondo le regole globali. Step 2 e 3 possono andare in p
 | 6 | Procedura di avvio: rileva cswap; se manca, con conferma installa uv (script ufficiale per utente) e `uv tool install claude-swap`, poi verifica; pulsante di aggiornamento | `client-desktop` | prova su un profilo Windows senza cswap |
 | 7 | Estensione VS Code: barra di stato, lista rapida per il cambio, pannello con `packages/ui`, impostazioni, avvio di `--headless`, pacchetto .vsix | `client-desktop` + `frontend` | .vsix installabile, test dell'estensione |
 | 8 | Pacchetti e CI: matrice Windows/Linux/macOS, installer, updater (chiave di firma degli aggiornamenti, endpoint sulle release) | `client-desktop` | artefatti per i tre sistemi dalla CI |
-| 9 | Verifica finale: suite completa ed E2E una volta sola, revisione, README e guida all'installazione per i colleghi, guida per passare da `cswap-guard` | `revisore` + `documentazione` | tutto verde, documenti pronti |
+| 9 | Verifica finale: suite completa ed E2E una volta sola, revisione, README e guida all'installazione per i colleghi, guida generica per passare da script, attività pianificate o cswap auto | `revisore` + `documentazione` | tutto verde, documenti pronti |
 
 ## 4. Decisioni provvisorie (reversibili)
 - Il motore esiste solo in Rust; l'estensione delega a `swapdeck --headless`.
@@ -103,7 +103,7 @@ Gli agenti si scelgono secondo le regole globali. Step 2 e 3 possono andare in p
 - Nessuna firma del codice per ora (avviso di SmartScreen e Gatekeeper accettato).
 - Build Windows locale se i Build Tools MSVC si installano senza admin; in ogni caso c'è la CI.
 - L'estensione si distribuisce come .vsix, senza Marketplace.
-- `cswap-guard` resta com'è finché non decidi di passare a `swapdeck --headless`. I file in `~/.claude` non si toccano senza il tuo permesso.
+- Il guard personale dell'utente (fuori dal progetto) resta finché non passa a SwapDeck, poi lo dismette lui. I file in `~/.claude` non si toccano senza il suo permesso.
 
 ## 5. Repo
 - GitHub privato: https://github.com/Gian20luca/SwapDeck. CI con GitHub Actions; artefatti e updater sulle GitHub Releases.
