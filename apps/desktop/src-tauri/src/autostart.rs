@@ -88,7 +88,7 @@ fn launcher(app: &AppHandle) -> Result<AutoLaunch, String> {
 fn current_launch_target(app: &AppHandle) -> Result<String, String> {
     #[cfg(target_os = "linux")]
     if let Some(appimage) = app.env().appimage {
-        return path_string(&appimage);
+        return path_string(Path::new(&appimage));
     }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
