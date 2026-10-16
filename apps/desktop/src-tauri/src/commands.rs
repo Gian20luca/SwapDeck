@@ -110,7 +110,15 @@ pub async fn run_action(
     action: CswapAction,
 ) -> Res<Outcome> {
     let api = Arc::clone(&shared.api);
+    let auto = match &action {
+        CswapAction::AutoStart { .. } => Some(true),
+        CswapAction::AutoStop => Some(false),
+        _ => None,
+    };
     let outcome = blocking(move || api.execute(&action)).await?;
+    if let Some(running) = auto {
+        app::set_auto_running(&app, running);
+    }
     app::apply_outcome(&app, &outcome);
     if let Some(cmd) = &outcome.command {
         crate::terminal::open(cmd)?;
@@ -132,7 +140,7 @@ pub struct AppSettingsView {
 pub fn get_app_settings(shared: State<'_, Arc<Shared>>) -> AppSettingsView {
     AppSettingsView {
         autostart: lock(&shared.settings).autostart,
-        autostart_managed: app::autostart_managed(),
+        autostart_managed: crate::autostart::managed(),
         version: env!("CARGO_PKG_VERSION").to_owned(),
     }
 }
@@ -143,10 +151,14 @@ pub fn set_autostart(
     shared: State<'_, Arc<Shared>>,
     enabled: bool,
 ) -> Res<AppSettingsView> {
-    lock(&shared.settings).autostart = enabled;
+    {
+        let mut s = lock(&shared.settings);
+        s.autostart = enabled;
+        s.autostart_saved = true;
+    }
     let failed = |m: String| CswapError::new(CswapErrorKind::Failed, m);
     shared.save_settings().map_err(failed)?;
-    app::apply_autostart(&app, enabled).map_err(failed)?;
+    crate::autostart::apply(&app, enabled).map_err(failed)?;
     Ok(get_app_settings(shared))
 }
 

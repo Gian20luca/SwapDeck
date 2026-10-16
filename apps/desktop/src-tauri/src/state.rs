@@ -25,6 +25,8 @@ pub struct Snapshot {
     pub updated_at_ms: u64,
     /// Motore sospeso (conflitto o pausa): variante «sospeso» dell'icona.
     pub engine_suspended: bool,
+    /// `cswap auto` avviato dall'app è in esecuzione.
+    pub auto_running: bool,
 }
 
 impl Snapshot {

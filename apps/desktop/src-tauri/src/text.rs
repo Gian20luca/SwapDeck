@@ -173,6 +173,25 @@ pub fn switch_failed(lang: Lang, err: &CswapError) -> (String, String) {
     (title.into(), err.message.clone())
 }
 
+/// `cswap auto` avviato dall'app è terminato da solo.
+pub fn auto_ended(lang: Lang, code: Option<i32>, err: Option<&CswapError>) -> (String, String) {
+    let title = match (lang, err.is_some()) {
+        (Lang::It, false) => "Cambio automatico terminato",
+        (Lang::It, true) => "Cambio automatico fermato da un errore",
+        (Lang::En, false) => "Automatic switching ended",
+        (Lang::En, true) => "Automatic switching stopped by an error",
+    };
+    let body = match (err, code) {
+        (Some(e), _) => e.message.clone(),
+        (None, Some(c)) => match lang {
+            Lang::It => format!("cswap auto è uscito con codice {c}."),
+            Lang::En => format!("cswap auto exited with code {c}."),
+        },
+        (None, None) => String::new(),
+    };
+    (title.into(), body)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -219,5 +238,16 @@ mod tests {
             name: "alias3".into(),
         };
         assert_eq!(notice(Lang::En, &s).0, "Active account: alias3");
+    }
+
+    #[test]
+    fn auto_ended_texts() {
+        let err = CswapError::new(CswapErrorKind::Failed, "nessun account");
+        let (t, b) = auto_ended(Lang::It, Some(1), Some(&err));
+        assert_eq!(t, "Cambio automatico fermato da un errore");
+        assert_eq!(b, "nessun account");
+        let (t, b) = auto_ended(Lang::En, Some(0), None);
+        assert_eq!(t, "Automatic switching ended");
+        assert!(b.contains("code 0"));
     }
 }

@@ -3285,16 +3285,17 @@ dependencies = [
 name = "swapdeck-desktop"
 version = "0.1.0"
 dependencies = [
+ "auto-launch",
  "ctrlc",
  "serde",
  "serde_json",
  "swapdeck-core",
  "tauri",
  "tauri-build",
- "tauri-plugin-autostart",
  "tauri-plugin-notification",
  "tauri-plugin-single-instance",
  "tempfile",
+ "win32job",
 ]
 
 [[package]]
@@ -3573,20 +3574,6 @@ dependencies = [
  "serde_json",
  "tauri-utils",
  "walkdir",
-]
-
-[[package]]
-name = "tauri-plugin-autostart"
-version = "2.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "459383cebc193cdd03d1ba4acc40f2c408a7abce419d64bdcd2d745bc2886f70"
-dependencies = [
- "auto-launch",
- "serde",
- "serde_json",
- "tauri",
- "tauri-plugin",
- "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -4418,6 +4405,16 @@ dependencies = [
  "thiserror 2.0.21",
  "windows 0.62.2",
  "windows-core 0.62.2",
+]
+
+[[package]]
+name = "win32job"
+version = "2.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c6a6724ccfbf34154a8691bd868b0fcd2be2ca3f7b47b32614654f1a01b191c"
+dependencies = [
+ "thiserror 1.0.69",
+ "windows 0.61.3",
 ]
 
 [[package]]

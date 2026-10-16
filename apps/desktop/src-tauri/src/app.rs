@@ -4,36 +4,15 @@ use std::sync::Arc;
 
 use swapdeck_core::cswap::ListResponse;
 use tauri::{AppHandle, Emitter, Manager, RunEvent};
-use tauri_plugin_autostart::{MacosLauncher, ManagerExt as _};
 use tauri_plugin_notification::NotificationExt as _;
 
-use crate::api::{CswapApi, Outcome, Res};
+use crate::api::{AutoPoll, CswapApi, Outcome, Res};
+use crate::auto_watch::{AUTO_WATCH_PERIOD, AutoWatcher};
+use crate::autostart::{self, MINIMIZED_ARG, Startup};
 use crate::poller::Poller;
 use crate::settings::SettingsStore;
-use crate::state::{STATE_EVENT, Shared, lock, now_ms};
+use crate::state::{STATE_EVENT, Shared, Snapshot, lock, now_ms};
 use crate::{commands, text, tray, windows};
-
-/// Argomento con cui l'avvio automatico lancia l'app: parte nell'area di notifica, senza finestra.
-pub const MINIMIZED_ARG: &str = "--minimized";
-
-/// L'avvio automatico tocca il sistema solo nelle build di rilascio: in sviluppo l'eseguibile
-/// cambia a ogni build e non va registrato al login.
-pub fn autostart_managed() -> bool {
-    !cfg!(debug_assertions)
-}
-
-pub fn apply_autostart(app: &AppHandle, enabled: bool) -> Result<(), String> {
-    if !autostart_managed() {
-        return Ok(());
-    }
-    let launcher = app.autolaunch();
-    let current = launcher.is_enabled().map_err(|e| e.to_string())?;
-    match (enabled, current) {
-        (true, false) => launcher.enable().map_err(|e| e.to_string()),
-        (false, true) => launcher.disable().map_err(|e| e.to_string()),
-        _ => Ok(()),
-    }
-}
 
 pub fn poller(app: &AppHandle) -> Poller {
     app.state::<Poller>().inner().clone()
@@ -48,21 +27,88 @@ pub fn notify(app: &AppHandle, (title, body): (String, String)) {
 /// Esito di una lettura: aggiorna lo stato, la UI, l'icona e mostra le notifiche.
 pub fn on_list(app: &AppHandle, result: &Res<ListResponse>) {
     let shared = app.state::<Arc<Shared>>();
-    let snap = {
-        let mut s = lock(&shared.snapshot);
+    update_snapshot(app, |s| {
         s.apply(result, now_ms());
-        s.clone()
-    };
-    if let Err(e) = app.emit(STATE_EVENT, &snap) {
-        eprintln!("evento di stato non inviato: {e}");
-    }
-    tray::update(app, &snap);
+        true
+    });
     if let Ok(list) = result {
         let notices = lock(&shared.notifier).observe(list);
         let lang = lock(&shared.settings).lang;
         for n in &notices {
             notify(app, text::notice(lang, n));
         }
+    }
+}
+
+/// Modifica lo stato; se `change` restituisce `true` lo invia alla UI e aggiorna l'icona.
+pub fn update_snapshot(app: &AppHandle, change: impl FnOnce(&mut Snapshot) -> bool) {
+    let shared = app.state::<Arc<Shared>>();
+    let snap = {
+        let mut s = lock(&shared.snapshot);
+        if !change(&mut s) {
+            return;
+        }
+        s.clone()
+    };
+    if let Err(e) = app.emit(STATE_EVENT, &snap) {
+        eprintln!("evento di stato non inviato: {e}");
+    }
+    tray::update(app, &snap);
+}
+
+/// `cswap auto` avviato o fermato dall'app.
+pub fn set_auto_running(app: &AppHandle, running: bool) {
+    update_snapshot(app, |s| {
+        std::mem::replace(&mut s.auto_running, running) != running
+    });
+}
+
+/// Esito del controllo di `cswap auto`: stato nella UI, rilettura dopo un cambio, notifica alla fine.
+fn on_auto_poll(app: &AppHandle, poll: &AutoPoll) {
+    match poll {
+        AutoPoll::NotRunning => set_auto_running(app, false),
+        AutoPoll::Running { switched } => {
+            set_auto_running(app, true);
+            if *switched {
+                poller(app).refresh();
+            }
+        }
+        AutoPoll::Ended { code, error } => {
+            set_auto_running(app, false);
+            poller(app).refresh();
+            let lang = lock(&app.state::<Arc<Shared>>().settings).lang;
+            notify(app, text::auto_ended(lang, *code, error.as_ref()));
+        }
+    }
+}
+
+/// Avvio automatico all'avvio dell'app: forzato solo al primo avvio, poi vale il sistema.
+fn sync_autostart(app: &AppHandle, shared: &Shared) {
+    let saved = lock(&shared.settings).autostart_saved;
+    let plan = autostart::startup_plan(autostart::managed(), shared.store.is_persistent(), saved);
+    let enabled = match plan {
+        Startup::Skip => return,
+        Startup::Enable => autostart::apply(app, true).map(|()| true),
+        Startup::Adopt => autostart::is_enabled(app).and_then(|on| {
+            // Riscrive la voce attiva: percorso aggiornato e tra virgolette.
+            if on {
+                autostart::apply(app, true)?;
+            }
+            Ok(on)
+        }),
+    };
+    match enabled {
+        Ok(on) => {
+            {
+                let mut s = lock(&shared.settings);
+                s.autostart = on;
+                s.autostart_saved = true;
+            }
+            if let Err(e) = shared.save_settings() {
+                eprintln!("config non salvata: {e}");
+            }
+        }
+        Err(e) => eprintln!("avvio automatico non aggiornato: {e}"),
     }
 }
 
@@ -81,7 +127,6 @@ pub fn run(api: Arc<dyn CswapApi>) {
     }
     let start_hidden = std::env::args().any(|a| a == MINIMIZED_ARG);
     let interval = settings.poll_interval;
-    let autostart = settings.autostart;
     let shared = Arc::new(Shared::new(api, store, settings));
 
     let app = tauri::Builder::default()
@@ -90,10 +135,6 @@ pub fn run(api: Arc<dyn CswapApi>) {
             windows::show_main(app);
         }))
         .plugin(tauri_plugin_notification::init())
-        .plugin(tauri_plugin_autostart::init(
-            MacosLauncher::LaunchAgent,
-            Some(vec![MINIMIZED_ARG]),
-        ))
         .manage(Arc::clone(&shared))
         .invoke_handler(tauri::generate_handler![
             commands::list_accounts,
@@ -110,14 +151,18 @@ pub fn run(api: Arc<dyn CswapApi>) {
         .on_window_event(windows::on_window_event)
         .setup(move |app| {
             let handle = app.handle().clone();
-            if let Err(e) = apply_autostart(&handle, autostart) {
-                eprintln!("avvio automatico non aggiornato: {e}");
-            }
+            sync_autostart(&handle, &shared);
             tray::create(&handle)?;
             let cb = handle.clone();
             let (poller, _thread) =
                 Poller::spawn(Arc::clone(&shared.api), interval, move |r| on_list(&cb, r));
             app.manage(poller);
+            let cb = handle.clone();
+            let (watcher, _thread) =
+                AutoWatcher::spawn(Arc::clone(&shared.api), AUTO_WATCH_PERIOD, move |p| {
+                    on_auto_poll(&cb, p);
+                });
+            app.manage(watcher);
             if !start_hidden {
                 windows::show_main(&handle);
             }
@@ -137,6 +182,11 @@ pub fn run(api: Arc<dyn CswapApi>) {
             api, code: None, ..
         } => api.prevent_exit(),
         RunEvent::Exit => {
+            // Tauri non rilascia lo stato gestito: `cswap auto` va fermato qui, prima del ciclo.
+            if let Some(w) = app.try_state::<AutoWatcher>() {
+                w.stop();
+            }
+            app.state::<Arc<Shared>>().api.shutdown();
             if let Some(p) = app.try_state::<Poller>() {
                 p.stop();
             }

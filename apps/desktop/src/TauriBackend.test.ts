@@ -33,7 +33,7 @@ function setup(responses: Record<string, unknown> = {}) {
   const emit = (snap: Partial<Snapshot>) =>
     handlers.forEach((h) =>
       h({
-        payload: { list: null, error: null, updatedAtMs: 1, engineSuspended: false, ...snap },
+        payload: { list: null, error: null, updatedAtMs: 1, engineSuspended: false, autoRunning: false, ...snap },
       }),
     );
   return { backend: new TauriBackend(invoke, listen), calls, emit, unlisten, listen };

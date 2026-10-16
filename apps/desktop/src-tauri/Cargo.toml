@@ -19,15 +19,19 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 swapdeck-core = { path = "../../../crates/swapdeck-core" }
 tauri = { version = "2.12.4", features = ["tray-icon"] }
-tauri-plugin-autostart = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-single-instance = "2"
+auto-launch = "0.5"
+
+[target.'cfg(windows)'.dependencies]
+win32job = "2.0.3"
 
 [dev-dependencies]
 tempfile = "3.27.0"
 
 [features]
 # Incorpora la pagina compilata (`apps/desktop/dist`) invece di usare il server di Vite.
+# Obbligatoria in rilascio (`compile_error!` in main.rs); `tauri build` la attiva da solo.
 custom-protocol = ["tauri/custom-protocol"]
 
 [lints]

@@ -26,6 +26,8 @@ export interface Snapshot {
   error: CswapError | null;
   updatedAtMs: number;
   engineSuspended: boolean;
+  /** `cswap auto` avviato dall'app è in esecuzione. */
+  autoRunning: boolean;
 }
 
 /** Esito di `run_action` (`Outcome` del Rust). */

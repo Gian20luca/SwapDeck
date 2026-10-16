@@ -22,6 +22,8 @@ pub struct Settings {
     pub lang: Lang,
     /// Avvio automatico al login: attivo di default.
     pub autostart: bool,
+    /// La chiave `autostart` c'era nella config (altrimenti è il primo avvio).
+    pub autostart_saved: bool,
     /// Ultima posizione del mini-widget, in pixel fisici.
     pub mini_position: Option<(i32, i32)>,
 }
@@ -56,6 +58,11 @@ impl Settings {
                 .get(KEY_AUTOSTART)
                 .and_then(Value::as_bool)
                 .unwrap_or(true),
+            autostart_saved: c
+                .extra
+                .get(KEY_AUTOSTART)
+                .and_then(Value::as_bool)
+                .is_some(),
             mini_position: mini_position(c.extra.get(KEY_MINI)),
         }
     }
@@ -89,6 +96,11 @@ impl SettingsStore {
 
     pub fn at(paths: AppPaths) -> Self {
         Self { paths: Some(paths) }
+    }
+
+    /// `false` se le impostazioni restano solo in memoria (config non valida o home sconosciuta).
+    pub fn is_persistent(&self) -> bool {
+        self.paths.is_some()
     }
 
     fn file(&self) -> Option<PathBuf> {
@@ -158,6 +170,8 @@ mod tests {
         )
         .unwrap();
         let (store, mut s, _) = SettingsStore::at(paths.clone()).read();
+        assert!(store.is_persistent());
+        assert!(!s.autostart_saved, "primo avvio: chiave assente");
         assert_eq!(s.poll_interval, Duration::from_secs(120));
         assert_eq!(s.lang, Lang::En);
         s.autostart = false;
@@ -165,6 +179,7 @@ mod tests {
         store.save(&s).unwrap();
         let (_, again, _) = SettingsStore::at(paths.clone()).read();
         assert!(!again.autostart);
+        assert!(again.autostart_saved);
         assert_eq!(again.mini_position, Some((-1200, 40)));
         let text = std::fs::read_to_string(paths.config_file()).unwrap();
         assert!(

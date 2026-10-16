@@ -3,8 +3,17 @@
 // In rilascio niente console su Windows (vedi HANDOFF: output di --headless).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+// Un binario di rilascio non deve mai caricare la pagina dal server di sviluppo (`devUrl`):
+// `dev` lo definisce tauri-build quando manca `tauri/custom-protocol`.
+#[cfg(all(dev, not(debug_assertions)))]
+compile_error!(
+    "build di rilascio senza custom-protocol: usare `--features custom-protocol` o `tauri build`"
+);
+
 mod api;
 mod app;
+mod auto_watch;
+mod autostart;
 mod commands;
 mod notify;
 mod poller;

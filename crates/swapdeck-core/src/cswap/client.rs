@@ -901,6 +901,13 @@ impl AutoProcess {
         self.child.as_ref().map(Child::id)
     }
 
+    /// Handle del processo figlio, finché non è uscito (per esempio per metterlo in un Job Object).
+    #[cfg(windows)]
+    pub fn raw_handle(&self) -> Option<std::os::windows::io::RawHandle> {
+        use std::os::windows::io::AsRawHandle;
+        self.child.as_ref().map(AsRawHandle::as_raw_handle)
+    }
+
     /// Codice di uscita se è terminato (`Some(None)` = terminato da un segnale).
     /// Dopo l'uscita il processo non si tocca più.
     pub fn try_exit(&mut self) -> Option<Option<i32>> {
