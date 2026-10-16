@@ -22,11 +22,13 @@ Entrambe usano lo stesso motore (Rust) e la stessa config, e coprono i comandi d
 
 Scarica gli asset dalla pagina Releases del repo (serve essere loggati con un account abilitato).
 
-| Sistema | App                                        | Estensione VS Code                    |
-| ------- | ------------------------------------------ | ------------------------------------- |
-| Windows | installer `.exe` (NSIS, per utente)        | `.vsix` `win32-x64`                   |
-| Linux   | `.AppImage` (si aggiorna da sola) o `.deb` | `.vsix` della tua piattaforma         |
-| macOS   | `.dmg` (Apple Silicon o Intel)             | `.vsix` `darwin-arm64` / `darwin-x64` |
+| Sistema | App                                                                                          | Installata in                                        | Estensione VS Code                                                                            |
+| ------- | -------------------------------------------------------------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Windows | `SwapDeck_<versione>_x64-setup.exe` (NSIS, per utente)                                       | `%LOCALAPPDATA%\SwapDeck`                            | `swapdeck-vscode-win32-x64-<versione>.vsix`                                                   |
+| Linux   | `SwapDeck_<versione>_amd64.AppImage` (si aggiorna da sola) o `SwapDeck_<versione>_amd64.deb` | dove metti l'AppImage; `/usr/bin` con il `.deb`      | `swapdeck-vscode-linux-x64-<versione>.vsix`                                                   |
+| macOS   | `SwapDeck_<versione>_aarch64.dmg` (Apple Silicon) o `SwapDeck_<versione>_x64.dmg` (Intel)    | `/Applications/SwapDeck.app` (trascinata dal `.dmg`) | `swapdeck-vscode-darwin-arm64-<versione>.vsix` o `swapdeck-vscode-darwin-x64-<versione>.vsix` |
+
+L'installazione contiene `swapdeck` e `swapdeck-cli` (su macOS in `SwapDeck.app/Contents/MacOS/`). `swapdeck-cli` c'è anche come file a sé nelle release, con il target nel nome (per esempio `swapdeck-cli-x86_64-pc-windows-msvc.exe`, `swapdeck-cli-x86_64-unknown-linux-gnu`, `swapdeck-cli-aarch64-apple-darwin`).
 
 Estensione: `code --install-extension swapdeck-vscode-<piattaforma>-<versione>.vsix`, oppure «Estensioni» → «...» → «Installa da VSIX...». Poi «Ricarica finestra».
 
@@ -43,7 +45,7 @@ Aggiornamenti automatici: spenti di default finché il repo è privato; si scari
 1. SwapDeck cerca `cswap`. Se non lo trova propone di installare `uv` e `claude-swap` **per utente** (con conferma): nessun admin, nessun file di sistema.
 2. Controlla la versione installata contro l'ultima su PyPI; se ce n'è una nuova avvisa e aggiorna con conferma (`uv tool upgrade claude-swap`).
 3. Se non hai ancora account, aggiungili dalla dashboard (equivale a `cswap add`).
-4. L'app parte da sola al login (disattivabile in config).
+4. L'app parte da sola al login (si spegne con `"autostart": false` in `config.json`).
 
 ## Dashboard, mini-widget e notifiche
 
@@ -70,17 +72,20 @@ Cambia account al posto tuo. È **spento di default**.
 | `returnToPrimary`       | torna al principale dopo il suo reset                                 | `true`          |
 | `returnHysteresis`      | punti sotto la soglia richiesti al principale per tornarci (isteresi) | 10              |
 | `minSwitchGapSecs`      | pausa minima tra due cambi                                            | 300             |
-| `pollIntervalSeconds`   | intervallo di controllo                                               | 60              |
+| `maxUsageAgeSecs`       | età massima di un consumo per fidarsene                               | 900             |
+| `ignoredConflicts`      | id dei conflitti da ignorare (vedi sotto), senza maiuscole/minuscole  | vuoto           |
 
-Se la riserva scelta è al limite si passa alla successiva. Le regole stanno nella sezione `engine` di `config.json` (si rileggono all'avvio) e si leggono/scrivono anche con `swapdeck-cli config get|set`.
+L'intervallo di controllo non sta in `engine` ma in cima alla config: `pollIntervalSeconds` (default e minimo 60, in secondi).
+
+Se la riserva scelta è al limite si passa alla successiva. L'isteresi vale solo sulle finestre che hanno fatto lasciare il principale (5 ore, 7 giorni o entrambe). Le regole stanno nella sezione `engine` di `config.json`, l'app e il processo headless le rileggono a ogni giro, e si leggono/scrivono anche dalla scheda «Regole» o con `swapdeck-cli config get|set`.
 
 **Un solo motore per utente.** Un lock impedisce che app, finestra VS Code o processo headless cambino account insieme: chi non ha il lock resta in osservazione.
 
-**Stato «sospeso» e conflitti.** Se rileva `cswap auto` in esecuzione o un'attività, timer, cron o LaunchAgent che richiama `cswap` (per esempio un vecchio guard), il motore si **sospende** da solo: icona «sospeso», riga nel tooltip e avviso sopra la dashboard. Non è un errore: evita due automatismi che si contraddicono. Per riattivarlo ferma l'altro automatismo (vedi [la guida dal cswap-guard](docs/GUIDA-DA-CSWAP-GUARD.md)). Provare prima in sola osservazione (`dryRun`) è sempre sicuro.
+**Stato «sospeso» e conflitti.** Se rileva `cswap auto` in esecuzione o un'attività, timer, cron o LaunchAgent che richiama `cswap` (per esempio un vecchio guard), il motore si **sospende** da solo: icona «sospeso», riga nel tooltip e avviso sopra la dashboard. Non è un errore: evita due automatismi che si contraddicono. Per riattivarlo ferma l'altro automatismo (vedi [la guida dal cswap-guard](docs/GUIDA-DA-CSWAP-GUARD.md)). Conta un'attività o un timer che cita `cswap` o `claude-swap` nel nome o nel comando; un'attività disabilitata dà solo un avviso. Per ignorare un conflitto noto si mette il suo id (per esempio `task:cswap-guard`) in `ignoredConflicts`. Provare prima in sola osservazione (`dryRun`) è sempre sicuro.
 
 ## Modalità senza interfaccia
 
-Per attività pianificate, server e WSL: `swapdeck-cli headless` (nel `.vsix` in `bin/` e come file separato nelle release; l'app ha anche `swapdeck --headless`, ma su Windows non ha console).
+Per attività pianificate, server e WSL: `swapdeck-cli headless` (accanto all'app installata, nel `.vsix` in `bin/` e come file separato nelle release). L'app accetta anche `swapdeck --headless` con le stesse opzioni: su Windows non apre console né stampa nulla, quindi va bene per un'attività pianificata che non deve far comparire finestre.
 
 ```
 swapdeck-cli headless [--once] [--dry-run]
@@ -100,7 +105,7 @@ Codici di uscita: 0 ok, 1 errore, 2 uso errato, 3 lock occupato (un altro motore
 | Linux   | `~/.config/swapdeck` e `~/.local/share/swapdeck` |
 | macOS   | `~/Library/Application Support/swapdeck`         |
 
-Contengono `config.json`, il lock del motore (`engine.lock`) e lo storico dei consumi. Con `SWAPDECK_HOME` (percorso assoluto) si usa un'altra radice, utile per le prove. Le credenziali restano quelle di `cswap`.
+Contengono `config.json`, il lock del motore (`engine.lock`, nella cartella dati) e lo storico dei consumi. Con `SWAPDECK_HOME` (percorso assoluto) si usa un'altra radice, con `config/` e `data/` sotto, utile per le prove. Le credenziali restano quelle di `cswap`.
 
 ## Problemi comuni
 

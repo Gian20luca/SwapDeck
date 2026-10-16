@@ -13,24 +13,28 @@ Per chi oggi ha uno script (per esempio `cswap-guard.ps1`) lanciato ogni pochi m
 | account non utilizzabile se 7d >= 98% | `sevenDayThreshold: 98` |
 | riserva al limite: passa all'altra | automatico (si passa alla successiva) |
 | ritorno al principale dopo il reset (5h sotto il 50%) | `returnToPrimary: true`, `returnHysteresis: 45` |
-| giro ogni 2 minuti | `pollIntervalSeconds: 120` |
+| giro ogni 2 minuti | `pollIntervalSeconds: 120` (in cima alla config, fuori da `engine`) |
 
 Preset «come cswap-guard» (numeri di esempio, sostituisci con i tuoi), in un file `preset.json`:
 
 ```json
-{"engine":{"primary":6,"reserves":[1,3],"reserveCriterion":"lowest-weekly","fiveHourThreshold":95,"sevenDayThreshold":98,"returnToPrimary":true,"returnHysteresis":45,"pollIntervalSeconds":120,"dryRun":true}}
+{"pollIntervalSeconds":120,"engine":{"primary":6,"reserves":[1,3],"reserveCriterion":"lowest-weekly","fiveHourThreshold":95,"sevenDayThreshold":98,"returnToPrimary":true,"returnHysteresis":45,"dryRun":true}}
 ```
 
-Applicalo con `swapdeck-cli config set -` leggendo da stdin (PowerShell: `Get-Content preset.json -Raw | swapdeck-cli config set -`; bash: `swapdeck-cli config set - < preset.json`). Il comando fa un merge patch: tocca solo i campi indicati. `dryRun: true` è voluto (passo 2).
+Applicalo con `swapdeck-cli config set -` leggendo da stdin (PowerShell: `Get-Content preset.json -Raw | swapdeck-cli config set -`; bash: `swapdeck-cli config set - < preset.json`). Il comando fa un merge patch: tocca solo i campi indicati. `dryRun: true` è voluto (passo 2). Nell'app il pulsante «Preset come cswap-guard» della scheda Regole imposta gli stessi valori di `engine` tranne `dryRun`; l'intervallo resta quello delle preferenze.
 
-Differenze note: SwapDeck aggiunge una pausa minima tra due cambi (`minSwitchGapSecs`, 300) e scarta consumi più vecchi di `maxUsageAgeSecs` (900); il guard no. Il ritorno usa «punti sotto la soglia»: 95 - 45 = 50, come il guard.
+Differenze note:
+
+- SwapDeck aggiunge una pausa minima tra due cambi (`minSwitchGapSecs`, 300) e scarta consumi più vecchi di `maxUsageAgeSecs` (900); il guard no.
+- Il ritorno usa «punti sotto la soglia» (5h sotto 95 - 45 = 50, come il guard) e aspetta l'ora di reset del principale.
+- L'isteresi vale solo sulle finestre che hanno fatto lasciare il principale: se è uscito per la settimana (7d >= 98), SwapDeck torna con 7d sotto 53 (98 - 45) e 5h sotto 95; il guard torna appena 7d < 98 e 5h < 50.
 
 ## 2. Prova in sola osservazione
 
 1. Lascia il guard com'è. Con il guard attivo il motore si **sospende**: è voluto (due automatismi insieme si contraddirebbero) e non è un errore.
-2. Per vedere le decisioni durante la prova, ignora il conflitto solo temporaneamente: aggiungi `"ignoredConflicts":["task:cswap-guard"]` alla sezione `engine` (l'id esatto è nell'avviso sopra la dashboard) e tieni `dryRun: true`. In sola osservazione SwapDeck non cambia mai account.
+2. Per vedere le decisioni durante la prova, ignora il conflitto solo temporaneamente: aggiungi `"ignoredConflicts":["task:cswap-guard"]` alla sezione `engine` (l'id esatto, `task:` seguito dal percorso dell'attività, è nell'avviso sopra la dashboard; maiuscole e minuscole non contano) e tieni `dryRun: true`. In sola osservazione SwapDeck non cambia mai account.
 3. Confronta per qualche giorno: storico e righe del motore (`swapdeck-cli headless --once --dry-run`) dicono cosa SwapDeck avrebbe fatto; il log del guard dice cosa ha fatto lui. Le decisioni devono coincidere (salvo la pausa tra due cambi).
-4. Finita la prova togli `ignoredConflicts`.
+4. Finita la prova togli il conflitto da `ignoredConflicts` (passo 4).
 
 ## 3. Come far girare il motore
 
@@ -42,23 +46,27 @@ Installa l'app, tieni l'avvio automatico al login e porta `enabled: true` e `dry
 
 ### B. Attività pianificata o servizio utente con `swapdeck-cli headless`
 
-Senza interfaccia e senza app. Usa `--once` con uno scheduler, oppure il ciclo continuo con un servizio. Sostituisci i percorsi del binario con i tuoi.
+Senza interfaccia. Usa `--once` con uno scheduler, oppure il ciclo continuo con un servizio. Dove sta il binario:
 
-**Windows** (per utente, senza admin), un giro ogni 2 minuti:
+- Windows: `%LOCALAPPDATA%\SwapDeck` dopo l'installer, con `swapdeck.exe` e `swapdeck-cli.exe`;
+- Linux: `/usr/bin/swapdeck-cli` con il `.deb`, oppure il file `swapdeck-cli-x86_64-unknown-linux-gnu` della release copiato in `~/.local/bin/swapdeck-cli` e reso eseguibile;
+- macOS: `/Applications/SwapDeck.app/Contents/MacOS/swapdeck-cli`, oppure il file `swapdeck-cli-<arch>-apple-darwin` della release.
+
+**Windows** (per utente, senza admin), un giro ogni 2 minuti. `swapdeck-cli.exe` è un programma da console e a ogni giro farebbe comparire una finestra: nell'attività conviene `swapdeck.exe --headless --once`, stesse opzioni e nessuna finestra. Da `cmd`:
 
 ```
-schtasks /Create /SC MINUTE /MO 2 /TN "SwapDeck" /TR "\"%LOCALAPPDATA%\Programs\swapdeck\swapdeck-cli.exe\" headless --once" /F
+schtasks /Create /SC MINUTE /MO 2 /TN "SwapDeck" /TR "\"%LOCALAPPDATA%\SwapDeck\swapdeck.exe\" --headless --once" /F
 ```
 
 Oppure con PowerShell:
 
 ```powershell
-$a = New-ScheduledTaskAction -Execute "$env:LOCALAPPDATA\Programs\swapdeck\swapdeck-cli.exe" -Argument "headless --once"
+$a = New-ScheduledTaskAction -Execute "$env:LOCALAPPDATA\SwapDeck\swapdeck.exe" -Argument "--headless --once"
 $t = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 2)
 Register-ScheduledTask -TaskName "SwapDeck" -Action $a -Trigger $t
 ```
 
-Il nome dell'attività non deve contenere `cswap`, altrimenti SwapDeck la scambia per un guard e si sospende.
+Né il nome dell'attività né il programma o gli argomenti devono contenere `cswap` o `claude-swap`: SwapDeck guarda tutti e tre, la scambierebbe per un guard e si sospenderebbe. Lo stesso vale per il nome del timer e l'`ExecStart` del suo servizio su Linux, per le righe di crontab e per l'etichetta del LaunchAgent su macOS.
 
 **Linux** (`systemd --user`), file `~/.config/systemd/user/swapdeck.service`:
 
@@ -101,20 +109,20 @@ loginctl enable-linger "$USER"   # facoltativo: parte anche senza login
 launchctl load ~/Library/LaunchAgents/it.example.swapdeck.plist
 ```
 
-L'etichetta non deve contenere `cswap` (stessa ragione di Windows).
+L'etichetta non deve contenere `cswap` né `claude-swap` (stessa ragione di Windows).
 
 ## 4. Passaggio definitivo
 
 Solo quando la prova combacia.
 
-1. Disattiva il vecchio guard, senza cancellarlo: `schtasks /Change /TN "cswap-guard" /DISABLE` (Windows), oppure disabilita il timer, il cron o il LaunchAgent equivalente. Conserva lo script.
-2. Togli `ignoredConflicts` se ancora presente (dalla scheda Regole o nella config: l'app e il processo headless rileggono le regole al giro successivo, senza riavvio): lo stato «sospeso» sparisce.
-3. Accendi il motore: `swapdeck-cli config set '{"engine":{"enabled":true,"dryRun":false}}'`.
+1. Disattiva il vecchio guard, senza cancellarlo: `schtasks /Change /TN "cswap-guard" /DISABLE` (Windows), oppure disabilita il timer, il cron o il LaunchAgent equivalente. Conserva lo script. Un'attività disabilitata resta come semplice avviso, senza sospendere il motore.
+2. Togli il conflitto da `ignoredConflicts` (dalla scheda Regole, oppure `{"engine":{"ignoredConflicts":[]}}` con `config set`): l'app e il processo headless rileggono le regole al giro successivo, senza riavvio.
+3. Accendi il motore con `{"engine":{"enabled":true,"dryRun":false}}`: in PowerShell `'{"engine":{"enabled":true,"dryRun":false}}' | swapdeck-cli config set -` (Windows PowerShell 5.1 toglie le virgolette dagli argomenti, lo stdin no); in bash `swapdeck-cli config set '{"engine":{"enabled":true,"dryRun":false}}'`.
 4. Verifica dalla dashboard o con `swapdeck-cli engine status` che il motore sia attivo e senza conflitti.
 
 ## 5. Tornare indietro
 
-1. Spegni SwapDeck: `swapdeck-cli config set '{"engine":{"enabled":false}}'` e ferma l'attività o il servizio di SwapDeck.
+1. Spegni SwapDeck con `{"engine":{"enabled":false}}` (stessa forma del passo 4.3) e ferma l'attività o il servizio di SwapDeck.
 2. Riabilita il vecchio guard: `schtasks /Change /TN "cswap-guard" /ENABLE`.
 
 Con il guard riattivato e SwapDeck spento non c'è conflitto e `cswap` resta quello di sempre.
