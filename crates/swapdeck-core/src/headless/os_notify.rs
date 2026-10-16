@@ -263,7 +263,10 @@ mod tests {
         ));
         // Bus e display.
         assert!(graphical_session(
-            env_of(&[("DBUS_SESSION_BUS_ADDRESS", "unix:path=/x"), ("DISPLAY", ":0")]),
+            env_of(&[
+                ("DBUS_SESSION_BUS_ADDRESS", "unix:path=/x"),
+                ("DISPLAY", ":0")
+            ]),
             none
         ));
         // Servizio utente: bus dal socket di XDG_RUNTIME_DIR, Wayland o tipo di sessione.

@@ -13,7 +13,11 @@ export const DEACTIVATE_GRACE_MS = 4000;
 /** `headless::exit_code::LOCK_BUSY` del core: il motore gira già altrove (altra finestra o app). */
 export const LOCK_BUSY_EXIT = 3;
 /** Argomenti del motore: `--notify=stdout` evita il doppione con le notifiche di sistema. */
-export const ENGINE_ARGS: readonly string[] = ['headless', '--stop-on-stdin-eof', '--notify=stdout'];
+export const ENGINE_ARGS: readonly string[] = [
+  'headless',
+  '--stop-on-stdin-eof',
+  '--notify=stdout',
+];
 /** Riga più lunga inoltrata al log (il resto si scarta). */
 const MAX_LINE = 4096;
 

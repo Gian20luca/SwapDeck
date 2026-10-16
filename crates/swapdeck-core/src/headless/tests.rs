@@ -716,7 +716,10 @@ fn notify_channel_routes_to_os_stdout_or_both() {
         .collect();
     for (e, (title, severity)) in events.iter().zip(&shown) {
         assert_eq!(e["notification"]["title"]["it"], title.as_str());
-        assert_eq!(e["notification"]["severity"], serde_json::to_value(severity).unwrap());
+        assert_eq!(
+            e["notification"]["severity"],
+            serde_json::to_value(severity).unwrap()
+        );
     }
 
     let (_, shown, out) = run_os(NotifyChannel::Stdout, Ok(OsOutcome::Shown));

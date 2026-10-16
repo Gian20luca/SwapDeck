@@ -302,7 +302,12 @@ fn headless_rejects_unknown_notify_channel() {
 fn headless_stops_when_stdin_closes() {
     let env = Env::new();
     let mut child = env
-        .command(&["headless", "--dry-run", "--stop-on-stdin-eof", "--notify=stdout"])
+        .command(&[
+            "headless",
+            "--dry-run",
+            "--stop-on-stdin-eof",
+            "--notify=stdout",
+        ])
         .stdin(Stdio::piped())
         .spawn()
         .unwrap();
