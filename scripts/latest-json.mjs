@@ -8,9 +8,11 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
+// Linux: chiave per installatore, perché si aggiorna solo l'AppImage (un .deb cerca
+// `linux-x86_64-deb`, non la trova e resta com'è).
 const PLATFORMS = [
   ['windows-x86_64', /_x64-setup\.exe$/],
-  ['linux-x86_64', /_amd64\.AppImage$/],
+  ['linux-x86_64-appimage', /_amd64\.AppImage$/],
   ['darwin-aarch64', /^SwapDeck_aarch64\.app\.tar\.gz$/],
   ['darwin-x86_64', /^SwapDeck_x64\.app\.tar\.gz$/],
 ];

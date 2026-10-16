@@ -49,6 +49,10 @@ jobs:
             {"family":"macos","os":"macos-latest","target":"aarch64-apple-darwin","bundles":"app,dmg"},
             {"family":"macos","os":"macos-latest","target":"x86_64-apple-darwin","bundles":"app,dmg"}
           ]'
+          if [ "$DRY_RUN" != true ] && [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "::error::una release vera parte solo da un tag v*"
+            exit 1
+          fi
           if [ "$PLATFORMS" != tutte ] && [ "$DRY_RUN" != true ]; then
             echo "::error::una release vera richiede tutte le piattaforme"
             exit 1
@@ -72,7 +76,7 @@ jobs:
     env:
       TARGET: ${{ matrix.target }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Dipendenze di sistema (webkit2gtk, AppImage)
         if: runner.os == 'Linux'
@@ -82,15 +86,15 @@ jobs:
             libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev \
             patchelf file libfuse2
 
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: release-${{ matrix.target }}
 
@@ -111,10 +115,10 @@ jobs:
           cp "target/$TARGET/release/swapdeck-cli$ext" "out/cli/swapdeck-cli-$TARGET$ext"
           echo "has=true" >> "$GITHUB_OUTPUT"
 
+      # Senza la chiave dell'updater: la compilazione (e `beforeBuildCommand`) non vede segreti;
+      # gli artefatti dell'updater si firmano dopo, in uno step a parte.
       - name: App Tauri
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           HAS_CLI: ${{ steps.cli.outputs.has }}
         run: |
           # Config di rilascio, con swapdeck-cli come binario esterno se c'è.
@@ -133,17 +137,35 @@ jobs:
           arch="${TARGET%%-*}"; [ "$arch" = x86_64 ] && arch=x64
           mkdir -p out
           case "$TARGET" in
-            *windows*) cp "$b"/nsis/*-setup.exe "$b"/nsis/*-setup.exe.sig out/ ;;
-            *linux*) cp "$b"/appimage/*.AppImage "$b"/appimage/*.AppImage.sig "$b"/deb/*.deb out/ ;;
+            *windows*) cp "$b"/nsis/*-setup.exe out/ ;;
+            *linux*) cp "$b"/appimage/*.AppImage "$b"/deb/*.deb out/ ;;
             *apple*)
               cp "$b"/dmg/*.dmg out/
-              cp "$b/macos/SwapDeck.app.tar.gz" "out/SwapDeck_${arch}.app.tar.gz"
-              cp "$b/macos/SwapDeck.app.tar.gz.sig" "out/SwapDeck_${arch}.app.tar.gz.sig"
+              # Archivio dell'updater come quello di tauri-bundler: `SwapDeck.app/` alla radice,
+              # senza i file `._*` dei metadati macOS.
+              COPYFILE_DISABLE=1 tar -czf "out/SwapDeck_${arch}.app.tar.gz" -C "$b/macos" SwapDeck.app
               ;;
           esac
+
+      - name: Firma per l'updater
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(out/*-setup.exe out/*.AppImage out/*.app.tar.gz)
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "::error::atteso un solo pacchetto dell'updater, trovati ${#files[@]}"
+            exit 1
+          fi
+          v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          # `pnpm --filter` lavora in apps/desktop: percorso relativo da lì.
+          pnpm --filter @swapdeck/desktop exec tauri signer sign --app-version "$v" "../../${files[0]}" >/dev/null
+          test -s "${files[0]}.sig"
           ls -la out out/cli 2>/dev/null || true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: app-${{ matrix.target }}
           path: out/
@@ -160,14 +182,14 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: app-*
           path: artifacts
@@ -187,7 +209,7 @@ jobs:
           darwin-x64 x86_64-apple-darwin
           EOF
           ls -la apps/vscode/dist/*.vsix
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: vsix
           path: apps/vscode/dist/*.vsix
@@ -209,16 +231,25 @@ jobs:
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || github.event_name == 'push' && github.ref_type != 'tag' }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts
       - name: Versione e tag
         id: ver
         run: |
           v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          if [ "$DRY_RUN" != true ] && [ "$GITHUB_REF_TYPE" != tag ]; then
+            echo "::error::una release vera parte solo da un tag v*"
+            exit 1
+          fi
           if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$v" ]; then
             echo "::error::il tag $GITHUB_REF_NAME non corrisponde alla versione $v di Cargo.toml"
+            exit 1
+          fi
+          vs="$(node -p 'require("./apps/vscode/package.json").version')"
+          if [ "$vs" != "$v" ]; then
+            echo "::error::apps/vscode/package.json ha la versione $vs, Cargo.toml $v"
             exit 1
           fi
           echo "version=$v" >> "$GITHUB_OUTPUT"
@@ -233,7 +264,7 @@ jobs:
           ls -la assets
       - name: Artefatti della prova
         if: env.DRY_RUN == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-dry-run
           path: assets/
@@ -244,6 +275,12 @@ jobs:
           TAG: ${{ steps.ver.outputs.tag }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
+            # Si ricarica solo una bozza: una release pubblicata non si tocca.
+            draft="$(gh release view "$TAG" --json isDraft --jq .isDraft)"
+            if [ "$draft" != true ]; then
+              echo "::error::la release $TAG è già pubblicata: asset non sostituiti"
+              exit 1
+            fi
             gh release upload "$TAG" assets/* --clobber
           else
             gh release create "$TAG" assets/* --draft --target "$GITHUB_SHA" \

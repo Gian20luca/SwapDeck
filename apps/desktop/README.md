@@ -42,8 +42,8 @@ allo sviluppo; gli installer escono dalla CI con MSVC.
   `pnpm dist:local` in `dist-locale/` (installer NSIS e portatile con `libunwind.dll` e `WebView2Loader.dll`).
 - Updater (`tauri-plugin-updater`, `src-tauri/src/updater.rs`): spento di default finché il repo è
   privato; si accende con `"updates": { "enabled": true }` in `config.json`. Endpoint `latest.json`
-  sulle GitHub Releases, chiave pubblica in `tauri.conf.json`, firma in CI con i segreti
-  `TAURI_SIGNING_PRIVATE_KEY` e `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (copia della chiave in
-  `%USERPROFILE%\.swapdeck-keys\`, fuori dal repo).
+  sulle GitHub Releases, chiave pubblica in `tauri.conf.json`. La CI compila senza segreti e firma
+  dopo, in uno step a parte, con `TAURI_SIGNING_PRIVATE_KEY` e `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+  L'aggiornamento si installa all'uscita e non riapre l'app. Rilascio e chiave: `docs/RILASCIO.md`.
 - Prove con `SWAPDECK_HOME`: la config sta in `<home>\config\config.json`; con `"autostart": false`
   l'app non registra l'avvio automatico (la voce `SwapDeck` di Windows è unica per utente).

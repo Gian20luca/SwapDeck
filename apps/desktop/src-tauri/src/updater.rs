@@ -55,6 +55,14 @@ pub fn spawn(app: &AppHandle) {
                         failures = 0;
                         delay = CHECK_PERIOD;
                     }
+                    // Installazione senza voce in `latest.json` (es. il .deb): niente da fare.
+                    Err(
+                        e @ (tauri_plugin_updater::Error::TargetNotFound(_)
+                        | tauri_plugin_updater::Error::TargetsNotFound(_)),
+                    ) => {
+                        eprintln!("aggiornamenti: non previsti per questa installazione ({e})");
+                        return;
+                    }
                     Err(e) => {
                         eprintln!("aggiornamenti: controllo non riuscito: {e}");
                         delay = retry_delay(failures);
@@ -69,7 +77,12 @@ pub fn spawn(app: &AppHandle) {
 }
 
 async fn fetch(app: &AppHandle) -> tauri_plugin_updater::Result<Option<(Update, Vec<u8>)>> {
-    let updater = app.updater_builder().timeout(REQUEST_TIMEOUT).build()?;
+    // Si installa all'uscita scelta dall'utente («Esci»): l'app non va riaperta.
+    let updater = app
+        .updater_builder()
+        .timeout(REQUEST_TIMEOUT)
+        .restart_after_install(false)
+        .build()?;
     let Some(update) = updater.check().await? else {
         return Ok(None);
     };
@@ -78,7 +91,8 @@ async fn fetch(app: &AppHandle) -> tauri_plugin_updater::Result<Option<(Update, 
     Ok(Some((update, bytes)))
 }
 
-/// All'uscita: installa l'aggiornamento pronto, se c'è (su Windows avvia l'installer e termina).
+/// All'uscita: installa l'aggiornamento pronto, se c'è (su Windows avvia l'installer e termina,
+/// senza riaprire l'app).
 pub fn install_pending(app: &AppHandle) {
     let Some(pending) = app.try_state::<Pending>() else {
         return;
@@ -86,7 +100,7 @@ pub fn install_pending(app: &AppHandle) {
     let Some((update, bytes)) = lock(&pending.0).take() else {
         return;
     };
-    if let Err(e) = update.install(bytes) {
+    if let Err(e) = update.restart_after_install(false).install(bytes) {
         eprintln!("aggiornamenti: installazione non riuscita: {e}");
     }
 }
