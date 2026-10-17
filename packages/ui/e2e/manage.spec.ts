@@ -126,7 +126,7 @@ test('regole: preset «Principale con riserve», salvataggio e conflitto ignorat
 }) => {
   await open(page);
   await tab(page, 'Regole');
-  await page.getByLabel('Mappa attiva').selectOption('priority-reserves');
+  await page.getByLabel('Mappa attiva', { exact: true }).selectOption('priority-reserves');
   await expect(page.getByText('Mappa attiva: Principale con riserve.')).toBeVisible();
   await page.getByLabel('Solo osservazione').check();
   await page.getByRole('button', { name: 'Salva' }).click();
