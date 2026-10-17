@@ -6,11 +6,12 @@ import { useAccounts } from '../../backend/useAccounts.js';
 import { useI18n } from '../../i18n/index.js';
 import { accountName } from '../../lib/account.js';
 import { CheckField, NoticeView, PathField, Section, SelectField } from './common.js';
+import { DiagnosticsSection } from './DiagnosticsSection.js';
 import { Tooltip } from '../Tooltip.js';
 
 const JSON_FILTER = [{ name: 'JSON', extensions: ['json'] }];
 
-/** Strumenti: export e import, credenziali parcheggiate (`unclaimed`) e `purge`. */
+/** Strumenti: export e import, credenziali parcheggiate (`unclaimed`), `purge` e diagnostica. */
 export function ToolsPage() {
   const { t } = useI18n();
   const backend = useBackend();
@@ -219,6 +220,8 @@ export function ToolsPage() {
           </Tooltip>
         </div>
       </Section>
+
+      <DiagnosticsSection />
       {dialog}
     </div>
   );

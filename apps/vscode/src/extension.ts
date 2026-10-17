@@ -73,6 +73,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
   const bundled = bundledCliPath(context.extensionPath, platform);
   await ensureExecutable(bundled, platform).catch(() => undefined);
   const cli = createCliRunner(cliPath);
+  const clientInfo = `VS Code ${vscode.version}, ${String(context.extension.packageJSON.version)}`;
+  // Nel log di SwapDeck (redatto dal core): l'estensione passa dalla CLI, una riga sola.
+  void cli(['log', 'info', '-'], { stdin: `estensione attivata (${clientInfo})` }).catch(
+    (error: unknown) => output.warn(`log: ${toCswapError(error).message}`),
+  );
+  const openFolder = async (dir: string) => {
+    if (!(await vscode.env.openExternal(vscode.Uri.file(dir)))) throw new Error(dir);
+  };
+  const copyText = async (text: string) => vscode.env.clipboard.writeText(text);
 
   let state: CliState | undefined;
   let timer: NodeJS.Timeout | undefined;
@@ -198,6 +207,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
             : t('SwapDeck: upgrade claude-swap with "uv tool upgrade claude-swap"?');
         return (await vscode.window.showWarningMessage(label, { modal: true }, ok)) === ok;
       },
+      clientInfo,
+      openFolder,
+      copyText,
       pauseEngine: async () => {
         if (!engine.running) return () => undefined;
         output.info('[motore] arresto per l’aggiornamento di cswap');
@@ -468,6 +480,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     vscode.commands.registerCommand('swapdeck.switchMap', () => pickMap()),
     vscode.commands.registerCommand('swapdeck.startEngine', () => setEngine(true)),
     vscode.commands.registerCommand('swapdeck.stopEngine', () => setEngine(false)),
+    vscode.commands.registerCommand('swapdeck.copyDiagnostics', async () => {
+      try {
+        const { text } = await cli<{ text: string }>([
+          'diagnostics',
+          '--json',
+          '--client',
+          clientInfo,
+        ]);
+        await copyText(text);
+        void vscode.window.showInformationMessage(
+          t('SwapDeck: diagnostics copied to the clipboard.'),
+        );
+      } catch (error) {
+        void vscode.window.showErrorMessage(toCswapError(error).message);
+      }
+    }),
+    vscode.commands.registerCommand('swapdeck.openLogsFolder', async () => {
+      try {
+        const { dir } = await cli<{ dir: string }>(['logs', 'dir']);
+        await openFolder(dir);
+      } catch (error) {
+        void vscode.window.showErrorMessage(toCswapError(error).message);
+      }
+    }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration(SECTION)) return;
       if (

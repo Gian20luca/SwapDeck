@@ -5,6 +5,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { StringDecoder } from 'node:string_decoder';
 import type { Readable } from 'node:stream';
+import { cliEnv } from './cli.js';
 
 /** Attesa dell'uscita pulita (stdin chiuso): il giro in corso (conflitti, cswap) va finito. */
 export const STOP_GRACE_MS = 15_000;
@@ -83,7 +84,7 @@ export class EngineProcess {
     return this.child?.pid;
   }
 
-  start(cliPath: string, env: NodeJS.ProcessEnv = process.env): void {
+  start(cliPath: string, env: NodeJS.ProcessEnv = cliEnv()): void {
     if (this.child) return;
     this.stopping = false;
     const child = spawn(cliPath, [...ENGINE_ARGS], {

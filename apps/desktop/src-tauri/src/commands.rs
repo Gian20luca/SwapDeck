@@ -5,16 +5,19 @@ use std::time::Duration;
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use swapdeck_core::applog;
 use swapdeck_core::config::{AppPreferences, PreferencesPatch};
 use swapdeck_core::cswap::{
     ConfigGetResponse, ConfigListResponse, Confirmation, CswapAction, CswapError, CswapErrorKind,
     DirectoryMapping, ListResponse, StatusResponse,
 };
+use swapdeck_core::diagnostics;
 use swapdeck_core::engine::{EngineProfiles, EngineRules, EngineState, ProfileCommand};
 use swapdeck_core::history::{
     DEFAULT_RETENTION_DAYS, History, HistoryEvents, HistoryQuery, HistoryRecord,
 };
 use swapdeck_core::notify::NotificationConfig;
+use swapdeck_core::paths::AppPaths;
 use swapdeck_core::timeutil::{now_unix, parse_iso};
 use swapdeck_core::usage::{self, UsageBreakdown, UsageError, UsagePaths, UsageQuery};
 use tauri::{AppHandle, State};
@@ -182,7 +185,13 @@ pub async fn run_action(
         CswapAction::AutoStop => Some(false),
         _ => None,
     };
-    let outcome = blocking(move || api.execute(&action)).await?;
+    let kind = action_kind(&action);
+    let outcome = blocking(move || api.execute(&action)).await;
+    match &outcome {
+        Ok(_) => applog::info(&format!("azione {kind}: ok")),
+        Err(e) => applog::warn(&format!("azione {kind}: {}", e.log_summary())),
+    }
+    let outcome = outcome?;
     if let Some(running) = auto {
         app::set_auto_running(&app, running);
     }
@@ -191,6 +200,49 @@ pub async fn run_action(
         crate::terminal::open(cmd)?;
     }
     Ok(outcome)
+}
+
+/// Nome della variante (`Switch`, `Remove`, …) senza i valori: nel log niente email né percorsi.
+fn action_kind(action: &CswapAction) -> String {
+    format!("{action:?}")
+        .chars()
+        .take_while(char::is_ascii_alphanumeric)
+        .collect()
+}
+
+/// Testo di diagnostica (lo stesso di `swapdeck-cli diagnostics`), con lo stato dell'avvio
+/// automatico. Esegue solo comandi di cswap in lettura, fuori dal thread principale.
+#[tauri::command]
+pub async fn get_diagnostics(shared: State<'_, Arc<Shared>>) -> Res<String> {
+    let autostart = lock(&shared.settings).autostart;
+    let managed = crate::autostart::managed();
+    blocking(move || {
+        let extra = vec![(
+            "Autostart".to_owned(),
+            format!(
+                "{}{}",
+                if autostart { "on" } else { "off" },
+                if managed {
+                    ""
+                } else {
+                    " (dev build: not registered)"
+                }
+            ),
+        )];
+        let paths = AppPaths::from_env_or_system();
+        Ok(diagnostics::report(paths.as_ref(), "desktop", None, extra))
+    })
+    .await
+}
+
+/// Apre la cartella dei log nel file manager (creata se manca).
+#[tauri::command]
+pub fn open_logs_folder() -> Res<()> {
+    let failed = |m: String| CswapError::new(CswapErrorKind::Failed, m);
+    let paths = AppPaths::from_env_or_system()
+        .ok_or_else(|| failed("cartelle dell'utente non determinabili".into()))?;
+    diagnostics::open_folder(&applog::logs_dir(&paths))
+        .map_err(|e| failed(format!("cartella dei log non aperta: {e}")))
 }
 
 /// Impostazioni dell'app mostrate nella UI.
@@ -225,7 +277,13 @@ pub fn set_autostart(
     }
     let failed = |m: String| CswapError::new(CswapErrorKind::Failed, m);
     shared.save_settings().map_err(failed)?;
-    crate::autostart::apply(&app, enabled).map_err(failed)?;
+    crate::autostart::apply(&app, enabled)
+        .inspect_err(|e| applog::warn(&format!("avvio automatico non aggiornato: {e}")))
+        .map_err(failed)?;
+    applog::info(&format!(
+        "avvio automatico {} dall'utente",
+        if enabled { "attivato" } else { "disattivato" }
+    ));
     Ok(get_app_settings(shared))
 }
 

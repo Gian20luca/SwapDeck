@@ -1,15 +1,18 @@
 //! Logica di SwapDeck: client di cswap, config, cartelle dati, motore delle regole, lock,
 //! storico, rilevamento dei conflitti e runner senza interfaccia.
 
+pub mod applog;
 pub mod config;
 pub mod conflicts;
 pub mod cswap;
+pub mod diagnostics;
 pub mod engine;
 pub mod headless;
 pub mod history;
 pub mod lock;
 pub mod notify;
 pub mod paths;
+pub mod redact;
 pub mod setup;
 pub mod timeutil;
 pub mod usage;

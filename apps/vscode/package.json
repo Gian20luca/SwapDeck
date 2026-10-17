@@ -58,6 +58,16 @@
         "command": "swapdeck.stopEngine",
         "title": "%command.stopEngine%",
         "category": "SwapDeck"
+      },
+      {
+        "command": "swapdeck.copyDiagnostics",
+        "title": "%command.copyDiagnostics%",
+        "category": "SwapDeck"
+      },
+      {
+        "command": "swapdeck.openLogsFolder",
+        "title": "%command.openLogsFolder%",
+        "category": "SwapDeck"
       }
     ],
     "configuration": {

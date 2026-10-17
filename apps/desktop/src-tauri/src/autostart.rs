@@ -72,8 +72,46 @@ fn desktop_exec_quote(s: &str) -> String {
     out
 }
 
+/// Motivo per cui un percorso non va scritto nella voce di avvio (`None` = va bene).
+/// - caratteri di controllo: un a capo spezzerebbe il file `.desktop` o il plist;
+/// - macOS: `auto-launch` non fa l'escape XML del plist (`&`, `<`, `>` lo rendono non valido)
+///   e un'app avviata in quarantena gira da un percorso casuale (App Translocation) che sparisce.
+pub fn launch_path_problem(path: &str, macos: bool) -> Option<&'static str> {
+    if path.chars().any(char::is_control) {
+        return Some("percorso dell'eseguibile con caratteri di controllo");
+    }
+    if macos && path.contains("/AppTranslocation/") {
+        return Some(
+            "app avviata in quarantena (App Translocation): spostala in Applicazioni e riaprila",
+        );
+    }
+    if macos && path.contains(['&', '<', '>']) {
+        return Some("percorso dell'app con &, < o >: spostala in Applicazioni");
+    }
+    None
+}
+
+/// AppImage da registrare: `APPIMAGE` vale solo se l'eseguibile gira davvero dentro `APPDIR`
+/// (il punto di montaggio dell'AppImage). Tauri la prende così com'è anche quando è ereditata
+/// da un altro processo (per esempio un terminale aperto da un editor in AppImage): con un .deb
+/// la voce punterebbe all'AppImage sbagliata.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+pub fn appimage_target(
+    appimage: Option<&std::ffi::OsStr>,
+    appdir: Option<&std::ffi::OsStr>,
+    exe: &Path,
+) -> Option<std::path::PathBuf> {
+    let appimage = Path::new(appimage?);
+    let appdir = Path::new(appdir?);
+    (appimage.is_absolute() && appdir.is_absolute() && exe.starts_with(appdir))
+        .then(|| appimage.to_path_buf())
+}
+
 fn launcher(app: &AppHandle) -> Result<AutoLaunch, String> {
     let exe = current_launch_target(app)?;
+    if let Some(problem) = launch_path_problem(&exe, cfg!(target_os = "macos")) {
+        return Err(problem.to_owned());
+    }
     let mut builder = AutoLaunchBuilder::new();
     builder
         .set_app_name(ENTRY_NAME)
@@ -86,11 +124,16 @@ fn launcher(app: &AppHandle) -> Result<AutoLaunch, String> {
 
 #[cfg_attr(not(target_os = "linux"), allow(unused_variables))]
 fn current_launch_target(app: &AppHandle) -> Result<String, String> {
-    #[cfg(target_os = "linux")]
-    if let Some(appimage) = app.env().appimage {
-        return path_string(Path::new(&appimage));
-    }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    #[cfg(target_os = "linux")]
+    {
+        let env = app.env();
+        if let Some(appimage) =
+            appimage_target(env.appimage.as_deref(), env.appdir.as_deref(), &exe)
+        {
+            return path_string(&appimage);
+        }
+    }
     #[cfg(target_os = "macos")]
     let exe = exe.canonicalize().map_err(|e| e.to_string())?;
     path_string(&exe)
@@ -148,6 +191,53 @@ mod tests {
         } else if cfg!(target_os = "linux") {
             assert!(p.starts_with('"') && p.ends_with('"'));
         }
+    }
+
+    #[test]
+    fn launch_path_problems() {
+        assert_eq!(launch_path_problem("/usr/bin/swapdeck", false), None);
+        assert_eq!(
+            launch_path_problem("/Applications/SwapDeck.app/Contents/MacOS/swapdeck", true),
+            None
+        );
+        assert!(launch_path_problem("/home/a\nExec=evil/x", false).is_some());
+        assert!(
+            launch_path_problem(
+                "/private/var/folders/x/T/AppTranslocation/ABC/d/SwapDeck.app/Contents/MacOS/swapdeck",
+                true
+            )
+            .is_some()
+        );
+        assert!(
+            launch_path_problem("/Users/a/A&B/SwapDeck.app/Contents/MacOS/swapdeck", true)
+                .is_some()
+        );
+        // Su Linux `&` è gestito dal quoting di `Exec`.
+        assert_eq!(launch_path_problem("/home/a/A&B/swapdeck", false), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn appimage_only_when_running_inside_it() {
+        use std::ffi::OsStr;
+        let img = Some(OsStr::new("/home/a/Apps/SwapDeck.AppImage"));
+        let dir = Some(OsStr::new("/tmp/.mount_SwapDeAbc"));
+        let inside = Path::new("/tmp/.mount_SwapDeAbc/usr/bin/swapdeck");
+        assert_eq!(
+            appimage_target(img, dir, inside).as_deref(),
+            Some(Path::new("/home/a/Apps/SwapDeck.AppImage"))
+        );
+        // .deb avviato con `APPIMAGE`/`APPDIR` ereditate da un altro AppImage.
+        assert_eq!(
+            appimage_target(img, dir, Path::new("/usr/bin/swapdeck")),
+            None
+        );
+        assert_eq!(appimage_target(img, None, inside), None);
+        assert_eq!(appimage_target(None, dir, inside), None);
+        assert_eq!(
+            appimage_target(Some(OsStr::new("rel.AppImage")), dir, inside),
+            None
+        );
     }
 
     #[test]

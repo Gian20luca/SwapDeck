@@ -30,6 +30,8 @@
     "allow-set-notification-settings",
     "allow-get-history-events",
     "allow-get-usage-breakdown",
+    "allow-get-diagnostics",
+    "allow-open-logs-folder",
     "allow-diagnose-setup",
     "allow-install-cswap",
     "allow-upgrade-cswap",

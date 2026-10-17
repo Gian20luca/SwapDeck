@@ -41,6 +41,9 @@ export const REQUEST_METHODS = [
   'upgradeCswap',
   'checkCswapUpdate',
   'dismissCswapUpdate',
+  'getDiagnostics',
+  'openLogsFolder',
+  'copyText',
 ] as const;
 
 export type RequestMethod = (typeof REQUEST_METHODS)[number];
@@ -83,7 +86,9 @@ export type RequestParams =
   | { method: 'pickOpenFile' | 'pickSaveFile' | 'pickFolder'; params: PickParams }
   | { method: 'diagnoseSetup' | 'installCswap' | 'upgradeCswap'; params: Record<string, never> }
   | { method: 'checkCswapUpdate'; params: { force?: boolean } }
-  | { method: 'dismissCswapUpdate'; params: { version: string } };
+  | { method: 'dismissCswapUpdate'; params: { version: string } }
+  | { method: 'getDiagnostics' | 'openLogsFolder'; params: Record<string, never> }
+  | { method: 'copyText'; params: { text: string } };
 
 /** Webview → host. */
 export type WebviewMessage = ({ type: 'request'; id: number } & RequestParams) | { type: 'ready' };

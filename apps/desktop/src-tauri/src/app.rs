@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
+use swapdeck_core::applog;
 use swapdeck_core::config::Language;
 use swapdeck_core::cswap::ListResponse;
 use swapdeck_core::engine::EngineRules;
@@ -169,6 +170,10 @@ fn sync_autostart(app: &AppHandle, shared: &Shared) {
     };
     match enabled {
         Ok(on) => {
+            applog::info(&format!(
+                "avvio automatico: {} ({plan:?})",
+                if on { "attivo" } else { "spento" }
+            ));
             {
                 let mut s = lock(&shared.settings);
                 s.autostart = on;
@@ -178,7 +183,10 @@ fn sync_autostart(app: &AppHandle, shared: &Shared) {
                 eprintln!("config non salvata: {e}");
             }
         }
-        Err(e) => eprintln!("avvio automatico non aggiornato: {e}"),
+        Err(e) => {
+            eprintln!("avvio automatico non aggiornato: {e}");
+            applog::warn(&format!("avvio automatico non aggiornato: {e}"));
+        }
     }
 }
 
@@ -206,12 +214,23 @@ fn engine_inputs(shared: &Shared, config: Option<&Path>) -> (EngineRules, Durati
 }
 
 pub fn run(api: Arc<dyn CswapApi>) {
+    applog::init("desktop");
+    let start_hidden = std::env::args().any(|a| a == MINIMIZED_ARG);
+    applog::info(&format!(
+        "{}{}",
+        applog::startup_line("app"),
+        if start_hidden {
+            " (avvio nascosto)"
+        } else {
+            ""
+        }
+    ));
     swapdeck_core::headless::log_app_id_registration(swapdeck_core::headless::register_app_id());
     let (store, settings, warnings) = SettingsStore::load();
     for w in warnings {
         eprintln!("config: {w}");
+        applog::warn(&format!("config: {w}"));
     }
-    let start_hidden = std::env::args().any(|a| a == MINIMIZED_ARG);
     let interval = settings.poll_interval;
     let updates = settings.updates_enabled;
     let data_dir = AppPaths::from_env_or_system().map(|p| p.data_dir);
@@ -258,6 +277,8 @@ pub fn run(api: Arc<dyn CswapApi>) {
             commands::set_notification_settings,
             commands::get_history_events,
             commands::get_usage_breakdown,
+            commands::get_diagnostics,
+            commands::open_logs_folder,
             setup_cmd::diagnose_setup,
             setup_cmd::install_cswap,
             setup_cmd::upgrade_cswap,
@@ -346,7 +367,9 @@ pub fn run(api: Arc<dyn CswapApi>) {
             }
             if let Err(e) = app.state::<Arc<Shared>>().save_settings() {
                 eprintln!("config non salvata all'uscita: {e}");
+                applog::warn(&format!("config non salvata all'uscita: {e}"));
             }
+            applog::info("app chiusa");
             // Per ultimo, dopo l'arresto ordinato: su Windows avvia l'installer e termina.
             updater::install_pending(app);
         }

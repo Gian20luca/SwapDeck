@@ -43,6 +43,8 @@ export const enInfo: Record<keyof typeof itInfo, string> = {
     'If an account already exists in the same slot, the file replaces it. Without this option it is skipped.',
   'info.tools.unclaimed':
     'Credentials cswap has set aside without a linked account. You can delete them one by one to tidy up.',
+  'info.tools.diag':
+    'SwapDeck keeps a per-user log in its data folder (logs/swapdeck.log): startups, engine decisions and actions, cswap errors, conflicts and the lock. It rotates on its own (5 files of 1 MiB) and holds no tokens or full emails. Diagnostics gathers what is needed to understand a problem into one text.',
   'info.tools.purge':
     'Deletes everything cswap has saved (accounts, credentials, session profiles). It does not touch the current Claude Code login and it cannot be undone.',
 

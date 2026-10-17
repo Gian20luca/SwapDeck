@@ -6,6 +6,8 @@
   "command.switchMap": "Cambia mappa",
   "command.startEngine": "Avvia motore",
   "command.stopEngine": "Ferma motore",
+  "command.copyDiagnostics": "Copia diagnostica",
+  "command.openLogsFolder": "Apri cartella dei log",
   "config.refreshIntervalSeconds": "Ogni quanti secondi leggere `cswap list`.",
   "config.cliPath": "Percorso assoluto di `swapdeck-cli`. Vuoto: quello incluso nell'estensione.",
   "config.engine.enabled": "Esegue il motore di SwapDeck (`swapdeck-cli headless`) mentre VS Code è aperto. Rispetta il lock di istanza unica e le regole della config di SwapDeck.",

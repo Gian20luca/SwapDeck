@@ -6,6 +6,8 @@
   "command.switchMap": "Change map",
   "command.startEngine": "Start engine",
   "command.stopEngine": "Stop engine",
+  "command.copyDiagnostics": "Copy diagnostics",
+  "command.openLogsFolder": "Open logs folder",
   "config.refreshIntervalSeconds": "How often to read `cswap list`, in seconds.",
   "config.cliPath": "Absolute path of `swapdeck-cli`. Empty: the one bundled with the extension.",
   "config.engine.enabled": "Run the SwapDeck engine (`swapdeck-cli headless`) while VS Code is open. It respects the single-instance lock and the rules in the SwapDeck config.",

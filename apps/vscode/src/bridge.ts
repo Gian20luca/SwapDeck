@@ -46,8 +46,17 @@ export interface BridgeDeps {
    * file) e restituisce la funzione che lo riavvia alla fine, riuscita o no.
    */
   pauseEngine?: () => Promise<() => void>;
+  /** Chi ospita, per la diagnostica (es. `VS Code 1.99, estensione 0.1.0`). */
+  clientInfo?: string;
+  /** Apre una cartella nel file manager; assente = `openLogsFolder` non disponibile. */
+  openFolder?: (dir: string) => Promise<void>;
+  /** Appunti dell'host; assente = `copyText` non disponibile. */
+  copyText?: (text: string) => Promise<void>;
   now?: () => number;
 }
+
+/** Testo massimo copiato negli appunti su richiesta del webview. */
+export const MAX_COPY_CHARS = 1_000_000;
 
 /** Tutti i `kind` di `CswapAction`: un `kind` fuori elenco è `invalidUsage` già nell'host. */
 export const ACTION_KINDS = [
@@ -323,6 +332,27 @@ export function createRequestHandler(deps: BridgeDeps) {
           if (to !== undefined) args.push('--to', String(to));
         }
         return deps.cli(args, { timeoutMs: USAGE_TIMEOUT_MS });
+      }
+      case 'getDiagnostics': {
+        const args = ['diagnostics', '--json'];
+        if (deps.clientInfo) args.push('--client', deps.clientInfo);
+        const result = await deps.cli<{ text: string }>(args);
+        return result.text;
+      }
+      case 'openLogsFolder': {
+        if (!deps.openFolder) throw invalid('apertura delle cartelle non disponibile');
+        const { dir } = await deps.cli<{ dir: string }>(['logs', 'dir']);
+        await deps.openFolder(dir);
+        return null;
+      }
+      case 'copyText': {
+        if (!deps.copyText) throw invalid('appunti non disponibili');
+        const text = params['text'];
+        if (typeof text !== 'string' || text.length > MAX_COPY_CHARS) {
+          throw invalid('testo non valido');
+        }
+        await deps.copyText(text);
+        return null;
       }
       case 'pickOpenFile':
       case 'pickSaveFile':

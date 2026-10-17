@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
+use crate::applog::{self, Level};
 use crate::config::{self, Language, MAX_POLL_INTERVAL_SECONDS, MIN_POLL_INTERVAL_SECONDS};
 use crate::conflicts::{Conflict, ConflictSource, SystemConflicts};
 use crate::cswap::{CswapClient, CswapError, CswapErrorKind, ListResponse, SwitchResponse};
@@ -243,9 +244,15 @@ struct Runner<'o, 'r> {
 
 impl Runner<'_, '_> {
     fn log(&mut self, now: i64, msg: &str) {
+        self.log_at(Level::Info, now, msg);
+    }
+
+    /// Riga su `out` e nel file di log del processo (se attivato).
+    fn log_at(&mut self, level: Level, now: i64, msg: &str) {
         // Un errore di stdout (pipe chiusa) non deve fermare il motore.
         let _ = writeln!(self.rt.out, "{} {msg}", format_iso(now));
         let _ = self.rt.out.flush();
+        applog::log(level, &format!("motore: {msg}"));
     }
 
     fn try_lock(&mut self, now: i64) -> io::Result<Option<Option<LockInfo>>> {
@@ -281,7 +288,11 @@ impl Runner<'_, '_> {
             Ok(()) => {}
             Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
                 self.holder = None;
-                self.log(now, "lock perso: un'altra istanza ha preso il motore");
+                self.log_at(
+                    Level::Warn,
+                    now,
+                    "lock perso: un'altra istanza ha preso il motore",
+                );
             }
             Err(e) => self.log(now, &format!("battito del lock non riuscito: {e}")),
         }
@@ -313,7 +324,11 @@ impl Runner<'_, '_> {
         let list = match self.rt.port.list() {
             Ok(l) => l,
             Err(e) => {
-                self.log(now, &format!("cswap list non riuscito: {e}"));
+                self.log_at(
+                    Level::Warn,
+                    now,
+                    &format!("cswap list non riuscito: {}", e.log_summary()),
+                );
                 return Step {
                     list: Err(e),
                     decision: None,
@@ -471,9 +486,12 @@ impl Runner<'_, '_> {
             return false;
         }
         let from = list.active_account_number;
-        let (switched, message) = match self.rt.port.switch_to(to) {
-            Ok(r) => (r.switched, format!("{:?}", r.reason)),
-            Err(e) => (false, e.to_string()),
+        let (switched, message, detail) = match self.rt.port.switch_to(to) {
+            Ok(r) => {
+                let m = format!("{:?}", r.reason);
+                (r.switched, m.clone(), m)
+            }
+            Err(e) => (false, e.to_string(), e.log_summary()),
         };
         if switched {
             h.mem.record_switch(&self.rules, list, to, now);
@@ -496,9 +514,10 @@ impl Runner<'_, '_> {
             self.switches += 1;
             self.log(now, &format!("CAMBIO ESEGUITO {from_s} -> {to}"));
         } else {
-            self.log(
+            self.log_at(
+                Level::Warn,
                 now,
-                &format!("cambio {from_s} -> {to} non eseguito: {message}"),
+                &format!("cambio {from_s} -> {to} non eseguito: {detail}"),
             );
         }
         if let Err(e) = mem_result.and(hist_result) {
@@ -796,20 +815,30 @@ pub fn cli_main(args: &[String], stop: &AtomicBool) -> i32 {
         eprintln!("cartelle dell'utente non determinabili");
         return exit_code::ERROR;
     };
+    applog::info(&format!(
+        "{} (once: {}, dry-run: {}, notifiche: {:?})",
+        applog::startup_line("motore senza interfaccia"),
+        flags.once,
+        flags.dry_run,
+        flags.notify
+    ));
     let loaded = match config::load(&paths.config_file()) {
         Ok(l) => l,
         Err(e) => {
             eprintln!("{e}");
+            applog::error(&format!("motore non avviato: config non valida: {e}"));
             return exit_code::ERROR;
         }
     };
     for w in &loaded.warnings {
         eprintln!("config: {w}");
+        applog::warn(&format!("config: {w}"));
     }
     let mut client = match CswapClient::locate() {
         Ok(c) => c,
         Err(e) => {
             eprintln!("{e}");
+            applog::error(&format!("motore non avviato: {}", e.log_summary()));
             return exit_code::ERROR;
         }
     };
@@ -835,17 +864,24 @@ pub fn cli_main(args: &[String], stop: &AtomicBool) -> i32 {
         Some(Box::new(SystemNotifier)),
     );
     match result {
-        Ok(RunOutcome::Finished { .. }) => exit_code::OK,
+        Ok(RunOutcome::Finished { ticks, switches }) => {
+            applog::info(&format!(
+                "motore senza interfaccia fermato: {ticks} giri, {switches} cambi"
+            ));
+            exit_code::OK
+        }
         Ok(RunOutcome::LockBusy(info)) => {
             let who = info.map_or_else(
                 || "un'altra istanza".to_owned(),
                 |i| format!("PID {} su {}", i.pid, i.host),
             );
             eprintln!("motore già attivo ({who})");
+            applog::info(&format!("motore già attivo ({who}): uscita"));
             exit_code::LOCK_BUSY
         }
         Err(e) => {
             eprintln!("motore fermato: {e}");
+            applog::error(&format!("motore fermato: {e}"));
             exit_code::ERROR
         }
     }
@@ -854,10 +890,16 @@ pub fn cli_main(args: &[String], stop: &AtomicBool) -> i32 {
 /// Una riga di log sull'AUMID delle notifiche (app e `--headless`); un errore non ferma nulla.
 pub fn log_app_id_registration(result: Result<Registration, String>) {
     match result {
-        Ok(Registration::Updated) => eprintln!("notifiche: app registrata come «SwapDeck»"),
+        Ok(Registration::Updated) => {
+            eprintln!("notifiche: app registrata come «SwapDeck»");
+            applog::info("notifiche: app registrata come «SwapDeck»");
+        }
         Ok(Registration::Unchanged | Registration::NotNeeded) => {}
         Err(e) => {
-            eprintln!("notifiche: registrazione dell'app non riuscita ({e}), si usa il ripiego")
+            let msg =
+                format!("notifiche: registrazione dell'app non riuscita ({e}), si usa il ripiego");
+            eprintln!("{msg}");
+            applog::warn(&msg);
         }
     }
 }

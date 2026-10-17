@@ -17,6 +17,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use serde_json::Value;
+use swapdeck_core::applog;
 use swapdeck_core::config::{
     self, AppConfig, AppPreferences, CONFIG_SCHEMA_VERSION, ConfigError, PreferencesPatch,
 };
@@ -75,6 +76,9 @@ pub const USAGE: &str = "uso: swapdeck-cli <comando>
   setup diagnose|install|upgrade      (install e upgrade: eventi JSON per riga, poi l'esito)
   setup check-update [--force]
   setup dismiss-update <VERSIONE>
+  diagnostics [--json] [--client TESTO]   (testo di diagnostica redatto; --json: {text, logsDir})
+  logs dir                            (cartella dei log, creata se manca)
+  log info|warn|error -               (una riga nel log, testo da stdin)
   headless [--once] [--dry-run] [--stop-on-stdin-eof] [--notify=os|stdout|both]";
 
 /// Dimensione massima del JSON letto da argomento o stdin.
@@ -96,11 +100,16 @@ fn failed(msg: impl AsRef<str>) -> CswapError {
 
 /// Esegue la CLI con gli argomenti (senza il nome del programma) e restituisce il codice di uscita.
 pub fn main_with(args: &[String]) -> i32 {
-    if args.first().map(String::as_str) == Some("headless") {
-        return headless(&args[1..]);
+    applog::init("cli");
+    match args.first().map(String::as_str) {
+        Some("headless") => return headless(&args[1..]),
+        Some("diagnostics") => return diagnostics(&args[1..]),
+        _ => {}
     }
     let mut stdout = io::stdout().lock();
-    match dispatch(args) {
+    let result = dispatch(args);
+    log_outcome(args, &result);
+    match result {
         Ok(value) => write_json(&mut stdout, &value).map_or(exit_code::ERROR, |()| exit_code::OK),
         Err(error) => {
             let code = if error.kind == CswapErrorKind::InvalidUsage {
@@ -112,6 +121,149 @@ pub fn main_with(args: &[String]) -> i32 {
             code
         }
     }
+}
+
+/// Parole dei comandi (niente valori dell'utente nel log).
+const COMMAND_WORDS: [&str; 31] = [
+    "version",
+    "state",
+    "status",
+    "cswap-config",
+    "confirm",
+    "action",
+    "history",
+    "events",
+    "usage",
+    "breakdown",
+    "mappings",
+    "config",
+    "get",
+    "set",
+    "preferences",
+    "notifications",
+    "poll",
+    "engine",
+    "rules",
+    "profiles",
+    "setup",
+    "diagnose",
+    "install",
+    "upgrade",
+    "check-update",
+    "dismiss-update",
+    "logs",
+    "dir",
+    "log",
+    "--force",
+    "-",
+];
+
+/// Nome del comando per il log: solo le parole note, fino alla prima che non lo è.
+fn command_label(args: &[String]) -> String {
+    let words: Vec<&str> = args
+        .iter()
+        .map(String::as_str)
+        .take_while(|w| COMMAND_WORDS.contains(w) && *w != "-")
+        .collect();
+    if words.is_empty() {
+        "?".to_owned()
+    } else {
+        words.join(" ")
+    }
+}
+
+/// Comandi che cambiano qualcosa (config, cswap, installazione): esito sempre nel log.
+fn is_write(args: &[String]) -> bool {
+    let w: Vec<&str> = args.iter().map(String::as_str).collect();
+    matches!(
+        w.as_slice(),
+        [_, "set", ..]
+            | ["engine", "rules", "set", ..]
+            | ["engine", "profiles", _]
+            | ["setup", "install" | "upgrade" | "dismiss-update", ..]
+    )
+}
+
+/// Nel log: esito dei comandi che scrivono, errori di tutti (classe, codice e tipo).
+fn log_outcome(args: &[String], result: &Res<Value>) {
+    // `action` scrive il suo esito da sé, con il tipo d'azione.
+    if args.first().map(String::as_str) == Some("action") {
+        return;
+    }
+    let label = command_label(args);
+    match result {
+        Ok(_) if is_write(args) => applog::info(&format!("comando {label}: ok")),
+        Ok(_) => {}
+        Err(e) if e.kind == CswapErrorKind::InvalidUsage => {
+            applog::debug(&format!("comando {label}: {}", e.log_summary()));
+        }
+        Err(e) => applog::warn(&format!("comando {label}: {}", e.log_summary())),
+    }
+}
+
+/// `diagnostics [--json] [--client TESTO]`: testo di diagnostica (lo stesso dell'app) su
+/// stdout; con `--json` `{"text": …, "logsDir": …}`.
+fn diagnostics(args: &[String]) -> i32 {
+    let mut json = false;
+    let mut client: Option<String> = None;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--json" => json = true,
+            "--client" => client = it.next().map(|c| c.chars().take(120).collect()),
+            _ => {
+                let error = usage_error(format!("opzioni di diagnostics non valide\n{USAGE}"));
+                let _ = write_json(&mut io::stdout().lock(), &CliErrorEnvelope { error });
+                return exit_code::USAGE;
+            }
+        }
+    }
+    let paths = AppPaths::from_env_or_system();
+    let component = applog::global().map_or("cli", applog::LogFile::component);
+    let text = swapdeck_core::diagnostics::report(
+        paths.as_ref(),
+        component,
+        client.as_deref(),
+        Vec::new(),
+    );
+    let mut stdout = io::stdout().lock();
+    let written = if json {
+        let logs_dir = paths
+            .as_ref()
+            .map(|p| applog::logs_dir(p).display().to_string());
+        write_json(
+            &mut stdout,
+            &serde_json::json!({ "text": text, "logsDir": logs_dir }),
+        )
+    } else {
+        stdout
+            .write_all(text.as_bytes())
+            .and_then(|()| stdout.flush())
+    };
+    written.map_or(exit_code::ERROR, |()| exit_code::OK)
+}
+
+/// `logs dir`: cartella dei log (creata se manca).
+fn logs_dir() -> Res<Value> {
+    let dir = applog::logs_dir(&paths()?);
+    swapdeck_core::paths::create_private_dir(&dir)
+        .map_err(|e| failed(format!("cartella dei log non creata: {e}")))?;
+    Ok(serde_json::json!({ "dir": dir.display().to_string() }))
+}
+
+/// `log <info|warn|error> -`: una riga nel log da chi usa la CLI (estensione VS Code).
+fn log_line(level: &str, text: &str) -> Res<Value> {
+    let level = match level {
+        "info" => applog::Level::Info,
+        "warn" => applog::Level::Warn,
+        "error" => applog::Level::Error,
+        _ => {
+            return Err(usage_error(format!("livello non valido\n{USAGE}")));
+        }
+    };
+    let text: String = text.trim().chars().take(2000).collect();
+    applog::log(level, &text);
+    Ok(serde_json::json!({ "ok": true }))
 }
 
 fn write_json(out: &mut impl Write, value: &impl Serialize) -> io::Result<()> {
@@ -137,7 +289,7 @@ fn dispatch(args: &[String]) -> Res<Value> {
         ["cswap-config"] => to_value(client()?.config_list()?),
         ["cswap-config", key] => to_value(client()?.config_get(key)?),
         ["confirm", "-", rest @ ..] => confirm(&read_input("-")?, rest),
-        ["action", "-"] => to_value(action(&parse_action(&read_input("-")?)?)?),
+        ["action", "-"] => action_logged(&read_input("-")?),
         ["confirm" | "action", ..] => Err(usage_error(format!(
             "l'azione va passata da stdin (-)\n{USAGE}"
         ))),
@@ -159,6 +311,8 @@ fn dispatch(args: &[String]) -> Res<Value> {
         ["config", "set", input] => to_value(config_set(&read_input(input)?)?),
         ["engine", "status"] => to_value(engine_status(&paths()?)),
         ["setup", rest @ ..] => setup_command(rest),
+        ["logs", "dir"] => logs_dir(),
+        ["log", level, "-"] => log_line(level, &read_input("-")?),
         [] | ["help" | "--help" | "-h"] => Err(usage_error(USAGE)),
         // Solo il primo argomento (accorciato): gli altri possono contenere dati dell'utente.
         [first, ..] => Err(usage_error(format!(
@@ -330,6 +484,21 @@ fn parse_i64(name: &str, value: &str) -> Res<i64> {
 
 /// Un'azione di F0. `run` restituisce il comando da aprire (lo apre chi chiama); `autoStart` solo
 /// con `once` (la CLI non resta in vita: per il controllo continuo c'è il motore, `headless`).
+/// `action -` con l'esito nel log: solo il tipo d'azione, mai i valori (token, email, percorsi).
+fn action_logged(text: &str) -> Res<Value> {
+    let kind = serde_json::from_str::<Value>(text)
+        .ok()
+        .and_then(|v| v.get("kind").and_then(Value::as_str).map(str::to_owned))
+        .filter(|k| k.len() <= 24 && k.chars().all(|c| c.is_ascii_alphanumeric()))
+        .unwrap_or_else(|| "?".to_owned());
+    let result = parse_action(text).and_then(|a| action(&a));
+    match &result {
+        Ok(_) => applog::info(&format!("azione {kind}: ok")),
+        Err(e) => applog::warn(&format!("azione {kind}: {}", e.log_summary())),
+    }
+    to_value(result?)
+}
+
 fn action(action: &CswapAction) -> Res<ActionOutcome> {
     let client = client()?;
     match action {

@@ -34,6 +34,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().map(String::as_str) == Some("--headless") {
+        swapdeck_core::applog::init("headless");
         let stop = Arc::new(AtomicBool::new(false));
         let flag = Arc::clone(&stop);
         if let Err(e) = ctrlc::set_handler(move || flag.store(true, Ordering::SeqCst)) {

@@ -232,6 +232,17 @@ export const itManage = {
   'tools.purge.confirmMessage':
     'Account, credenziali e profili salvati da cswap vengono cancellati. Non si può annullare.',
   'tools.purge.done': 'Dati di cswap eliminati.',
+  'tools.diag': 'Diagnostica',
+  'tools.diag.hint':
+    'Per una segnalazione: versioni, sistema, stato del motore, mappa attiva e ultime righe del log, senza token né email complete.',
+  'tools.diag.openLogs': 'Apri cartella dei log',
+  'tools.diag.copy': 'Copia diagnostica',
+  'tools.diag.copied': 'Diagnostica copiata negli appunti.',
+  'tools.diag.copyFailed':
+    'Appunti non disponibili: seleziona il testo qui sotto e copialo a mano (Ctrl+C).',
+  'tools.diag.text': 'Testo della diagnostica',
+  'tools.diag.failed': 'Diagnostica non disponibile: {message}',
+  'tools.diag.openFailed': 'Cartella dei log non aperta: {message}',
 
   'history.title': 'Storico',
   'history.range': 'Intervallo',

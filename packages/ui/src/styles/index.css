@@ -360,6 +360,13 @@ body {
   width: 100%;
 }
 
+.sd-diagnostics {
+  margin-top: 8px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+
 /* Grafico */
 .sd-chart {
   position: relative;

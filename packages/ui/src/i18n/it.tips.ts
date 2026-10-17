@@ -43,6 +43,10 @@ export const itTips = {
   'tools.unclaimed.purge.tip': 'Cancella questa credenziale orfana, dopo una conferma.',
   'tools.purge.action.tip':
     'Cancella tutti i dati di cswap, dopo una doppia conferma. Non si torna indietro.',
+  'tools.diag.openLogs.tip':
+    'Apre nel file manager la cartella con swapdeck.log e i file precedenti (rotazione a 5 file da 1 MiB).',
+  'tools.diag.copy.tip':
+    'Copia negli appunti versioni di SwapDeck e cswap, sistema, stato del motore, mappa attiva e ultime 200 righe di log, già ripulite.',
   'mini.refresh.tip': 'Riprova a leggere i consumi.',
   'engineMark.target': ' (ora: {name})',
 } as const;

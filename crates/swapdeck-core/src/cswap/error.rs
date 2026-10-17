@@ -3,6 +3,9 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub use crate::redact::mask_email;
+use crate::redact::{redact, strip_control};
+
 use super::model::{Account, ErrorEnvelope, ListResponse, SUPPORTED_SCHEMA_VERSION, UsageStatus};
 
 /// Età oltre la quale un dato `ok` è considerato vecchio (cadenza normale di cswap).
@@ -93,6 +96,20 @@ impl CswapError {
     fn with_exit(mut self, code: Option<i32>) -> Self {
         self.exit_code = code;
         self
+    }
+}
+
+impl CswapError {
+    /// Riga per il file di log: classe, codice di uscita e tipo (se noti), messaggio ripulito.
+    pub fn log_summary(&self) -> String {
+        let mut s = format!("{:?}", self.kind);
+        if let Some(code) = self.exit_code {
+            s.push_str(&format!(" (codice {code})"));
+        }
+        if let Some(t) = &self.error_type {
+            s.push_str(&format!(" [{t}]"));
+        }
+        format!("{s}: {}", self.message)
     }
 }
 
@@ -365,26 +382,10 @@ fn last_line(s: &str) -> String {
 /// Ripulisce un messaggio: niente sequenze ANSI né caratteri di controllo, niente
 /// `Error:` iniziale, token oscurati, email mascherate, lunghezza limitata.
 pub fn clean_message(raw: &str) -> String {
-    let mut no_ansi = String::with_capacity(raw.len());
-    let mut chars = raw.chars().peekable();
-    while let Some(c) = chars.next() {
-        if c == '\u{1b}' {
-            if chars.peek() == Some(&'[') {
-                chars.next();
-                for n in chars.by_ref() {
-                    if n.is_ascii_alphabetic() {
-                        break;
-                    }
-                }
-            }
-            continue;
-        }
-        no_ansi.push(if c.is_control() { ' ' } else { c });
-    }
+    let no_ansi = strip_control(raw);
     let text = no_ansi.trim();
     let text = text.strip_prefix("Error:").unwrap_or(text).trim();
-    let words: Vec<String> = text.split_whitespace().map(redact_word).collect();
-    let joined = words.join(" ");
+    let joined = redact(text);
     if joined.chars().count() > MAX_MESSAGE_CHARS {
         let mut cut: String = joined.chars().take(MAX_MESSAGE_CHARS).collect();
         cut.push('…');
@@ -392,36 +393,6 @@ pub fn clean_message(raw: &str) -> String {
     } else {
         joined
     }
-}
-
-fn redact_word(word: &str) -> String {
-    if let Some(pos) = word.find("sk-ant-") {
-        return format!("{}sk-ant-***", &word[..pos]);
-    }
-    let core = word.trim_matches(|c: char| !c.is_alphanumeric() && c != '@');
-    // Stringhe lunghe senza spazi con lettere e cifre: possibili token.
-    if core.len() >= 40
-        && core
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "-_.=+/".contains(c))
-        && core.chars().any(|c| c.is_ascii_digit())
-        && core.chars().any(|c| c.is_ascii_alphabetic())
-        && !core.contains('/')
-    {
-        return word.replace(core, "***");
-    }
-    if let Some((local, domain)) = core.split_once('@') {
-        if !local.is_empty() && domain.contains('.') {
-            return word.replace(core, &mask_email(local, domain));
-        }
-    }
-    word.to_owned()
-}
-
-/// `mario.rossi@example.com` → `ma***@example.com`.
-pub fn mask_email(local: &str, domain: &str) -> String {
-    let keep: String = local.chars().take(2).collect();
-    format!("{keep}***@{domain}")
 }
 
 #[cfg(test)]

@@ -41,6 +41,8 @@ export const itInfo = {
     'Se un’utenza è già presente nello stesso slot, il file la sostituisce. Senza questa scelta viene saltata.',
   'info.tools.unclaimed':
     'Credenziali che cswap ha messo da parte senza un’utenza collegata. Puoi eliminarle una a una per fare pulizia.',
+  'info.tools.diag':
+    'SwapDeck tiene un log per utente nella sua cartella dati (logs/swapdeck.log): avvii, decisioni e azioni del motore, errori di cswap, conflitti e lock. Ruota da solo (5 file da 1 MiB) e non contiene token né email complete. La diagnostica mette insieme in un testo quello che serve per capire un problema.',
   'info.tools.purge':
     'Cancella tutto ciò che cswap ha salvato (utenze, credenziali, profili di sessione). Non tocca il login corrente di Claude Code e non si può annullare.',
 

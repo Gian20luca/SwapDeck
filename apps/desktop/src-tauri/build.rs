@@ -29,6 +29,8 @@ fn main() {
             "set_notification_settings",
             "get_history_events",
             "get_usage_breakdown",
+            "get_diagnostics",
+            "open_logs_folder",
             "diagnose_setup",
             "install_cswap",
             "upgrade_cswap",

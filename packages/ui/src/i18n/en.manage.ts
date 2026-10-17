@@ -234,6 +234,16 @@ export const enManage: Record<keyof typeof itManage, string> = {
   'tools.purge.confirmMessage':
     'Accounts, credentials and profiles saved by cswap are erased. This cannot be undone.',
   'tools.purge.done': 'cswap data deleted.',
+  'tools.diag': 'Diagnostics',
+  'tools.diag.hint':
+    'For a bug report: versions, system, engine state, active map and the last log lines, with no tokens or full emails.',
+  'tools.diag.openLogs': 'Open logs folder',
+  'tools.diag.copy': 'Copy diagnostics',
+  'tools.diag.copied': 'Diagnostics copied to the clipboard.',
+  'tools.diag.copyFailed': 'Clipboard not available: select the text below and copy it (Ctrl+C).',
+  'tools.diag.text': 'Diagnostics text',
+  'tools.diag.failed': 'Diagnostics not available: {message}',
+  'tools.diag.openFailed': 'Logs folder not opened: {message}',
 
   'history.title': 'History',
   'history.range': 'Range',

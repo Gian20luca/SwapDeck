@@ -171,6 +171,12 @@ export interface Backend {
    */
   getUsageBreakdown?(query: UsageQuery): Promise<UsageBreakdown>;
   /** Selettori nativi: percorso scelto, `null` se annullato. */
+  /** Testo di diagnostica già redatto (versioni, sistema, motore, mappa, ultime righe di log). */
+  getDiagnostics?(): Promise<string>;
+  /** Apre la cartella dei log nel file manager. */
+  openLogsFolder?(): Promise<void>;
+  /** Copia negli appunti dall'host (VS Code); senza, la pagina usa `navigator.clipboard`. */
+  copyText?(text: string): Promise<void>;
   pickOpenFile?(options?: PickOptions): Promise<string | null>;
   pickSaveFile?(options?: PickOptions): Promise<string | null>;
   pickFolder?(options?: PickOptions): Promise<string | null>;

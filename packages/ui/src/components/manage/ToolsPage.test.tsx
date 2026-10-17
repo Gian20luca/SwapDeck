@@ -149,3 +149,37 @@ describe('ToolsPage: unclaimed e purge', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 });
+
+describe('ToolsPage: diagnostica', () => {
+  it('copia la diagnostica negli appunti e apre la cartella dei log', async () => {
+    const { backend, user } = await setup();
+    const section = screen.getByRole('region', { name: 'Diagnostica' });
+    await user.click(within(section).getByRole('button', { name: 'Copia diagnostica' }));
+    expect(await within(section).findByText('Diagnostica copiata negli appunti.')).toBeVisible();
+    expect(await navigator.clipboard.readText()).toContain('Diagnostica di SwapDeck');
+    await user.click(within(section).getByRole('button', { name: 'Apri cartella dei log' }));
+    await waitFor(() => expect(backend.logsFolderOpened).toBe(1));
+  });
+
+  it('usa gli appunti dell’host se ci sono; se falliscono mostra il testo da copiare a mano', async () => {
+    const backend = new FakeBackend();
+    const copyText = vi.fn().mockRejectedValue(new Error('no clipboard'));
+    Object.assign(backend, { copyText });
+    renderWith(<ToolsPage />, backend);
+    const user = userEvent.setup();
+    const section = await screen.findByRole('region', { name: 'Diagnostica' });
+    await user.click(within(section).getByRole('button', { name: 'Copia diagnostica' }));
+    const text = await within(section).findByRole('textbox', { name: 'Testo della diagnostica' });
+    expect((text as HTMLTextAreaElement).value).toContain('Diagnostica di SwapDeck');
+    expect(copyText).toHaveBeenCalledWith(expect.stringContaining('Motore:'));
+    expect(within(section).getByRole('alert')).toHaveTextContent('Appunti non disponibili');
+  });
+
+  it('senza metodi di diagnostica nell’host la sezione non c’è', async () => {
+    const backend = new FakeBackend();
+    Object.assign(backend, { getDiagnostics: undefined, openLogsFolder: undefined });
+    renderWith(<ToolsPage />, backend);
+    await screen.findByRole('heading', { name: 'Strumenti' });
+    expect(screen.queryByRole('region', { name: 'Diagnostica' })).toBeNull();
+  });
+});

@@ -426,6 +426,26 @@ export class FakeBackend implements Backend, SetupBackend {
       : this.picks.saveFile;
   }
 
+  /** Aperture della cartella dei log (per i test). */
+  logsFolderOpened = 0;
+
+  async getDiagnostics(): Promise<string> {
+    await this.delay();
+    return [
+      'Diagnostica di SwapDeck',
+      'SwapDeck: 0.1.0 (Componente: dev)',
+      'Motore: spento, solo osservazione: no, 120s',
+      '--- Ultime righe del log (1) ---',
+      '2026-10-17T10:00:00.000Z INFO  dev[1] app avviata',
+      '',
+    ].join('\n');
+  }
+
+  async openLogsFolder(): Promise<void> {
+    await this.delay();
+    this.logsFolderOpened += 1;
+  }
+
   async pickFolder(_options?: PickOptions): Promise<string | null> {
     return this.picks.folder === undefined ? String.raw`C:\Progetti\demo` : this.picks.folder;
   }

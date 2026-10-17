@@ -569,3 +569,90 @@ fn usage_breakdown_reads_sessions_read_only() {
     let (code, _) = run(&["usage", "breakdown", "--window", "custom"]);
     assert_eq!(code, 2, "custom senza --from");
 }
+
+fn log_text(env: &Env) -> String {
+    fs::read_to_string(env.home().join("data/logs/swapdeck.log")).unwrap_or_default()
+}
+
+#[test]
+fn log_file_records_actions_and_headless_without_secrets() {
+    let env = Env::new();
+    let (code, _) = env.run_stdin(&["action", "-"], r#"{"kind":"switch","target":3}"#);
+    assert_eq!(code, 0);
+    let (code, _) = env.run_stdin(&["action", "-"], r#"{"kind":"switch","target":42}"#);
+    assert_eq!(code, 1);
+    let out = env
+        .command(&["headless", "--once", "--dry-run", "--notify=stdout"])
+        .env("SWAPDECK_LOG_SOURCE", "vscode")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let (code, _) = env.run_stdin(&["log", "warn", "-"], "prova da mario.rossi@example.com");
+    assert_eq!(code, 0);
+    let text = log_text(&env);
+    assert!(
+        text.contains(" INFO  cli[") && text.contains("azione switch: ok"),
+        "{text}"
+    );
+    assert!(
+        text.contains(" WARN  cli[") && text.contains("azione switch: "),
+        "{text}"
+    );
+    assert!(
+        text.contains("vscode[") && text.contains("motore senza interfaccia avviato: SwapDeck")
+    );
+    assert!(
+        text.contains("motore: "),
+        "decisioni del motore nel log: {text}"
+    );
+    assert!(text.contains("prova da ma***@example.com"), "{text}");
+    // Mai email complete: quelle delle fixture (userN@example.com) non compaiono.
+    assert!(
+        !text.contains("user3@") && !text.contains("mario.rossi"),
+        "{text}"
+    );
+    // Le letture riuscite non scrivono nulla.
+    let before = log_text(&env).len();
+    let (code, _) = env.run(&["state"]);
+    assert_eq!(code, 0);
+    assert_eq!(log_text(&env).len(), before);
+}
+
+#[test]
+fn diagnostics_text_and_json() {
+    let env = Env::new();
+    let _ = env.run_stdin(&["log", "info", "-"], "riga di prova");
+    let out = env
+        .command(&["diagnostics", "--client", "VS Code 1.99"])
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let text = String::from_utf8(out.stdout).unwrap();
+    for part in [
+        "Diagnostica di SwapDeck",
+        "Client: VS Code 1.99",
+        "Stato di cswap: ready",
+        "Motore: ",
+        "Mappa attiva: ",
+        "riga di prova",
+    ] {
+        assert!(text.contains(part), "manca «{part}»:\n{text}");
+    }
+    assert!(!text.contains("@example.com") || text.contains("***@example.com"));
+    let (code, v) = env.run(&["diagnostics", "--json"]);
+    assert_eq!(code, 0);
+    assert!(
+        v["text"]
+            .as_str()
+            .unwrap()
+            .contains("Diagnostica di SwapDeck")
+    );
+    assert!(v["logsDir"].as_str().unwrap().ends_with("logs"));
+    let (code, v) = env.run(&["logs", "dir"]);
+    assert_eq!(code, 0);
+    assert!(PathBuf::from(v["dir"].as_str().unwrap()).is_dir());
+    let (code, _) = env.run(&["diagnostics", "--boh"]);
+    assert_eq!(code, 2);
+    let (code, _) = env.run_stdin(&["log", "fatal", "-"], "x");
+    assert_eq!(code, 2);
+}

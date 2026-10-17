@@ -214,6 +214,18 @@ export class VsCodeBackend implements Backend, SetupBackend {
     return this.request({ method: 'pickFolder', params: pickParams(options) });
   }
 
+  getDiagnostics(): Promise<string> {
+    return this.request({ method: 'getDiagnostics', params: {} });
+  }
+
+  async openLogsFolder(): Promise<void> {
+    await this.request({ method: 'openLogsFolder', params: {} });
+  }
+
+  async copyText(text: string): Promise<void> {
+    await this.request({ method: 'copyText', params: { text } });
+  }
+
   diagnoseSetup(): Promise<SetupDiagnosis> {
     return this.request({ method: 'diagnoseSetup', params: {} });
   }

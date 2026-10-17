@@ -45,6 +45,10 @@ export const enTips: Record<keyof typeof itTips, string> = {
   'tools.unclaimed.purge.tip': 'Deletes this orphan credential, after confirmation.',
   'tools.purge.action.tip':
     'Deletes all cswap data, after a double confirmation. It cannot be undone.',
+  'tools.diag.openLogs.tip':
+    'Opens the folder with swapdeck.log and the older files (rotation: 5 files of 1 MiB) in the file manager.',
+  'tools.diag.copy.tip':
+    'Copies SwapDeck and cswap versions, system, engine state, active map and the last 200 log lines, already cleaned, to the clipboard.',
   'mini.refresh.tip': 'Tries reading usage again.',
   'engineMark.target': ' (now: {name})',
 };

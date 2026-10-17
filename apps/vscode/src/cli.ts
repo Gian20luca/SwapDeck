@@ -141,6 +141,14 @@ export function lastLine(text: string): string {
 export type CliRunner = <T>(args: string[], options?: RunOptions) => Promise<T>;
 
 /** Lancia `swapdeck-cli` senza shell e senza finestra, con timeout e limite di output. */
+/** Nome con cui la CLI lanciata dall'estensione firma le sue righe nel log di SwapDeck. */
+export const LOG_SOURCE = 'vscode';
+
+/** Ambiente dei processi `swapdeck-cli`: quello di VS Code più `SWAPDECK_LOG_SOURCE`. */
+export function cliEnv(base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return { ...base, SWAPDECK_LOG_SOURCE: LOG_SOURCE };
+}
+
 export function createCliRunner(getPath: () => string): CliRunner {
   return <T>(args: string[], options: RunOptions = {}) =>
     new Promise<T>((resolve, reject) => {
@@ -149,7 +157,7 @@ export function createCliRunner(getPath: () => string): CliRunner {
         shell: false,
         windowsHide: true,
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: options.env ?? process.env,
+        env: cliEnv(options.env ?? process.env),
       });
       const chunks: Buffer[] = [];
       const onChunk = options.onEvent ? eventLines(options.onEvent) : undefined;

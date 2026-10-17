@@ -392,3 +392,42 @@ describe('setup di cswap', () => {
     });
   });
 });
+
+describe('diagnostica', () => {
+  it('getDiagnostics passa il client alla CLI; cartella dei log e appunti solo se l’host li ha', async () => {
+    const calls: string[][] = [];
+    const cli = (async (args: string[]) => {
+      calls.push(args);
+      return args[0] === 'diagnostics' ? { text: 'Diagnostica di SwapDeck' } : { dir: '/tmp/logs' };
+    }) as CliRunner;
+    const base = {
+      cli,
+      lastState: () => cliState(fixtureList()),
+      refresh: async () => cliState(fixtureList()),
+      onOutcome: () => undefined,
+      confirm: async () => true,
+    };
+    const bare = createRequestHandler(base);
+    await expect(bare('getDiagnostics', {})).resolves.toBe('Diagnostica di SwapDeck');
+    expect(calls[0]).toEqual(['diagnostics', '--json']);
+    const invalid = { info: { kind: 'invalidUsage' } };
+    await expect(bare('openLogsFolder', {})).rejects.toMatchObject(invalid);
+    await expect(bare('copyText', { text: 'x' })).rejects.toMatchObject(invalid);
+
+    const openFolder = vi.fn(async () => undefined);
+    const copyText = vi.fn(async () => undefined);
+    const full = createRequestHandler({
+      ...base,
+      clientInfo: 'VS Code 1.99',
+      openFolder,
+      copyText,
+    });
+    await full('getDiagnostics', {});
+    expect(calls.at(-1)).toEqual(['diagnostics', '--json', '--client', 'VS Code 1.99']);
+    await full('openLogsFolder', {});
+    expect(openFolder).toHaveBeenCalledWith('/tmp/logs');
+    await full('copyText', { text: 'abc' });
+    expect(copyText).toHaveBeenCalledWith('abc');
+    await expect(full('copyText', { text: 1 })).rejects.toMatchObject(invalid);
+  });
+});
