@@ -101,7 +101,9 @@ export type HostMessage =
   | { type: 'state'; list: ListResponse }
   /** Avanzamento di installazione o aggiornamento di cswap per la richiesta id. */
   | { type: 'progress'; id: number; event: SetupProgress }
-  | { type: 'view'; settings: ViewSettings };
+  | { type: 'view'; settings: ViewSettings }
+  /** Config di SwapDeck o di cswap cambiata (altra finestra, app, CLI, altra vista): le schede rileggono. */
+  | { type: 'configChanged' };
 
 export function isRequestMethod(value: unknown): value is RequestMethod {
   return typeof value === 'string' && (REQUEST_METHODS as readonly string[]).includes(value);

@@ -60,6 +60,7 @@ export class VsCodeBackend implements Backend, SetupBackend {
   private readonly pending = new Map<number, Pending>();
   private readonly stateListeners = new Set<(state: ListResponse) => void>();
   private readonly viewListeners = new Set<(settings: ViewSettings) => void>();
+  private readonly configListeners = new Set<() => void>();
   private readonly unsubscribe: Unsubscribe;
 
   constructor(
@@ -82,6 +83,7 @@ export class VsCodeBackend implements Backend, SetupBackend {
     this.pending.clear();
     this.stateListeners.clear();
     this.viewListeners.clear();
+    this.configListeners.clear();
   }
 
   private receive(message: HostMessage): void {
@@ -102,6 +104,9 @@ export class VsCodeBackend implements Backend, SetupBackend {
         return;
       case 'view':
         for (const l of this.viewListeners) l(message.settings);
+        return;
+      case 'configChanged':
+        for (const l of this.configListeners) l();
         return;
     }
   }
@@ -239,6 +244,11 @@ export class VsCodeBackend implements Backend, SetupBackend {
   onStateChanged(listener: (state: ListResponse) => void): Unsubscribe {
     this.stateListeners.add(listener);
     return () => this.stateListeners.delete(listener);
+  }
+
+  onConfigChanged(listener: () => void): Unsubscribe {
+    this.configListeners.add(listener);
+    return () => this.configListeners.delete(listener);
   }
 
   /** Lingua e tema di VS Code, inviati dall'host all'avvio e quando cambiano. */

@@ -22,6 +22,10 @@ export const it = {
   'common.retry': 'Riprova',
   'common.refresh': 'Aggiorna',
   'common.loading': 'Caricamento…',
+  'sync.changedElsewhere':
+    'Modificato in un’altra finestra. Le tue modifiche non sono salvate: Ricarica le scarta e mostra i valori nuovi.',
+  'sync.reload': 'Ricarica',
+  'sync.reload.tip': 'Scarta le modifiche non salvate e mostra i valori attuali',
   'common.working': 'Operazione in corso…',
 
   'dashboard.title': 'Account',

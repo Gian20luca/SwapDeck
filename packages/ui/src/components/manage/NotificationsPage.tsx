@@ -5,9 +5,18 @@ import type { Notice } from '../../backend/useActionRunner.js';
 import { errorMessage } from '../../backend/useAccounts.js';
 import type { NotificationPatch } from '../../backend/types.js';
 import { useI18n, type MessageKey } from '../../i18n/index.js';
+import { useConfigChanged, useSyncedForm } from '../../lib/useExternalChange.js';
 import { useLoad } from '../../lib/useLoad.js';
 import { Tooltip } from '../Tooltip.js';
-import { CheckField, LoadGate, NoticeView, Section, SelectField, TextField } from './common.js';
+import {
+  CheckField,
+  ExternalChangeNotice,
+  LoadGate,
+  NoticeView,
+  Section,
+  SelectField,
+  TextField,
+} from './common.js';
 
 /** Campi numerici: percorso «avviso.campo» → limiti (come `NotificationConfig::validate` del Rust). */
 const NUMBERS = {
@@ -120,6 +129,7 @@ export function NotificationsPage({ onBack }: { onBack: () => void }) {
     [backend],
   );
   const { state, set, reload } = useLoad<NotificationConfig>(load, [load]);
+  useConfigChanged(reload);
   const back = useRef<HTMLButtonElement>(null);
   useEffect(() => back.current?.focus(), []);
 
@@ -157,8 +167,17 @@ function NotificationsForm({
   const { next, errors } = useMemo(() => build(config, texts, t), [config, texts, t]);
   const hasErrors = Object.keys(errors).length > 0;
   const patch = useMemo(() => diff(saved, next), [saved, next]);
-  const dirty =
-    Object.keys(patch).length > 0 || JSON.stringify(texts) !== JSON.stringify(textsOf(saved));
+  const differs = (s: NotificationConfig) =>
+    Object.keys(diff(s, next)).length > 0 || JSON.stringify(texts) !== JSON.stringify(textsOf(s));
+  const dirty = differs(saved);
+  const external = useSyncedForm(
+    saved,
+    (s) => !differs(s),
+    (s) => {
+      setConfig(structuredClone(s));
+      setTexts(textsOf(s));
+    },
+  );
 
   function update<S extends Section>(section: S, changes: Partial<NotificationConfig[S]>) {
     setConfig((c) => ({ ...c, [section]: { ...c[section], ...changes } }));
@@ -379,6 +398,7 @@ function NotificationsForm({
       </Section>
 
       <NoticeView notice={notice} />
+      <ExternalChangeNotice stale={external.stale} onReload={external.reloadNow} />
       <div className="sd-row sd-row--end">
         <Tooltip text={t('notif.revert.tip')}>
           <button

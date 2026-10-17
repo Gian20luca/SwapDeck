@@ -135,6 +135,11 @@ export interface Backend {
   runAction(action: CswapAction): Promise<ActionOutcome>;
   /** Evento di aggiornamento dello stato: il motore o un'azione hanno prodotto una nuova lista. */
   onStateChanged(listener: (state: ListResponse) => void): Unsubscribe;
+  /**
+   * Config di SwapDeck o di cswap cambiata fuori da questa vista (altra finestra o istanza, app,
+   * CLI): le schede aperte rileggono i loro dati. Facoltativo: senza, si aggiornano cambiando scheda.
+   */
+  onConfigChanged?(listener: () => void): Unsubscribe;
 
   /*
    * Gestione completa (step 5). Tutti i metodi sono facoltativi: un host che non li ha

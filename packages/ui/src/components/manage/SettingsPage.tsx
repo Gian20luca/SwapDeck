@@ -12,11 +12,13 @@ import {
   validateConfigValue,
   type ConfigKind,
 } from '../../lib/cswapConfig.js';
+import { useConfigChanged, useSyncedForm } from '../../lib/useExternalChange.js';
 import { useLoad } from '../../lib/useLoad.js';
 import type { ThemeMode } from '../../theme/index.js';
 import { LanguageSelect, ThemeSelect } from '../PreferenceControls.js';
 import {
   CheckField,
+  ExternalChangeNotice,
   LoadGate,
   NoticeView,
   Section,
@@ -82,6 +84,7 @@ function PreferencesSection() {
     [backend],
   );
   const { state, set, reload } = useLoad<AppPreferences>(load, [load]);
+  useConfigChanged(() => supported && reload());
   const [notice, setNotice] = useState<Notice | null>(null);
 
   async function save(change: Partial<AppPreferences>, text: string): Promise<boolean> {
@@ -156,9 +159,18 @@ function PollForm({
   const parsed = parseThresholds(thresholds);
   const thresholdsError =
     withThresholds && parsed === null ? t('settings.thresholds.invalid') : null;
-  const dirty =
-    intervalNumber !== prefs.pollIntervalSeconds ||
-    (withThresholds && JSON.stringify(parsed) !== JSON.stringify(prefs.notificationThresholds));
+  const differs = (p: AppPreferences) =>
+    intervalNumber !== p.pollIntervalSeconds ||
+    (withThresholds && JSON.stringify(parsed) !== JSON.stringify(p.notificationThresholds));
+  const dirty = differs(prefs);
+  const external = useSyncedForm(
+    prefs,
+    (p) => !differs(p),
+    (p) => {
+      setInterval(String(p.pollIntervalSeconds));
+      setThresholds(p.notificationThresholds.join(', '));
+    },
+  );
 
   return (
     <form
@@ -200,6 +212,7 @@ function PollForm({
           disabled={saving}
         />
       )}
+      <ExternalChangeNotice stale={external.stale} onReload={external.reloadNow} />
       <div className="sd-row">
         <Tooltip text={t('settings.save.tip')}>
           <button
@@ -265,6 +278,7 @@ function CswapConfigSection() {
   const backend = useBackend();
   const load = useCallback(() => backend.getConfig(), [backend]);
   const { state, reload } = useLoad(load, [load]);
+  useConfigChanged(reload);
   const { run, busy, notice, dialog } = useActionRunner();
 
   async function after(promise: Promise<{ ok: boolean }>) {
@@ -282,7 +296,7 @@ function CswapConfigSection() {
             <ul className="sd-list" aria-label={t('config.title')}>
               {config.settings.map((setting) => (
                 <ConfigRow
-                  key={`${setting.key}:${JSON.stringify(setting.value)}:${setting.isSet}`}
+                  key={setting.key}
                   setting={setting}
                   busy={busy}
                   onSet={(value) =>
@@ -327,6 +341,11 @@ function ConfigRow({
   const info = keyInfo ? t(keyInfo.info) : undefined;
   const initial = configValueText(setting.value);
   const [text, setText] = useState(initial);
+  const external = useSyncedForm(
+    setting,
+    (s) => text === configValueText(s.value),
+    (s) => setText(configValueText(s.value)),
+  );
   const error = validateConfigValue(setting.key, text);
   const label = keyInfo ? t(keyInfo.label) : setting.key;
   const kind: ConfigKind = keyInfo?.kind ?? { type: 'string' };
@@ -377,6 +396,7 @@ function ConfigRow({
           disabled={busy}
         />
       )}
+      <ExternalChangeNotice stale={external.stale} onReload={external.reloadNow} />
       <div className="sd-row">
         <Tooltip text={t('config.save.tip')}>
           <button

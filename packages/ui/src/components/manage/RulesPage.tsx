@@ -6,7 +6,7 @@ import type {
   ReserveCriterion,
   ScoreWeights,
 } from '@swapdeck/types';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBackend } from '../../backend/context.js';
 import type { Notice } from '../../backend/useActionRunner.js';
 import { errorMessage, useAccounts } from '../../backend/useAccounts.js';
@@ -25,12 +25,14 @@ import {
   type RulesDraft,
 } from '../../lib/engineRules.js';
 import { shortEmail } from '../../lib/format.js';
+import { useSyncedForm } from '../../lib/useExternalChange.js';
 import { useLoad } from '../../lib/useLoad.js';
 import { Tooltip } from '../Tooltip.js';
 import { FlowList } from './FlowList.js';
 import { MapSelector } from './MapSelector.js';
 import {
   CheckField,
+  ExternalChangeNotice,
   LoadGate,
   NoticeView,
   Section,
@@ -131,19 +133,19 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
   // Confronto sulla lista resa esplicita: uno spostamento annullato non lascia modifiche.
   const dirty =
     JSON.stringify(materialize(draft, accounts)) !== JSON.stringify(materialize(base, accounts));
-  // Regole cambiate fuori (altra finestra, CLI): senza modifiche in corso la bozza si riallinea.
-  const seen = useRef(JSON.stringify(rulesNow));
-  useEffect(() => {
-    const json = JSON.stringify(rulesNow);
-    if (json === seen.current) return;
-    seen.current = json;
-    if (!dirty) {
-      const next = initialDraft(rulesNow, accounts);
+  // Regole cambiate fuori (altra finestra, CLI): senza modifiche in corso la bozza si riallinea,
+  // con modifiche resta e compare l'avviso con «Ricarica».
+  const external = useSyncedForm(
+    rulesNow,
+    (r) =>
+      JSON.stringify(materialize(draft, accounts)) ===
+      JSON.stringify(materialize(initialDraft(r, accounts), accounts)),
+    (r) => {
+      const next = initialDraft(r, accounts);
       setBase(next);
       setDraft(next);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rulesNow]);
+    },
+  );
 
   const rules = useMemo(() => fromDraft(draft, rulesNow), [draft, rulesNow]);
   const errors = useMemo(() => validateRules(rules), [rules]);
@@ -160,7 +162,7 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
   const patch = (changes: Partial<RulesDraft>) => setDraft((d) => ({ ...d, ...changes }));
 
   function adopt(engine: EngineState, profiles: EngineProfiles | null) {
-    seen.current = JSON.stringify(engine.rules);
+    external.own(engine.rules);
     onSaved({ engine, profiles });
     const next = initialDraft(engine.rules, accounts);
     setBase(next);
@@ -176,7 +178,7 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
       const saved = await backend.setEngineRules(next);
       const profiles = backend.getEngineProfiles ? await backend.getEngineProfiles() : null;
       if (keepDraft) {
-        seen.current = JSON.stringify(saved.rules);
+        external.own(saved.rules);
         onSaved({ engine: saved, profiles });
         const ignoredConflicts = [...saved.rules.ignoredConflicts];
         setBase((b) => ({ ...b, ignoredConflicts }));
@@ -556,6 +558,7 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
         </Section>
 
         <NoticeView notice={notice} />
+        <ExternalChangeNotice stale={external.stale} onReload={external.reloadNow} />
         <div className="sd-row sd-row--end">
           <Tooltip text={t('rules.revert.tip')}>
             <button

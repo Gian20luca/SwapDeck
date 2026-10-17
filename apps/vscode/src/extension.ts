@@ -228,12 +228,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
         await engine.stop();
         return () => syncEngine();
       },
-      onChanged: () => void signalSync(),
+      onChanged: () => {
+        void signalSync();
+        configChanged();
+      },
     }),
     (post) => {
       if (state?.list) post({ type: 'state', list: state.list });
     },
   );
+  /** Le schede aperte nei webview di questa finestra rileggono i loro dati. */
+  const configChanged = () => hub.post({ type: 'configChanged' });
   const panel = new DashboardPanel(hub);
   const sidebar = new SidebarView(hub);
 
@@ -250,7 +255,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
         await mkdir(dir, { recursive: true, mode: 0o700 });
         sync = new SyncWatcher({
           dir,
-          onChange: () => void refresh(),
+          onChange: () => {
+            void refresh();
+            configChanged();
+          },
           log: (message) => output.info(message),
         });
       }
@@ -319,8 +327,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
 
   async function afterAction(outcome: ActionOutcome): Promise<void> {
     refresher.invalidate();
-    // Cambio di account o altra azione di cswap: le altre finestre rileggono subito.
+    // Cambio di account o altra azione di cswap: le altre finestre rileggono subito, e così le
+    // schede aperte nelle altre viste di questa finestra.
     void signalSync();
+    configChanged();
     if (outcome.command) {
       const term = vscode.window.createTerminal({
         name: 'cswap run',
