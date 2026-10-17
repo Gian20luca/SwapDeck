@@ -302,7 +302,7 @@ export function createRequestHandler(deps: BridgeDeps) {
         return deps.cli(args);
       }
       case 'getUsageBreakdown': {
-        // La prima lettura delle sessioni può durare decine di secondi: timeout più largo.
+        // Lettura a budget: ogni chiamata dura pochi secondi, la UI richiama finché c'è `partial`.
         const query = plainObject(params['query'], 'richiesta dei consumi');
         const window = query['window'];
         if (window !== '5h' && window !== '7d' && window !== 'custom') {

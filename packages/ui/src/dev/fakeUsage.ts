@@ -97,6 +97,16 @@ const equivalent = (c: TokenCounts) =>
   c.cacheCreation * WEIGHTS[2] +
   c.cacheRead * WEIGHTS[3];
 
+/** Come `source::project_label` del Rust (senza `cwd`): ultimo pezzo dopo il trattino. */
+function projectLabel(project: string): string {
+  return (
+    project
+      .split('-')
+      .reverse()
+      .find((s) => s !== '') ?? '?'
+  );
+}
+
 function emptyTotals(): UsageTotals {
   return { tokens: t(0, 0, 0, 0), equivalent: 0, messages: 0 };
 }
@@ -205,6 +215,7 @@ export function fakeUsageBreakdown(query: UsageQuery, nowMs: number): UsageBreak
         row = {
           key: m.project,
           project: m.project,
+          projectLabel: projectLabel(m.project),
           totals: emptyTotals(),
           sharePct: 0,
           lastUsed: 0,
@@ -214,6 +225,7 @@ export function fakeUsageBreakdown(query: UsageQuery, nowMs: number): UsageBreak
         row = {
           key: `${m.project}/${m.session}`,
           project: m.project,
+          projectLabel: projectLabel(m.project),
           session: m.session,
           totals: emptyTotals(),
           sharePct: 0,
@@ -225,6 +237,7 @@ export function fakeUsageBreakdown(query: UsageQuery, nowMs: number): UsageBreak
           ? {
               key: `agent:${m.agent.id}`,
               project: m.project,
+              projectLabel: projectLabel(m.project),
               session: m.session,
               agent: m.agent.id,
               agentType: m.agent.type,
@@ -236,6 +249,7 @@ export function fakeUsageBreakdown(query: UsageQuery, nowMs: number): UsageBreak
           : {
               key: `main:${m.project}/${m.session}`,
               project: m.project,
+              projectLabel: projectLabel(m.project),
               session: m.session,
               totals: emptyTotals(),
               sharePct: 0,

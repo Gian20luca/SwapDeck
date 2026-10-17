@@ -12,7 +12,9 @@ export type UsageRow = {
  */
 key: string, project?: string, 
 /**
- * Nome da mostrare: solo l'ultima parte del percorso ([`source::project_label`]). `project`
+ * Nome da mostrare: solo l'ultima cartella, dal `cwd` delle sessioni quando corrisponde alla
+ * cartella del progetto ([`source::project_label_from_cwd`]), altrimenti dal nome della
+ * cartella ([`source::project_label`]). `project`
  * (nome della cartella di Claude Code, cioè il percorso intero) serve solo da chiave.
  */
 projectLabel?: string, session?: string, agent?: string, agentType?: string, description?: string, model?: string, totals: UsageTotals, 

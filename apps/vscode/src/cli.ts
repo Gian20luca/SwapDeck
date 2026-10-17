@@ -15,8 +15,11 @@ const STDERR_TAIL_BYTES = 4096;
 export const DEFAULT_TIMEOUT_MS = 60_000;
 /** Le azioni che scrivono hanno già un loro timeout in Rust (30 s, `upgrade` di più). */
 export const ACTION_TIMEOUT_MS = 6 * 60_000;
-/** La prima lettura delle sessioni di Claude Code (`usage breakdown`) può durare decine di secondi. */
-export const USAGE_TIMEOUT_MS = 5 * 60_000;
+/**
+ * `usage breakdown` legge a budget (circa 8 s a chiamata, la UI richiama finché c'è `partial`):
+ * margine per l'elenco dei file su dischi lenti.
+ */
+export const USAGE_TIMEOUT_MS = 2 * 60_000;
 /** Dopo il timeout: attesa dell'uscita del processo prima di `SIGKILL` (e poi del rifiuto). */
 export const KILL_GRACE_MS = 2_000;
 

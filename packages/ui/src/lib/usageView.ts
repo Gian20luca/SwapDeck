@@ -1,15 +1,5 @@
 import type { UsageGroupBy, UsageRow } from '@swapdeck/types';
 
-/**
- * Nome di progetto più leggibile: Claude Code chiama la cartella come il percorso con i separatori
- * cambiati in trattini (`c--Progetti-SwapDeck`, `-home-utente-progetto`). Si toglie solo il prefisso
- * dell'unità o il trattino iniziale; il resto resta com'è.
- */
-export function prettyProject(name: string): string {
-  const stripped = name.replace(/^[A-Za-z]--/, '').replace(/^-+/, '');
-  return stripped === '' ? name : stripped;
-}
-
 /** Identificativo di sessione o agente accorciato (di solito un UUID). */
 export function shortId(id: string, max = 8): string {
   return id.length > max + 1 ? `${id.slice(0, max)}…` : id;
@@ -23,10 +13,11 @@ export interface RowLabel {
 
 /** Testo di una riga della classifica secondo il raggruppamento; `main` = «Conversazione principale». */
 export function rowLabel(row: UsageRow, groupBy: UsageGroupBy, main: string): RowLabel {
-  const project = row.project === undefined ? undefined : prettyProject(row.project);
+  // Solo il nome dato dal core: `project` (e la chiave che lo contiene) è il percorso intero.
+  const project = row.projectLabel;
   switch (groupBy) {
     case 'project':
-      return { title: project ?? row.key };
+      return { title: project ?? '?' };
     case 'session':
       return {
         title: row.session === undefined ? row.key : shortId(row.session),

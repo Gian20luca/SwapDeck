@@ -1112,3 +1112,55 @@ fn project_label_is_only_the_last_part() {
         assert!(label == "uno" || label == "due", "{label}");
     }
 }
+
+fn with_cwd(line: &str, cwd: &str) -> String {
+    let mut v: serde_json::Value = serde_json::from_str(line).unwrap();
+    v["cwd"] = serde_json::Value::String(cwd.to_owned());
+    v.to_string()
+}
+
+#[test]
+fn project_label_from_cwd_when_it_matches_the_folder() {
+    let e = env();
+    let a = assistant(t0() + 10, "m1", "claude-opus-4-8", 1, 1, 0, 0);
+    let b = assistant(t0() + 20, "m2", "claude-opus-4-8", 1, 1, 0, 0);
+    // Un `cd` in una sottocartella non conta; vale la prima riga che ridà il nome della cartella.
+    append(
+        &e.projects.join("C--Progetti-my-app").join("s1.jsonl"),
+        &[
+            "{\"type\":\"summary\"}".to_owned(),
+            with_cwd(&a, r"C:\Progetti\my-app\sub"),
+            with_cwd(&b, r"C:\Progetti\my-app"),
+        ],
+    );
+    // `cwd` che non ridà la cartella: resta la ricostruzione dal nome.
+    append(
+        &e.projects.join("-home-u-x-y").join("s2.jsonl"),
+        &[with_cwd(&a, "/home/u/altro")],
+    );
+    // Nessun `cwd`.
+    append(
+        &e.projects.join("-home-u-solo-nome").join("s3.jsonl"),
+        &[serde_json::json!({"type": "summary"}).to_string(), {
+            let mut v: serde_json::Value = serde_json::from_str(&a).unwrap();
+            v.as_object_mut().unwrap().remove("cwd");
+            v.to_string()
+        }],
+    );
+    let b = usage_breakdown(&e.paths(), &query(UsageGroupBy::Project, None), t0() + 3600).unwrap();
+    let label = |p: &str| {
+        b.rows
+            .iter()
+            .find(|r| r.project.as_deref() == Some(p))
+            .and_then(|r| r.project_label.clone())
+            .unwrap()
+    };
+    assert_eq!(label("C--Progetti-my-app"), "my-app");
+    assert_eq!(label("-home-u-x-y"), "y");
+    assert_eq!(label("-home-u-solo-nome"), "nome");
+    let text = fs::read_to_string(e.data.join("usage").join("index.json")).unwrap();
+    // Il `cwd` (scritto con `\\` nel JSON) non entra nell'indice.
+    assert!(!text.contains(r"Progetti\\my-app") && !text.contains("altro"));
+    assert_eq!(source::project_label_from_cwd(&e.projects, ".."), None);
+    assert_eq!(source::project_label_from_cwd(&e.projects, "a/b"), None);
+}

@@ -46,7 +46,7 @@ test('«Chi consuma questa utenza» dalla dashboard apre la scheda filtrata; rag
   );
   await expect(page.getByRole('heading', { name: 'Chi consuma' })).toBeVisible();
   await expect(page.getByLabel('Utenza')).toHaveValue('1');
-  await expect(ranking(page).getByRole('listitem').first()).toContainText('Progetti-SwapDeck');
+  await expect(ranking(page).getByRole('listitem').first()).toContainText('SwapDeck');
   await expect(page.getByRole('list', { name: 'Altri dispositivi (stima)' })).toContainText(
     'Fiducia media',
   );

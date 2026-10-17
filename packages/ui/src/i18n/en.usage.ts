@@ -18,6 +18,7 @@ export const enUsage = {
   'usage.group.model': 'Model',
   'usage.group.tip': 'How to group the usage in the ranking.',
   'usage.firstScan': 'First analysis of the sessions in progress…',
+  'usage.firstScan.progress': '{pct}% of the sessions read',
   'usage.firstScan.hint':
     'The first read can take a few tens of seconds; the following ones are immediate.',
   'usage.noSource': 'Cannot find the Claude Code sessions on this PC.',
@@ -48,6 +49,8 @@ export const enUsage = {
     'Method: compares the quota read from the server with this PC’s tokens and gives the difference to other devices; confidence grows with the number and consistency of readings.',
   'usage.scan.indexReset': 'The reading index was rebuilt from scratch.',
   'usage.scan.saveFailed': 'Index not saved: the next analysis will restart from the previous one.',
+  'usage.scan.partial':
+    'Session reading not finished: the ranking only includes the part already read.',
   'usage.scan.incomplete': 'Some session folders are unreadable: the data may be partial.',
   'usage.privacy':
     'Only the token counts and the agent descriptions of the Claude Code sessions on this PC are read; the message text is not read and nothing leaves the PC.',

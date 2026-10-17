@@ -54,6 +54,86 @@ pub fn project_label(folder: &str) -> String {
         .collect()
 }
 
+/// Byte letti al massimo dall'inizio di un file per trovare il `cwd`.
+const CWD_PROBE_BYTES: u64 = 256 * 1024;
+/// File di sessione provati al massimo per progetto.
+const CWD_PROBE_FILES: usize = 3;
+
+#[derive(Deserialize)]
+struct RawCwd {
+    #[serde(default)]
+    cwd: Option<String>,
+}
+
+/// Nome da mostrare dal campo `cwd` delle righe di sessione: l'ultima cartella del percorso, solo
+/// se il percorso codificato come fa Claude Code (ogni carattere non alfanumerico ASCII → `-`)
+/// ridà esattamente il nome della cartella del progetto (un `cd` in una sottocartella non conta).
+/// Legge al massimo i primi 256 KB di tre sessioni principali; il percorso resta in memoria solo
+/// qui e non si salva né si registra. `None`: si usa [`project_label`].
+pub fn project_label_from_cwd(projects: &Path, project: &str) -> Option<String> {
+    if project.is_empty() || project == "." || project == ".." || project.contains(['/', '\\']) {
+        return None;
+    }
+    let dir = projects.join(project);
+    let mut files: Vec<(i64, PathBuf)> = fs::read_dir(&dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
+        .filter(|e| {
+            e.file_name()
+                .to_str()
+                .is_some_and(|n| n.ends_with(".jsonl"))
+        })
+        .filter_map(|e| Some((mtime_ms(&e.metadata().ok()?), e.path())))
+        .collect();
+    files.sort_by(|a, b| b.0.cmp(&a.0));
+    files
+        .iter()
+        .take(CWD_PROBE_FILES)
+        .find_map(|(_, path)| cwd_label_in(path, project))
+}
+
+fn cwd_label_in(path: &Path, project: &str) -> Option<String> {
+    let file = open_regular(path).ok()?;
+    let mut buf = Vec::new();
+    file.take(CWD_PROBE_BYTES).read_to_end(&mut buf).ok()?;
+    let mut found = None;
+    // L'ultimo pezzo può essere una riga tagliata: si analizzano solo le righe complete.
+    let complete = buf.iter().filter(|&&b| b == b'\n').count();
+    for line in buf.split(|&b| b == b'\n').take(complete) {
+        if memchr::memmem::find(line, b"\"cwd\":").is_none() {
+            continue;
+        }
+        let Some(cwd) = serde_json::from_slice::<RawCwd>(line)
+            .ok()
+            .and_then(|r| r.cwd)
+        else {
+            continue;
+        };
+        let encoded: String = cwd
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+            .collect();
+        if encoded != project {
+            continue;
+        }
+        let label: String = cwd
+            .rsplit(['/', '\\'])
+            .find(|s| !s.is_empty())
+            .unwrap_or_default()
+            .chars()
+            .filter(|c| !c.is_control())
+            .take(64)
+            .collect();
+        if !label.is_empty() {
+            found = Some(label);
+            break;
+        }
+    }
+    buf.fill(0);
+    found
+}
+
 /// File di sessione trovato.
 #[derive(Debug, Clone)]
 pub struct SessionFile {

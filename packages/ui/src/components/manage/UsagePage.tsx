@@ -1,6 +1,7 @@
 import type {
   BreakdownWindow,
   OtherDevicesEstimate,
+  ScanProgress,
   UsageBreakdown,
   UsageGroupBy,
   UsageQuery,
@@ -36,6 +37,8 @@ const CONFIDENCE_KEYS = {
 
 /** Dopo quanto un caricamento è la «prima analisi» (le letture successive durano millisecondi). */
 const FIRST_SCAN_AFTER_MS = 600;
+/** Chiamate al massimo per una lettura a budget (circa 256 MB l'una: oltre 50 GB di sessioni). */
+const MAX_SCAN_CALLS = 200;
 
 /**
  * Chi consuma (F20): classifica dei consumi di Claude Code di questo PC per progetto, sessione,
@@ -58,17 +61,36 @@ export function UsagePage({ target }: { target?: { account: number; key: number 
 
   // Una lettura lenta (la prima) non deve sovrascrivere una richiesta più recente.
   const seq = useRef(0);
+  const [progress, setProgress] = useState<ScanProgress | null>(null);
+  useEffect(
+    () => () => {
+      seq.current += 1;
+    },
+    [],
+  );
   const load = useCallback(async (): Promise<UsageBreakdown> => {
     if (!backend.getUsageBreakdown) throw new Error('n/d');
     const mine = ++seq.current;
+    // Superata da una richiesta più recente: non si risolve, così non tocca lo stato.
+    const superseded = () => new Promise<UsageBreakdown>(() => undefined);
+    setProgress(null);
     const query: UsageQuery = {
       window,
       groupBy,
       ...(account === 'all' ? {} : { account: Number(account) }),
     };
-    const result = await backend.getUsageBreakdown(query);
-    // Superata da una richiesta più recente: non si risolve, così non tocca lo stato.
-    if (mine !== seq.current) return new Promise<UsageBreakdown>(() => undefined);
+    let result = await backend.getUsageBreakdown(query);
+    // Lettura a budget: si richiama finché il core ha righe da leggere, mostrando l'avanzamento;
+    // senza avanzamento (o oltre il limite) si mostra quanto letto, con l'avviso.
+    let scanned = -1;
+    for (let calls = 1; result.partial && calls < MAX_SCAN_CALLS; calls++) {
+      if (mine !== seq.current) return superseded();
+      if (result.partial.scannedBytes <= scanned) break;
+      scanned = result.partial.scannedBytes;
+      setProgress(result.partial);
+      result = await backend.getUsageBreakdown(query);
+    }
+    if (mine !== seq.current) return superseded();
     return result;
   }, [backend, window, groupBy, account]);
   const { state, reload } = useLoad(load, [load]);
@@ -125,7 +147,11 @@ export function UsagePage({ target }: { target?: { account: number; key: number 
           <p>{t('common.unavailable')}</p>
         </div>
       ) : (
-        <LoadGate state={state} onRetry={() => void reload()} loading={<FirstScan />}>
+        <LoadGate
+          state={state}
+          onRetry={() => void reload()}
+          loading={<FirstScan progress={progress} />}
+        >
           {(data) => <Result data={data} groupBy={groupBy} locale={locale} t={t} nameOf={nameOf} />}
         </LoadGate>
       )}
@@ -173,20 +199,40 @@ function Choice<T extends string>({
   );
 }
 
-/** Caricamento: subito «Caricamento…», dopo poco la prima analisi, con avanzamento indeterminato. */
-function FirstScan() {
-  const { t } = useI18n();
-  const [slow, setSlow] = useState(false);
+/**
+ * Caricamento: subito «Caricamento…», dopo poco (o appena il core dice che la lettura è a metà) la
+ * prima analisi, con l'avanzamento vero quando c'è e indeterminato prima della prima risposta.
+ */
+function FirstScan({ progress }: { progress: ScanProgress | null }) {
+  const { t, locale } = useI18n();
+  const [late, setLate] = useState(false);
   useEffect(() => {
-    const timer = setTimeout(() => setSlow(true), FIRST_SCAN_AFTER_MS);
+    const timer = setTimeout(() => setLate(true), FIRST_SCAN_AFTER_MS);
     return () => clearTimeout(timer);
   }, []);
+  const slow = late || progress !== null;
+  const pct =
+    progress && progress.totalBytes > 0
+      ? Math.min(100, (progress.scannedBytes / progress.totalBytes) * 100)
+      : null;
   return (
     <div className="sd-state" role="status">
       <p>{slow ? t('usage.firstScan') : t('common.loading')}</p>
       {slow && (
         <>
-          <progress className="sd-usage__progress" aria-label={t('usage.firstScan')} />
+          {pct === null ? (
+            <progress className="sd-usage__progress" aria-label={t('usage.firstScan')} />
+          ) : (
+            <>
+              <progress
+                className="sd-usage__progress"
+                aria-label={t('usage.firstScan')}
+                value={pct}
+                max={100}
+              />
+              <p>{t('usage.firstScan.progress', { pct: formatPct(Math.floor(pct), locale) })}</p>
+            </>
+          )}
           <p className="sd-hint">{t('usage.firstScan.hint')}</p>
         </>
       )}
@@ -284,6 +330,7 @@ function ScanNotices({ data, t }: { data: UsageBreakdown; t: Translate }) {
   if (data.scan.indexReset) keys.push('usage.scan.indexReset');
   if (data.scan.saveFailed) keys.push('usage.scan.saveFailed');
   if (data.scan.incomplete) keys.push('usage.scan.incomplete');
+  if (data.partial) keys.push('usage.scan.partial');
   if (keys.length === 0) return null;
   return (
     <div className="sd-notice" role="note">

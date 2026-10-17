@@ -19,6 +19,7 @@ export const itUsage = {
   'usage.group.model': 'Modello',
   'usage.group.tip': 'Come raggruppare i consumi nella classifica.',
   'usage.firstScan': 'Prima analisi delle sessioni in corso…',
+  'usage.firstScan.progress': 'Letto il {pct}% delle sessioni',
   'usage.firstScan.hint':
     'La prima lettura può richiedere qualche decina di secondi; le successive sono immediate.',
   'usage.noSource': 'Non trovo le sessioni di Claude Code su questo PC.',
@@ -50,6 +51,8 @@ export const itUsage = {
     'Metodo: confronta la quota letta dal server con i token di questo PC e dà agli altri dispositivi la differenza; la fiducia cresce con il numero e la coerenza delle letture.',
   'usage.scan.indexReset': 'L’indice delle letture è stato rifatto da capo.',
   'usage.scan.saveFailed': 'Indice non salvato: la prossima analisi ripartirà dalla precedente.',
+  'usage.scan.partial':
+    'Lettura delle sessioni non completata: la classifica comprende solo la parte già letta.',
   'usage.scan.incomplete':
     'Alcune cartelle delle sessioni non sono leggibili: i dati possono essere parziali.',
   'usage.privacy':

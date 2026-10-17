@@ -165,7 +165,9 @@ pub struct UsageRow {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub project: Option<String>,
-    /// Nome da mostrare: solo l'ultima parte del percorso ([`source::project_label`]). `project`
+    /// Nome da mostrare: solo l'ultima cartella, dal `cwd` delle sessioni quando corrisponde alla
+    /// cartella del progetto ([`source::project_label_from_cwd`]), altrimenti dal nome della
+    /// cartella ([`source::project_label`]). `project`
     /// (nome della cartella di Claude Code, cioè il percorso intero) serve solo da chiave.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -324,10 +326,30 @@ fn scan_and_rank(
         }
     }
     let mut out = breakdown(&idx, &records, query, now)?;
+    if let Some(p) = projects {
+        apply_cwd_labels(p, &mut out.rows);
+    }
     out.source_available = projects.is_some();
     out.partial = stats.partial;
     out.scan = stats;
     Ok(out)
+}
+
+/// Sostituisce `projectLabel` con l'ultima cartella del `cwd` quando le sessioni del progetto la
+/// danno ([`source::project_label_from_cwd`]); una lettura per progetto, solo in memoria.
+fn apply_cwd_labels(projects: &std::path::Path, rows: &mut [UsageRow]) {
+    let mut labels: HashMap<String, Option<String>> = HashMap::new();
+    for row in rows {
+        let Some(project) = row.project.as_deref() else {
+            continue;
+        };
+        let label = labels
+            .entry(project.to_owned())
+            .or_insert_with(|| source::project_label_from_cwd(projects, project));
+        if let Some(l) = label {
+            row.project_label = Some(l.clone());
+        }
+    }
 }
 
 /// Ultimo campione valido di un'utenza con il reset della finestra.

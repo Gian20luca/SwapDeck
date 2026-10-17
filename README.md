@@ -59,6 +59,7 @@ Aggiornamenti automatici: spenti di default finché il repo è privato; si scari
 
   Per gli avvisi su consumi e reset si sceglie se seguire solo l'utenza attiva o tutte. In più: **Non disturbare** a orari (anche a cavallo della mezzanotte, con i critici che possono passare) e un **riepilogo giornaliero** all'ora scelta. Le regole stanno nella sezione `notifications` di `config.json` e valgono dalla lettura successiva.
 
+- **Chi consuma:** scheda (anche dalla scheda dell'account e dallo Storico, «Chi consuma questa utenza») con la classifica dei consumi di Claude Code di questo PC per progetto, sessione, agente o modello, sulle 5 ore o sui 7 giorni, per un'utenza o per tutte, più la quota stimata consumata da altri dispositivi con il suo grado di fiducia. Si leggono in sola lettura solo conteggi di token, orari, nomi di progetto e sessione e le descrizioni degli agenti; il testo dei messaggi non si legge e nulla esce dal PC. La prima lettura di molte sessioni procede a blocchi con l'avanzamento in percentuale; le successive sono immediate. Metodo e limiti in `docs/CHI-CONSUMA.md`; da riga di comando `swapdeck-cli usage breakdown`.
 - **Conferme:** le azioni delicate (`remove`, `import`, `export`, `swap`/`move`, `unmap`, `disable` dell'account attivo, `purge`) chiedono conferma; `purge` chiede di digitare una parola. Il cambio di account non chiede nulla.
 
 ## Motore delle regole

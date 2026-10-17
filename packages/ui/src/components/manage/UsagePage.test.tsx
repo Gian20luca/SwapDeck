@@ -41,7 +41,7 @@ describe('UsagePage', () => {
   it('classifica per progetto: barre, percentuale, token e ultimo uso, dal più alto', async () => {
     const { spy } = await setup();
     expect(spy).toHaveBeenCalledWith({ window: '5h', groupBy: 'project' });
-    expect(names()[0]).toBe('Progetti-SwapDeck');
+    expect(names()[0]).toBe('SwapDeck');
     const first = within(ranking()).getAllByRole('listitem')[0]!;
     expect(within(first).getByRole('img', { name: /% del consumo/ })).toBeInTheDocument();
     expect(first.textContent).toMatch(/token eq\. · \d+ messaggi · ultimo uso/);
@@ -163,6 +163,79 @@ describe('UsagePage', () => {
     slow.forEach((release) => release());
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(names()).toContain('claude-opus-4-8');
+  });
+
+  it('lettura a budget: richiama finché c’è partial e mostra l’avanzamento vero', async () => {
+    const backend = new FakeBackend({ usageScanCalls: 2 });
+    const real = backend.getUsageBreakdown.bind(backend);
+    const pending: Array<() => void> = [];
+    const spy = vi
+      .spyOn(backend, 'getUsageBreakdown')
+      .mockImplementation(
+        (query) => new Promise((resolve) => pending.push(() => resolve(real(query)))),
+      );
+    renderWith(<UsagePage />, backend);
+    const next = async (calls: number) => {
+      await waitFor(() => expect(pending).toHaveLength(calls));
+      pending[calls - 1]!();
+    };
+    await next(1);
+    expect(await screen.findByText('Letto il 33% delle sessioni')).toBeInTheDocument();
+    const progress = screen.getByRole('progressbar');
+    expect(Number(progress.getAttribute('value'))).toBeCloseTo(33.33, 1);
+    expect(progress).toHaveAttribute('max', '100');
+    await next(2);
+    expect(await screen.findByText('Letto il 66% delle sessioni')).toBeInTheDocument();
+    await next(3);
+    await screen.findByRole('list', { name: 'Classifica dei consumi' });
+    expect(spy).toHaveBeenCalledTimes(3);
+    expect(spy).toHaveBeenLastCalledWith({ window: '5h', groupBy: 'project' });
+    expect(screen.queryByText(/Lettura delle sessioni non completata/)).toBeNull();
+  });
+
+  it('lettura a budget senza avanzamento: si ferma e mostra quanto letto con l’avviso', async () => {
+    const backend = new FakeBackend();
+    const real = backend.getUsageBreakdown.bind(backend);
+    const spy = vi.spyOn(backend, 'getUsageBreakdown').mockImplementation(async (query) => ({
+      ...(await real(query)),
+      partial: { scannedBytes: 10, totalBytes: 100 },
+    }));
+    await setup(backend);
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(screen.getByText(/Lettura delle sessioni non completata/)).toBeInTheDocument();
+  });
+
+  it('una lettura a budget superata da una più recente smette di richiamare', async () => {
+    const backend = new FakeBackend();
+    const real = backend.getUsageBreakdown.bind(backend);
+    let scanned = 0;
+    const slow: Array<() => void> = [];
+    const spy = vi.spyOn(backend, 'getUsageBreakdown').mockImplementation((query) =>
+      query.groupBy === 'project'
+        ? new Promise((resolve) =>
+            slow.push(() =>
+              resolve(
+                real(query).then((r) => ({
+                  ...r,
+                  partial: { scannedBytes: (scanned += 10), totalBytes: 1000 },
+                })),
+              ),
+            ),
+          )
+        : real(query),
+    );
+    renderWith(<UsagePage />, backend);
+    await waitFor(() => expect(slow).toHaveLength(1));
+    slow[0]!();
+    await screen.findByText('Letto il 1% delle sessioni');
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Modello' }));
+    await screen.findByText('claude-opus-4-8');
+    slow.forEach((release) => release());
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(names()).toContain('claude-opus-4-8');
+    const projectCalls = spy.mock.calls.filter(([q]) => q.groupBy === 'project').length;
+    expect(projectCalls).toBe(2);
   });
 
   it('privacy: riga fissa in fondo alla pagina', async () => {
