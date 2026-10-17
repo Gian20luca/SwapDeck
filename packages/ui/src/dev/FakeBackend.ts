@@ -42,7 +42,7 @@ import configList from '../../../../fixtures/cswap/config-list.json';
 import { loadScenario, type ScenarioName } from './fixtures.js';
 import { generateEvents, generateHistory } from './history.js';
 import { FakeSetup, type FakeSetupOptions } from './fakeSetup.js';
-import { applyProfile, fakeCandidate, seedProfiles } from './fakeProfiles.js';
+import { applyProfile, checkEditable, fakeCandidate, seedProfiles } from './fakeProfiles.js';
 import { defaultNotifications, patchNotifications } from './fakeNotifications.js';
 
 export interface FakeBackendOptions {
@@ -294,6 +294,11 @@ export class FakeBackend implements Backend, SetupBackend {
     await this.delay();
     const problems = Object.keys(validateRules(rules));
     if (problems.length > 0) fail(`Regole non valide: ${problems.join(', ')}`, 'ConfigError');
+    try {
+      checkEditable(this.profiles, this.rules, rules);
+    } catch (error) {
+      fail(error instanceof Error ? error.message : String(error), 'ConfigError');
+    }
     this.rules = structuredClone(rules);
     return this.engineState();
   }

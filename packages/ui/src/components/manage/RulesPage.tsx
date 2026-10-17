@@ -6,7 +6,7 @@ import type {
   ReserveCriterion,
   ScoreWeights,
 } from '@swapdeck/types';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useBackend } from '../../backend/context.js';
 import type { Notice } from '../../backend/useActionRunner.js';
 import { errorMessage, useAccounts } from '../../backend/useAccounts.js';
@@ -28,7 +28,7 @@ import { shortEmail } from '../../lib/format.js';
 import { useLoad } from '../../lib/useLoad.js';
 import { Tooltip } from '../Tooltip.js';
 import { FlowList } from './FlowList.js';
-import { MapSelector } from './MapSelector.js';
+import { MapNameForm, MapSelector, profileLabel } from './MapSelector.js';
 import {
   CheckField,
   LoadGate,
@@ -55,7 +55,11 @@ interface RulesData {
   profiles: EngineProfiles | null;
 }
 
-/** Scheda Regole: mappa attiva, lista delle utenze (flusso), criterio, soglie, stato e conflitti. */
+/**
+ * Scheda Regole: stato del motore, mappa attiva con il riquadro delle sue regole (lista delle
+ * utenze, criterio, soglie; in sola lettura per un preset, con «Clona come mappa personale»),
+ * interruttori comuni a tutte le mappe e conflitti.
+ */
 export function RulesPage() {
   const backend = useBackend();
   const { t } = useI18n();
@@ -127,6 +131,11 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
   const [draft, setDraft] = useState<RulesDraft>(base);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(initialNotice);
+  const [cloning, setCloning] = useState(false);
+  const boxId = useId();
+  const activeProfile = data.profiles?.profiles.find((p) => p.id === data.profiles?.activeId);
+  /** Preset attivo: lista, criterio e soglie in sola lettura. */
+  const locked = Boolean(activeProfile?.preset);
 
   // Confronto sulla lista resa esplicita: uno spostamento annullato non lascia modifiche.
   const dirty =
@@ -205,19 +214,26 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
       const text =
         command.op === 'select'
           ? t('maps.changed', { name })
-          : command.op === 'create'
-            ? t('maps.created', { name: command.name })
-            : command.op === 'rename'
-              ? t('maps.renamed', { name: command.name })
-              : command.op === 'duplicate'
-                ? t('maps.duplicated')
-                : command.op === 'delete'
-                  ? t('maps.deleted')
-                  : t('maps.restored');
-      if (profiles.activeId === data.profiles?.activeId) {
+          : command.op === 'clone'
+            ? t('maps.cloned', { name: command.name })
+            : command.op === 'create'
+              ? t('maps.created', { name: command.name })
+              : command.op === 'rename'
+                ? t('maps.renamed', { name: command.name })
+                : command.op === 'duplicate'
+                  ? t('maps.duplicated')
+                  : t('maps.deleted');
+      if (profiles.activeId !== data.profiles?.activeId)
+        onSaved({ engine, profiles }, { tone: 'info', text }); // l'editor riparte (key)
+      else if (command.op === 'select') {
         adopt(engine, profiles);
         setNotice({ tone: 'info', text });
-      } else onSaved({ engine, profiles }, { tone: 'info', text }); // l'editor riparte (key)
+      } else {
+        // Le regole attive non cambiano: la bozza in corso resta.
+        seen.current = JSON.stringify(engine.rules);
+        onSaved({ engine, profiles });
+        setNotice({ tone: 'info', text });
+      }
       return true;
     } catch (error) {
       setNotice({
@@ -263,15 +279,6 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
     <div className="sd-page">
       <h2>{t('rules.title')}</h2>
       <p className="sd-hint">{t('rules.hint')}</p>
-
-      {data.profiles && (
-        <MapSelector
-          profiles={data.profiles}
-          busy={busy}
-          dirty={dirty}
-          onCommand={profileCommand}
-        />
-      )}
 
       {view && (
         <>
@@ -342,6 +349,248 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
         </p>
       )}
 
+      {data.profiles && (
+        <MapSelector
+          profiles={data.profiles}
+          busy={busy}
+          dirty={dirty}
+          onCommand={profileCommand}
+        />
+      )}
+
+      <form
+        className="sd-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!hasErrors && dirty) void persist(rules, t('rules.saved'));
+        }}
+      >
+        <section
+          className="sd-mapbox"
+          data-locked={locked}
+          {...(activeProfile ? { 'aria-labelledby': boxId } : {})}
+        >
+          {activeProfile && (
+            <h3 id={boxId}>{t('maps.box.title', { name: profileLabel(activeProfile, t) })}</h3>
+          )}
+          {locked && (
+            <div className="sd-notice sd-mapbox__locked" data-testid="map-readonly">
+              <span>{t('maps.readOnly')}</span>
+              <Tooltip text={t('maps.clone.tip')}>
+                <button
+                  type="button"
+                  className="sd-btn sd-btn--small"
+                  disabled={busy || cloning}
+                  onClick={() => setCloning(true)}
+                >
+                  {t('maps.clone')}
+                </button>
+              </Tooltip>
+            </div>
+          )}
+          {locked && cloning && activeProfile && (
+            <MapNameForm
+              initial=""
+              busy={busy}
+              onCancel={() => setCloning(false)}
+              onSubmit={(name) => profileCommand({ op: 'clone', id: activeProfile.id, name })}
+            />
+          )}
+          <Section title={t('flow.title')} hint={t('flow.hint')} level={4}>
+            {missing.length > 0 && (
+              <div className="sd-notice" data-tone="warn" role="status">
+                {t('flow.missingWarn', { list: missing.map((n) => `#${n}`).join(', ') })}{' '}
+                <Tooltip text={t('flow.removeMissing.tip')}>
+                  <button
+                    type="button"
+                    className="sd-btn sd-btn--small"
+                    disabled={busy || locked}
+                    onClick={() =>
+                      patch({
+                        order: draft.order.filter((n) => !missing.includes(n)),
+                        excluded: draft.excluded.filter((n) => !missing.includes(n)),
+                      })
+                    }
+                  >
+                    {t('flow.removeMissing')}
+                  </button>
+                </Tooltip>
+              </div>
+            )}
+            <FlowList
+              rows={rows}
+              nameOf={nameOf}
+              disabled={busy || locked}
+              onMove={(n, to) =>
+                setDraft((d) =>
+                  moveRow(
+                    d,
+                    accounts,
+                    flowRows(d, accounts).findIndex((r) => r.number === n),
+                    to,
+                  ),
+                )
+              }
+              onToggle={(n, included) => setDraft((d) => setIncluded(d, accounts, n, included))}
+            />
+            {errors.order && (
+              <span className="sd-field-error" role="alert">
+                {t(errors.order)}
+              </span>
+            )}
+          </Section>
+
+          <Section title={t('rules.thresholds')} level={4}>
+            <SelectField
+              label={t('rules.criterion')}
+              tip={t('flow.criterion.tip')}
+              hint={t(`flow.criterion.hint.${draft.reserveCriterion}`)}
+              value={draft.reserveCriterion}
+              onChange={(value) => patch({ reserveCriterion: value as ReserveCriterion })}
+              disabled={busy || locked}
+              options={CRITERIA.map((c) => ({ value: c, label: t(`rules.criterion.${c}`) }))}
+            />
+            {draft.reserveCriterion === 'balanced-score' && (
+              <fieldset className="sd-fieldset">
+                <legend>{t('flow.weights')}</legend>
+                <span className="sd-hint">{t('flow.weights.hint')}</span>
+                <div className="sd-weights">
+                  {WEIGHTS.map((w) => (
+                    <TextField
+                      key={w}
+                      label={t(`flow.weight.${w}`)}
+                      tip={t('flow.weight.tip')}
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="any"
+                      value={draft.weights[w]}
+                      onChange={(value) => patch({ weights: { ...draft.weights, [w]: value } })}
+                      disabled={busy || locked}
+                    />
+                  ))}
+                </div>
+                {errors.weights && <span className="sd-field-error">{t(errors.weights)}</span>}
+              </fieldset>
+            )}
+            {(data.engine.warnings ?? []).map((w) => (
+              <div key={w} className="sd-notice" data-tone="warn" role="status">
+                {w}
+              </div>
+            ))}
+            {draft.reserveCriterion === 'model-headroom' && (
+              <TextField
+                label={t('flow.model')}
+                hint={t('flow.model.hint')}
+                tip={t('flow.model.tip')}
+                value={draft.headroomModel}
+                onChange={(headroomModel) => patch({ headroomModel })}
+                error={errors.model ? t(errors.model) : null}
+                disabled={busy || locked}
+              />
+            )}
+            <TextField
+              label={t('rules.fiveHour')}
+              tip={t('rules.fiveHour.tip')}
+              type="number"
+              min={1}
+              max={100}
+              step="any"
+              value={draft.fiveHourThreshold}
+              onChange={(value) => patch({ fiveHourThreshold: value })}
+              error={errors.fiveHour ? t(errors.fiveHour) : null}
+              disabled={busy || locked}
+            />
+            <TextField
+              label={t('rules.sevenDay')}
+              tip={t('rules.sevenDay.tip')}
+              type="number"
+              min={1}
+              max={100}
+              hint={t('rules.sevenDay.hint')}
+              value={draft.sevenDayThreshold}
+              onChange={(value) => patch({ sevenDayThreshold: value })}
+              error={errors.sevenDay ? t(errors.sevenDay) : null}
+              disabled={busy || locked}
+            />
+            <CheckField
+              label={t('rules.return')}
+              tip={t('rules.return.tip')}
+              checked={draft.returnToPrimary}
+              onChange={(returnToPrimary) => patch({ returnToPrimary })}
+              disabled={busy || locked}
+            />
+            <TextField
+              label={t('rules.hysteresis')}
+              tip={t('rules.hysteresis.tip')}
+              type="number"
+              min={0}
+              max={50}
+              hint={t('rules.hysteresis.hint')}
+              value={draft.returnHysteresis}
+              onChange={(value) => patch({ returnHysteresis: value })}
+              error={errors.hysteresis ? t(errors.hysteresis) : null}
+              disabled={busy || locked}
+            />
+            <TextField
+              label={t('rules.gap')}
+              tip={t('rules.gap.tip')}
+              type="number"
+              min={0}
+              hint={t('rules.gap.hint')}
+              value={draft.minSwitchGapSecs}
+              onChange={(value) => patch({ minSwitchGapSecs: value })}
+              error={errors.gap ? t(errors.gap) : null}
+              disabled={busy || locked}
+            />
+          </Section>
+        </section>
+
+        <Section title={t('rules.engine')}>
+          <CheckField
+            label={t('rules.enabled')}
+            tip={t('rules.enabled.tip')}
+            checked={draft.enabled}
+            onChange={(enabled) => patch({ enabled })}
+            disabled={busy}
+          />
+          <CheckField
+            label={t('rules.dryRun')}
+            hint={t('rules.dryRun.hint')}
+            tip={t('rules.dryRun.tip')}
+            checked={draft.dryRun}
+            onChange={(dryRun) => patch({ dryRun })}
+            disabled={busy}
+          />
+        </Section>
+
+        <NoticeView notice={notice} />
+        <div className="sd-row sd-row--end">
+          <Tooltip text={t('rules.revert.tip')}>
+            <button
+              type="button"
+              className="sd-btn"
+              disabled={busy || !dirty}
+              onClick={() => {
+                setDraft(base);
+                setNotice(null);
+              }}
+            >
+              {t('rules.revert')}
+            </button>
+          </Tooltip>
+          <Tooltip text={t('rules.save.tip')}>
+            <button
+              type="submit"
+              className="sd-btn sd-btn--primary"
+              disabled={busy || hasErrors || !dirty}
+            >
+              {saving ? t('common.working') : t('common.save')}
+            </button>
+          </Tooltip>
+        </div>
+      </form>
+
       {data.engine.conflicts.length > 0 && (
         <Section title={t('rules.conflicts')} hint={t('rules.conflicts.hint')}>
           <ul className="sd-list" aria-label={t('rules.conflicts')}>
@@ -380,207 +629,6 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
           </ul>
         </Section>
       )}
-
-      <form
-        className="sd-form"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!hasErrors && dirty) void persist(rules, t('rules.saved'));
-        }}
-      >
-        <Section title={t('rules.engine')}>
-          <CheckField
-            label={t('rules.enabled')}
-            tip={t('rules.enabled.tip')}
-            checked={draft.enabled}
-            onChange={(enabled) => patch({ enabled })}
-            disabled={busy}
-          />
-          <CheckField
-            label={t('rules.dryRun')}
-            hint={t('rules.dryRun.hint')}
-            tip={t('rules.dryRun.tip')}
-            checked={draft.dryRun}
-            onChange={(dryRun) => patch({ dryRun })}
-            disabled={busy}
-          />
-        </Section>
-
-        <Section title={t('flow.title')} hint={t('flow.hint')}>
-          {missing.length > 0 && (
-            <div className="sd-notice" data-tone="warn" role="status">
-              {t('flow.missingWarn', { list: missing.map((n) => `#${n}`).join(', ') })}{' '}
-              <Tooltip text={t('flow.removeMissing.tip')}>
-                <button
-                  type="button"
-                  className="sd-btn sd-btn--small"
-                  disabled={busy}
-                  onClick={() =>
-                    patch({
-                      order: draft.order.filter((n) => !missing.includes(n)),
-                      excluded: draft.excluded.filter((n) => !missing.includes(n)),
-                    })
-                  }
-                >
-                  {t('flow.removeMissing')}
-                </button>
-              </Tooltip>
-            </div>
-          )}
-          <FlowList
-            rows={rows}
-            nameOf={nameOf}
-            disabled={busy}
-            onMove={(n, to) =>
-              setDraft((d) =>
-                moveRow(
-                  d,
-                  accounts,
-                  flowRows(d, accounts).findIndex((r) => r.number === n),
-                  to,
-                ),
-              )
-            }
-            onToggle={(n, included) => setDraft((d) => setIncluded(d, accounts, n, included))}
-          />
-          {errors.order && (
-            <span className="sd-field-error" role="alert">
-              {t(errors.order)}
-            </span>
-          )}
-        </Section>
-
-        <Section title={t('rules.thresholds')}>
-          <SelectField
-            label={t('rules.criterion')}
-            tip={t('flow.criterion.tip')}
-            hint={t(`flow.criterion.hint.${draft.reserveCriterion}`)}
-            value={draft.reserveCriterion}
-            onChange={(value) => patch({ reserveCriterion: value as ReserveCriterion })}
-            disabled={busy}
-            options={CRITERIA.map((c) => ({ value: c, label: t(`rules.criterion.${c}`) }))}
-          />
-          {draft.reserveCriterion === 'balanced-score' && (
-            <fieldset className="sd-fieldset">
-              <legend>{t('flow.weights')}</legend>
-              <span className="sd-hint">{t('flow.weights.hint')}</span>
-              <div className="sd-weights">
-                {WEIGHTS.map((w) => (
-                  <TextField
-                    key={w}
-                    label={t(`flow.weight.${w}`)}
-                    tip={t('flow.weight.tip')}
-                    type="number"
-                    min={0}
-                    max={100}
-                    step="any"
-                    value={draft.weights[w]}
-                    onChange={(value) => patch({ weights: { ...draft.weights, [w]: value } })}
-                    disabled={busy}
-                  />
-                ))}
-              </div>
-              {errors.weights && <span className="sd-field-error">{t(errors.weights)}</span>}
-            </fieldset>
-          )}
-          {(data.engine.warnings ?? []).map((w) => (
-            <div key={w} className="sd-notice" data-tone="warn" role="status">
-              {w}
-            </div>
-          ))}
-          {draft.reserveCriterion === 'model-headroom' && (
-            <TextField
-              label={t('flow.model')}
-              hint={t('flow.model.hint')}
-              tip={t('flow.model.tip')}
-              value={draft.headroomModel}
-              onChange={(headroomModel) => patch({ headroomModel })}
-              error={errors.model ? t(errors.model) : null}
-              disabled={busy}
-            />
-          )}
-          <TextField
-            label={t('rules.fiveHour')}
-            tip={t('rules.fiveHour.tip')}
-            type="number"
-            min={1}
-            max={100}
-            step="any"
-            value={draft.fiveHourThreshold}
-            onChange={(value) => patch({ fiveHourThreshold: value })}
-            error={errors.fiveHour ? t(errors.fiveHour) : null}
-            disabled={busy}
-          />
-          <TextField
-            label={t('rules.sevenDay')}
-            tip={t('rules.sevenDay.tip')}
-            type="number"
-            min={1}
-            max={100}
-            hint={t('rules.sevenDay.hint')}
-            value={draft.sevenDayThreshold}
-            onChange={(value) => patch({ sevenDayThreshold: value })}
-            error={errors.sevenDay ? t(errors.sevenDay) : null}
-            disabled={busy}
-          />
-          <CheckField
-            label={t('rules.return')}
-            tip={t('rules.return.tip')}
-            checked={draft.returnToPrimary}
-            onChange={(returnToPrimary) => patch({ returnToPrimary })}
-            disabled={busy}
-          />
-          <TextField
-            label={t('rules.hysteresis')}
-            tip={t('rules.hysteresis.tip')}
-            type="number"
-            min={0}
-            max={50}
-            hint={t('rules.hysteresis.hint')}
-            value={draft.returnHysteresis}
-            onChange={(value) => patch({ returnHysteresis: value })}
-            error={errors.hysteresis ? t(errors.hysteresis) : null}
-            disabled={busy}
-          />
-          <TextField
-            label={t('rules.gap')}
-            tip={t('rules.gap.tip')}
-            type="number"
-            min={0}
-            hint={t('rules.gap.hint')}
-            value={draft.minSwitchGapSecs}
-            onChange={(value) => patch({ minSwitchGapSecs: value })}
-            error={errors.gap ? t(errors.gap) : null}
-            disabled={busy}
-          />
-        </Section>
-
-        <NoticeView notice={notice} />
-        <div className="sd-row sd-row--end">
-          <Tooltip text={t('rules.revert.tip')}>
-            <button
-              type="button"
-              className="sd-btn"
-              disabled={busy || !dirty}
-              onClick={() => {
-                setDraft(base);
-                setNotice(null);
-              }}
-            >
-              {t('rules.revert')}
-            </button>
-          </Tooltip>
-          <Tooltip text={t('rules.save.tip')}>
-            <button
-              type="submit"
-              className="sd-btn sd-btn--primary"
-              disabled={busy || hasErrors || !dirty}
-            >
-              {saving ? t('common.working') : t('common.save')}
-            </button>
-          </Tooltip>
-        </div>
-      </form>
     </div>
   );
 }

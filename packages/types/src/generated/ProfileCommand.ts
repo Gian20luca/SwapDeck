@@ -3,4 +3,4 @@
 /**
  * Operazione sulle mappe (comandi dell'app, della CLI e di VS Code).
  */
-export type ProfileCommand = { "op": "create", name: string, } | { "op": "rename", id: string, name: string, } | { "op": "duplicate", id: string, name?: string, } | { "op": "delete", id: string, } | { "op": "restore", id: string, } | { "op": "select", id: string, };
+export type ProfileCommand = { "op": "create", name: string, } | { "op": "rename", id: string, name: string, } | { "op": "duplicate", id: string, name?: string, } | { "op": "clone", id: string, name: string, } | { "op": "delete", id: string, } | { "op": "select", id: string, };

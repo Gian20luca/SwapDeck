@@ -65,6 +65,8 @@ pub const USAGE: &str = "uso: swapdeck-cli <comando>
   engine state
   engine rules set <json|->
   engine profiles [<json|->]          (senza argomento: elenco; con un'operazione: la applica)
+                                      (op: create, rename, duplicate, clone, delete, select;
+                                       i preset sono in sola lettura: clone li copia)
   setup diagnose|install|upgrade      (install e upgrade: eventi JSON per riga, poi l'esito)
   setup check-update [--force]
   setup dismiss-update <VERSIONE>

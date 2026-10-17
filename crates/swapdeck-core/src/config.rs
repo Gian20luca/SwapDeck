@@ -264,7 +264,8 @@ impl AppConfig {
         Ok(())
     }
 
-    /// Sostituisce le regole del motore dopo [`EngineRules::validate_for_save`].
+    /// Sostituisce le regole del motore dopo [`EngineRules::validate_for_save`]. Con un preset
+    /// attivo cambiano solo le parti comuni a tutte le mappe (il preset è in sola lettura).
     pub fn set_engine_rules(&mut self, rules: EngineRules) -> Result<(), ConfigError> {
         let problems = rules.validate_for_save();
         if !problems.is_empty() {
@@ -272,6 +273,12 @@ impl AppConfig {
         }
         let mut rules = rules;
         rules.sync_order();
+        let mut profiles = self.engine_profiles.clone();
+        profiles.normalize(&self.engine);
+        profiles
+            .check_editable(&rules)
+            .map_err(ConfigError::Invalid)?;
+        self.engine_profiles = profiles;
         self.engine_profiles.normalize(&rules);
         self.engine = rules;
         Ok(())
@@ -548,17 +555,49 @@ mod tests {
         assert_eq!(reread.engine, c.engine);
         assert_eq!(reread.engine_profiles.active_id, "sport");
 
-        // Le regole salvate dall'interfaccia vanno nella mappa attiva.
+        // Preset attivo in sola lettura: cambiano solo le parti comuni.
+        let edited = EngineRules {
+            five_hour_threshold: 80.0,
+            ..c.engine.clone()
+        };
+        let err = update(&path, |c| c.set_engine_rules(edited.clone())).unwrap_err();
+        assert!(err.to_string().contains("sola lettura"), "{err}");
+        let observe = EngineRules {
+            dry_run: true,
+            ..c.engine.clone()
+        };
+        let c = update(&path, |c| c.set_engine_rules(observe.clone())).unwrap();
+        assert!(c.engine.dry_run);
+        assert_eq!(c.engine_profiles.active_id, "sport");
+
+        // Clonato, il preset diventa una mappa personale attiva e modificabile.
+        let clone = ProfileCommand::CloneAs {
+            id: "sport".into(),
+            name: "Mia sport".into(),
+        };
+        let c = update(&path, |c| c.apply_profile_command(&clone)).unwrap();
+        assert_eq!(c.engine_profiles.active().unwrap().name, "Mia sport");
+        assert_eq!(c.engine, observe);
         let edited = EngineRules {
             five_hour_threshold: 80.0,
             ..c.engine.clone()
         };
         let c = update(&path, |c| c.set_engine_rules(edited.clone())).unwrap();
         assert_eq!(c.engine_profiles.active().unwrap().rules, edited);
+        let sport = c.engine_profiles.profiles.iter().find(|p| p.id == "sport");
+        assert_eq!(
+            sport.unwrap().rules.five_hour_threshold,
+            98.0,
+            "preset invariato"
+        );
 
         // Mappa senza lista con il motore acceso: selezione rifiutata, config invariata;
         // le operazioni che non cambiano le regole attive restano possibili.
         let mut on = AppConfig::default();
+        let create = ProfileCommand::Create {
+            name: "Vuota".into(),
+        };
+        on.apply_profile_command(&create).unwrap();
         on.set_engine_rules(EngineRules {
             enabled: true,
             primary: Some(1),
@@ -566,11 +605,18 @@ mod tests {
         })
         .unwrap();
         let before = on.clone();
-        let select = ProfileCommand::Select { id: "eco".into() };
+        let empty = on
+            .engine_profiles
+            .profiles
+            .iter()
+            .find(|p| p.name == "Vuota");
+        let select = ProfileCommand::Select {
+            id: empty.unwrap().id.clone(),
+        };
         assert!(on.apply_profile_command(&select).is_err());
         assert_eq!(on, before);
         let create = ProfileCommand::Create {
-            name: "Vuota".into(),
+            name: "Altra".into(),
         };
         on.apply_profile_command(&create).unwrap();
         assert_eq!(on.engine, before.engine);

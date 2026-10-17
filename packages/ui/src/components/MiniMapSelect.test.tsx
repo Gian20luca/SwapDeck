@@ -13,6 +13,12 @@ describe('Mini-widget: mappa attiva', () => {
     renderWith(<MiniWidget />, backend);
     const select = await screen.findByLabelText('Mappa');
     expect(select).toHaveValue('personal');
+    // Preset distinti dalle mappe personali.
+    const groups = select.querySelectorAll('optgroup');
+    expect([...groups].map((g) => [g.label, g.children.length])).toEqual([
+      ['Mappe personali', 1],
+      ['Preset (sola lettura)', 4],
+    ]);
     await user.selectOptions(select, 'eco');
     await waitFor(() => expect(apply).toHaveBeenCalledWith({ op: 'select', id: 'eco' }));
     await waitFor(() => expect(screen.getByLabelText('Mappa')).toHaveValue('eco'));

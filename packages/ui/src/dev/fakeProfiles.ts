@@ -52,6 +52,19 @@ export function seedProfiles(rules: EngineRules): EngineProfiles {
   };
 }
 
+/** Parti comuni a tutte le mappe: non contano per la sola lettura dei preset. */
+function settings(rules: EngineRules): string {
+  const { enabled: _e, dryRun: _d, ignoredConflicts: _i, ...rest } = rules;
+  return JSON.stringify({ ...rest, order: configuredOrder(rules) });
+}
+
+/** Errore se `next` modifica un preset attivo oltre le parti comuni (come `check_editable`). */
+export function checkEditable(profiles: EngineProfiles, current: EngineRules, next: EngineRules) {
+  const active = profiles.profiles.find((p) => p.id === profiles.activeId);
+  if (active?.preset && settings(current) !== settings(next))
+    fail(`«${active.name}» è un preset in sola lettura: clonalo per modificarlo`);
+}
+
 /** Applica un'operazione; restituisce le nuove mappe (le regole attive sono quelle della mappa attiva). */
 export function applyProfile(
   current: EngineProfiles,
@@ -65,6 +78,11 @@ export function applyProfile(
     const i = next.profiles.findIndex((p) => p.id === id);
     return i >= 0 ? i : fail(`mappa «${id}» inesistente`);
   };
+  const personal = (id: string) => {
+    const i = index(id);
+    const p = next.profiles[i]!;
+    return p.preset ? fail(`«${p.name}» è un preset in sola lettura: clonalo per modificarlo`) : i;
+  };
   const freeName = (name: string, except?: number) => {
     const n = name.trim();
     if (!n || n.length > 60) fail('nome della mappa vuoto o troppo lungo');
@@ -75,6 +93,11 @@ export function applyProfile(
   const newId = () => {
     for (let n = 1; ; n++) if (!next.profiles.some((p) => p.id === `map-${n}`)) return `map-${n}`;
   };
+  /** Regole della mappa se diventa attiva: un preset prende la lista attuale. */
+  const rulesFrom = (i: number) => {
+    const p = next.profiles[i]!;
+    return p.preset ? presetRules(p.preset, activeRules) : structuredClone(p.rules);
+  };
   switch (cmd.op) {
     case 'create':
       next.profiles.push({
@@ -84,33 +107,36 @@ export function applyProfile(
       });
       break;
     case 'rename': {
-      const i = index(cmd.id);
+      const i = personal(cmd.id);
       next.profiles[i]!.name = freeName(cmd.name, i);
       break;
     }
     case 'duplicate': {
       const src = next.profiles[index(cmd.id)]!;
       const name = cmd.name ? freeName(cmd.name) : freeName(`${src.name} (copia)`);
-      next.profiles.push({ ...structuredClone(src), id: newId(), name });
+      next.profiles.push({ id: newId(), name, rules: structuredClone(src.rules) });
+      break;
+    }
+    case 'clone': {
+      const i = index(cmd.id);
+      const id = newId();
+      next.profiles.push({ id, name: freeName(cmd.name), rules: rulesFrom(i) });
+      next.activeId = id;
       break;
     }
     case 'delete': {
-      const i = index(cmd.id);
-      if (next.profiles.length === 1) fail("l'ultima mappa non si può eliminare");
+      const i = personal(cmd.id);
+      if (next.activeId === cmd.id)
+        fail("la mappa attiva non si elimina: scegli prima un'altra mappa");
       next.profiles.splice(i, 1);
-      if (next.activeId === cmd.id) next.activeId = next.profiles[0]!.id;
       break;
     }
-    case 'restore': {
-      const p = next.profiles[index(cmd.id)]!;
-      if (!p.preset) fail('la mappa non viene da un preset');
-      p.rules = presetRules(p.preset, p.rules);
-      break;
-    }
-    case 'select':
-      index(cmd.id);
+    case 'select': {
+      const i = index(cmd.id);
+      next.profiles[i]!.rules = rulesFrom(i);
       next.activeId = cmd.id;
       break;
+    }
   }
   return next;
 }
