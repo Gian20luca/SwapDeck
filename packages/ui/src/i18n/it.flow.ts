@@ -32,6 +32,8 @@ export const itFlow = {
   'maps.delete.active': 'Scegli prima un’altra mappa: quella attiva non si elimina.',
   'maps.box.title': 'Regole della mappa «{name}»',
   'maps.readOnly': 'Preset in sola lettura: clonalo per modificarlo.',
+  'maps.noList':
+    'Questo preset non ha una lista di account: clonalo come mappa personale per sceglierla, poi accendi il motore.',
   'maps.clone': 'Clona come mappa personale',
   'maps.clone.tip':
     'Crea una mappa personale con gli stessi valori e la apre: la puoi modificare, rinominare ed eliminare.',

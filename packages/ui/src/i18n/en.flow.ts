@@ -32,6 +32,8 @@ export const enFlow: Record<keyof typeof itFlow, string> = {
   'maps.delete.active': 'Choose another map first: the active one cannot be deleted.',
   'maps.box.title': 'Rules of the map “{name}”',
   'maps.readOnly': 'Read-only preset: clone it to edit it.',
+  'maps.noList':
+    'This preset has no account list: clone it as a personal map to choose one, then turn the engine on.',
   'maps.clone': 'Clone as a personal map',
   'maps.clone.tip':
     'Creates a personal map with the same values and opens it: you can edit, rename and delete it.',

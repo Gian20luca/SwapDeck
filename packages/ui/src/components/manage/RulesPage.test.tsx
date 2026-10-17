@@ -335,6 +335,35 @@ describe('RulesPage: mappe', () => {
     expect(profiles.profiles.find((p) => p.id === 'eco')?.preset).toBe('eco');
   });
 
+  it('preset attivo: il salvataggio manda solo le parti comuni, lista com’è (esclusi compresi)', async () => {
+    const { backend, save, user } = await setup({
+      rules: { order: [6, 1, 3], primary: 6, reserves: [1, 3], excluded: [3] },
+    });
+    await user.selectOptions(screen.getByLabelText('Mappa attiva'), 'eco');
+    await screen.findByText('Mappa attiva: Eco.');
+    const before = (await backend.getEngineState()).rules;
+    await user.click(screen.getByLabelText('Solo osservazione'));
+    await user.click(screen.getByRole('button', { name: 'Salva' }));
+    expect(await screen.findByText('Regole salvate.')).toBeInTheDocument();
+    // Le regole salvate così come sono (non la lista resa esplicita dalla bozza), più il cambio.
+    expect(save.mock.calls[0]![0]).toEqual({ ...before, dryRun: true });
+  });
+
+  it('preset attivo senza lista: niente motore, avviso che rimanda a «Clona»', async () => {
+    const { save, user } = await setup({ rules: { enabled: false } });
+    await user.selectOptions(screen.getByLabelText('Mappa attiva'), 'sport');
+    await screen.findByText('Mappa attiva: Sport.');
+    const noList =
+      'Questo preset non ha una lista di account: clonalo come mappa personale per sceglierla, poi accendi il motore.';
+    expect(screen.getByTestId('map-readonly')).toHaveTextContent(noList);
+    await user.click(screen.getByRole('button', { name: 'Accendi' }));
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.getAllByText(noList).length).toBeGreaterThan(1);
+    await user.click(screen.getByLabelText('Motore acceso'));
+    expect(screen.getAllByRole('alert').some((a) => a.textContent === noList)).toBe(true);
+    expect(screen.getByRole('button', { name: 'Salva' })).toBeDisabled();
+  });
+
   it('il backend rifiuta la modifica di un preset', async () => {
     const backend = new FakeBackend({ rules: { primary: 6 } });
     await backend.applyEngineProfile({ op: 'select', id: 'sport' });

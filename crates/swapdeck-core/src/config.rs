@@ -267,17 +267,18 @@ impl AppConfig {
     /// Sostituisce le regole del motore dopo [`EngineRules::validate_for_save`]. Con un preset
     /// attivo cambiano solo le parti comuni a tutte le mappe (il preset è in sola lettura).
     pub fn set_engine_rules(&mut self, rules: EngineRules) -> Result<(), ConfigError> {
-        let problems = rules.validate_for_save();
-        if !problems.is_empty() {
-            return Err(ConfigError::Invalid(problems.join("; ")));
-        }
         let mut rules = rules;
         rules.sync_order();
         let mut profiles = self.engine_profiles.clone();
         profiles.normalize(&self.engine);
         profiles
             .check_editable(&rules)
+            .and_then(|()| profiles.check_list(&rules))
             .map_err(ConfigError::Invalid)?;
+        let problems = rules.validate_for_save();
+        if !problems.is_empty() {
+            return Err(ConfigError::Invalid(problems.join("; ")));
+        }
         self.engine_profiles = profiles;
         self.engine_profiles.normalize(&rules);
         self.engine = rules;
@@ -297,6 +298,7 @@ impl AppConfig {
         current.sync_order();
         let problems = rules.validate_for_save();
         if rules != current && !problems.is_empty() {
+            profiles.check_list(&rules).map_err(ConfigError::Invalid)?;
             return Err(ConfigError::Invalid(problems.join("; ")));
         }
         self.engine = rules;
@@ -620,6 +622,52 @@ mod tests {
         };
         on.apply_profile_command(&create).unwrap();
         assert_eq!(on.engine, before.engine);
+    }
+
+    /// Preset attivo dopo la migrazione dalla v0.1.0 (esclusi dentro la lista): dalla pagina
+    /// Regole si salvano le parti comuni; senza lista il motore non parte e l'errore lo dice.
+    #[test]
+    fn active_preset_saves_common_parts() {
+        use crate::engine::ProfileCommand;
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(CONFIG_FILE);
+        std::fs::write(
+            &path,
+            r#"{"engine":{"order":[6,1,3],"excluded":[3],"reserveCriterion":"lowest5h",
+                "fiveHourThreshold":98},
+               "engineProfiles":{"activeId":"sport","profiles":[
+                {"id":"personal","name":"Personale","rules":{"order":[2]}},
+                {"id":"sport","name":"Sport","preset":"sport","rules":{"order":[6,1,3],
+                 "excluded":[3],"reserveCriterion":"lowest5h","fiveHourThreshold":98}}]}}"#,
+        )
+        .unwrap();
+        let l = load(&path).unwrap();
+        assert_eq!(l.config.engine_profiles.active_id, "sport");
+        let observe = EngineRules {
+            dry_run: true,
+            ignored_conflicts: vec!["x".into()],
+            ..l.config.engine.clone()
+        };
+        let c = update(&path, |c| c.set_engine_rules(observe.clone())).unwrap();
+        assert!(c.engine.dry_run);
+        let on = EngineRules {
+            enabled: true,
+            ..c.engine.clone()
+        };
+        update(&path, |c| c.set_engine_rules(on.clone())).unwrap();
+
+        let mut fresh = AppConfig::default();
+        let select = ProfileCommand::Select { id: "sport".into() };
+        fresh.apply_profile_command(&select).unwrap();
+        let on = EngineRules {
+            enabled: true,
+            ..fresh.engine.clone()
+        };
+        let err = fresh.set_engine_rules(on).unwrap_err().to_string();
+        assert!(
+            err.contains("non ha una lista") && err.contains("clonalo"),
+            "{err}"
+        );
     }
 
     #[test]

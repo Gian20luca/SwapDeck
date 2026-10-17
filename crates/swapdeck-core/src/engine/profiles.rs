@@ -16,8 +16,11 @@ use ts_rs::TS;
 
 use super::{EngineRules, ReserveCriterion};
 
-/// Mappe al massimo (preset compresi), e lunghezza massima di un nome.
+/// Mappe personali al massimo (i preset non contano), e lunghezza massima di un nome. Il limite
+/// blocca solo le mappe nuove: in lettura non si tolgono mappe, anche oltre il limite.
 pub const MAX_PROFILES: usize = 32;
+/// Versione del formato delle mappe: assente (0) = v0.1.0, con i preset modificabili.
+const PROFILES_VERSION: u32 = 1;
 pub const MAX_PROFILE_NAME_LEN: usize = 60;
 /// Id della mappa creata dalle regole esistenti alla prima lettura.
 pub const PERSONAL_ID: &str = "personal";
@@ -149,6 +152,9 @@ impl RulesProfile {
 pub struct EngineProfiles {
     pub active_id: String,
     pub profiles: Vec<RulesProfile>,
+    /// Formato del file (vedi [`PROFILES_VERSION`]): la migrazione della v0.1.0 si fa una volta.
+    #[ts(skip)]
+    pub version: u32,
 }
 
 /// Operazione sulle mappe (comandi dell'app, della CLI e di VS Code).
@@ -196,13 +202,22 @@ fn carry_globals(rules: &mut EngineRules, from: &EngineRules) {
 }
 
 /// Stesse impostazioni di mappa, a meno delle parti comuni e dei valori che il criterio non
-/// usa (pesi e modello). Con `list` conta anche la lista con gli esclusi.
+/// usa (pesi e modello). Con `list` conta anche la lista con gli esclusi, in una sola forma:
+/// esclusi fuori dalla lista (come nei preset) e in ordine di numero.
 fn same_settings(a: &EngineRules, b: &EngineRules, list: bool) -> bool {
     let plain = |r: &EngineRules| {
         let mut r = r.clone();
         carry_globals(&mut r, &EngineRules::default());
         r.sync_order();
-        if !list {
+        if list {
+            let excluded = r.excluded.clone();
+            if let Some(order) = &mut r.order {
+                order.retain(|n| !excluded.contains(n));
+            }
+            r.sync_order();
+            r.excluded.sort_unstable();
+            r.excluded.dedup();
+        } else {
             r.order = None;
             r.primary = None;
             r.reserves.clear();
@@ -245,6 +260,7 @@ impl EngineProfiles {
         Self {
             active_id: PERSONAL_ID.to_owned(),
             profiles,
+            version: PROFILES_VERSION,
         }
     }
 
@@ -261,14 +277,14 @@ impl EngineProfiles {
 
     /// Mappe lette dal file riportate in forma valida; `engine` (le regole attive) prevale
     /// sulla copia della mappa attiva. Migra i preset della v0.1.0 (vedi
-    /// [`Self::migrate_presets`]). Idempotente. Restituisce gli avvisi.
+    /// [`Self::migrate_presets`]). Idempotente. Non toglie mappe valide, nemmeno oltre
+    /// [`MAX_PROFILES`] (il file è già limitato in dimensione). Restituisce gli avvisi.
     pub fn normalize(&mut self, engine: &EngineRules) -> Vec<String> {
         let mut warnings = Vec::new();
         let before = self.profiles.len();
         let mut seen = std::collections::HashSet::new();
         self.profiles
             .retain(|p| valid_id(&p.id) && seen.insert(p.id.clone()) && name_ok(&p.name).is_ok());
-        self.profiles.truncate(MAX_PROFILES);
         if self.profiles.len() != before {
             warnings.push("mappe non valide tolte".to_owned());
         }
@@ -276,6 +292,7 @@ impl EngineProfiles {
             *self = Self::seeded(engine);
             return warnings;
         }
+        let legacy = self.version < PROFILES_VERSION;
         if self.active().is_none() {
             // Le regole attive (`engine`) non devono finire sopra un'altra mappa.
             let name = (1..)
@@ -301,19 +318,23 @@ impl EngineProfiles {
             p.rules.sync_order();
         }
         self.store_active(engine);
-        warnings.extend(self.migrate_presets(engine));
-        warnings.extend(self.fit());
+        warnings.extend(self.migrate_presets(engine, legacy));
+        self.version = self.version.max(PROFILES_VERSION);
         warnings
     }
 
     /// Preset in sola lettura con i valori del codice:
-    /// - un preset salvato con valori diversi dall'originale (o rinominato) diventa una mappa
-    ///   personale con le sue regole, «<Nome> (personale)» o il nome che gli era stato dato, e
-    ///   la mappa attiva la segue; il preset torna all'originale con la sua lista;
+    /// - `legacy` (file della v0.1.0, una volta sola): un preset salvato con valori diversi,
+    ///   con una lista diversa da quella attiva o rinominato diventa una mappa personale con le
+    ///   sue regole, «<Nome> (personale)» o il nome che gli era stato dato, e la mappa attiva
+    ///   la segue; il preset torna all'originale con la lista attiva (meglio una copia in più
+    ///   che perdere le regole dell'utente);
+    /// - sempre: il preset attivo con valori diversi dal codice (regole cambiate fuori, nel
+    ///   file) diventa allo stesso modo una mappa personale;
     /// - le copie di un preset (stesso tipo, «Duplica» della v0.1.0) diventano personali;
     /// - i preset mancanti si aggiungono con la lista delle regole attive;
     /// - una mappa personale con il nome di un preset prende il suffisso «(personale)».
-    fn migrate_presets(&mut self, engine: &EngineRules) -> Vec<String> {
+    fn migrate_presets(&mut self, engine: &EngineRules, legacy: bool) -> Vec<String> {
         let mut warnings = Vec::new();
         let mut seen: Vec<PresetKind> = Vec::new();
         let mut copies = Vec::new();
@@ -328,9 +349,20 @@ impl EngineProfiles {
             seen.push(kind.clone());
             let code_name = kind.name(false);
             let p = &self.profiles[i];
-            let original = kind.rules(&p.rules);
-            let renamed = p.name.trim() != code_name && p.name.trim() != LEGACY_PRESET_NAME;
-            if renamed || !same_settings(&p.rules, &original, false) {
+            let own = kind.rules(&p.rules);
+            let original = if legacy {
+                kind.rules(engine)
+            } else {
+                own.clone()
+            };
+            let renamed =
+                legacy && p.name.trim() != code_name && p.name.trim() != LEGACY_PRESET_NAME;
+            let edited =
+                (legacy || p.id == self.active_id) && !same_settings(&p.rules, &own, false);
+            let listed = legacy
+                && !own.configured_order().is_empty()
+                && !same_settings(&own, &original, true);
+            if renamed || edited || listed {
                 let base = if renamed {
                     p.name.trim().to_owned()
                 } else {
@@ -397,23 +429,6 @@ impl EngineProfiles {
         warnings
     }
 
-    /// Oltre [`MAX_PROFILES`] si tolgono le ultime mappe personali non attive.
-    fn fit(&mut self) -> Vec<String> {
-        let mut warnings = Vec::new();
-        while self.profiles.len() > MAX_PROFILES {
-            let Some(i) = self
-                .profiles
-                .iter()
-                .rposition(|p| p.preset.is_none() && p.id != self.active_id)
-            else {
-                break;
-            };
-            let dropped = self.profiles.remove(i);
-            warnings.push(format!("troppe mappe: tolta «{}»", dropped.name));
-        }
-        warnings
-    }
-
     /// Copia le regole attive nella mappa attiva.
     pub fn store_active(&mut self, engine: &EngineRules) {
         let id = self.active_id.clone();
@@ -429,6 +444,24 @@ impl EngineProfiles {
         match self.active() {
             Some(p) if p.preset.is_some() && !same_settings(&p.rules, rules, true) => {
                 Err(read_only(&p.name))
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// Preset attivo senza lista: il motore non si accende (né osserva) finché non si clona il
+    /// preset e si sceglie la lista nella mappa personale. Errore con il messaggio giusto.
+    pub fn check_list(&self, rules: &EngineRules) -> Result<(), String> {
+        match self.active() {
+            Some(p)
+                if p.preset.is_some()
+                    && (rules.enabled || rules.dry_run)
+                    && rules.configured_order().is_empty() =>
+            {
+                Err(format!(
+                    "«{}» non ha una lista di account: clonalo come mappa personale per sceglierla",
+                    p.name
+                ))
             }
             _ => Ok(()),
         }
@@ -473,7 +506,8 @@ impl EngineProfiles {
                     Some(n) => next.free_name(n, None)?,
                     None => next.copy_name(&next.profiles[i].name),
                 };
-                let rules = next.profiles[i].rules.clone();
+                let mut rules = next.profiles[i].rules_from(current);
+                carry_globals(&mut rules, current);
                 next.push_personal(name, rules);
             }
             ProfileCommand::CloneAs { id, name } => {
@@ -517,9 +551,11 @@ impl EngineProfiles {
         }
     }
 
+    /// Posto per una mappa personale nuova (i preset non contano).
     fn room(&self) -> Result<(), String> {
-        if self.profiles.len() >= MAX_PROFILES {
-            return Err(format!("al massimo {MAX_PROFILES} mappe, preset compresi"));
+        let personal = self.profiles.iter().filter(|p| p.preset.is_none()).count();
+        if personal >= MAX_PROFILES {
+            return Err(format!("al massimo {MAX_PROFILES} mappe personali"));
         }
         Ok(())
     }
@@ -828,8 +864,8 @@ mod tests {
         p.active_id = "gone-again".into();
         p.normalize(&changed);
         assert_eq!(p.active().unwrap().name, "Recuperata 2");
-        // Al massimo delle mappe si toglie l'ultima personale non attiva per fare posto.
-        while p.profiles.len() < MAX_PROFILES {
+        // Oltre il limite delle mappe personali in lettura non si toglie nulla; le nuove no.
+        while p.profiles.len() < MAX_PROFILES + 4 {
             p.profiles.push(RulesProfile {
                 id: format!("x-{}", p.profiles.len()),
                 name: format!("X {}", p.profiles.len()),
@@ -839,14 +875,174 @@ mod tests {
         }
         p.active_id = "gone".into();
         let w = p.normalize(&changed);
-        assert_eq!(w.len(), 2, "{w:?}");
-        assert_eq!(p.profiles.len(), MAX_PROFILES);
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert_eq!(p.profiles.len(), MAX_PROFILES + 5, "nessuna mappa tolta");
         assert_eq!(p.active().unwrap().rules, changed);
         assert_eq!(p.profiles.iter().filter(|m| m.preset.is_some()).count(), 4);
+        for cmd in [
+            ProfileCommand::Create { name: "Y".into() },
+            ProfileCommand::Duplicate {
+                id: "eco".into(),
+                name: None,
+            },
+        ] {
+            let err = p.apply(&cmd, &changed).unwrap_err();
+            assert!(err.contains("al massimo 32 mappe personali"), "{err}");
+        }
+    }
+
+    /// Prima con il limite contavano anche i preset: ora contano solo le mappe personali.
+    #[test]
+    fn the_limit_counts_only_personal_maps() {
+        let cur = user_like();
+        let mut p = EngineProfiles::seeded(&cur);
+        for n in 1..MAX_PROFILES {
+            p.apply(
+                &ProfileCommand::Create {
+                    name: format!("M {n}"),
+                },
+                &cur,
+            )
+            .unwrap();
+        }
+        assert_eq!(p.profiles.len(), MAX_PROFILES + 4);
         let err = p
-            .apply(&ProfileCommand::Create { name: "Y".into() }, &changed)
+            .apply(&ProfileCommand::Create { name: "Z".into() }, &cur)
             .unwrap_err();
         assert!(err.contains("al massimo"), "{err}");
+    }
+
+    /// Lista in due forme (esclusi dentro o fuori `order`): non è una modifica del preset.
+    #[test]
+    fn excluded_inside_or_outside_the_list_is_the_same_list() {
+        let text = r#"{"activeId":"eco","profiles":[
+            {"id":"personal","name":"Personale","rules":{"order":[2,5]}},
+            {"id":"eco","name":"Eco","preset":"eco",
+             "rules":{"order":[6,1,3],"excluded":[3],"reserveCriterion":"reset-soonest",
+                      "fiveHourThreshold":90}}]}"#;
+        let mut p: EngineProfiles = serde_json::from_str(text).unwrap();
+        let mut engine = p.profiles[1].rules.clone();
+        engine.enabled = true;
+        engine.sync_order();
+        let w = p.normalize(&engine);
+        assert!(w.iter().all(|w| !w.contains("modificato")), "{w:?}");
+        assert_eq!(p.active_id, "eco");
+        assert_eq!(p.active().unwrap().rules.configured_order(), vec![6, 1]);
+        // Salvataggio dalla pagina Regole con le regole attive nella forma di `engine`.
+        let mut observe = engine.clone();
+        observe.dry_run = true;
+        observe.ignored_conflicts = vec!["x".into()];
+        p.check_editable(&observe).unwrap();
+        let mut reordered = engine.clone();
+        reordered.excluded = vec![3, 3];
+        p.check_editable(&reordered).unwrap();
+        let mut edited = engine.clone();
+        edited.order = Some(vec![1, 6]);
+        assert!(p.check_editable(&edited).is_err());
+    }
+
+    /// Preset attivo senza lista: niente motore, messaggio che rimanda a «Clona».
+    #[test]
+    fn an_active_preset_without_a_list_asks_to_clone() {
+        let mut p = EngineProfiles::seeded(&EngineRules::default());
+        let r = p
+            .apply(
+                &ProfileCommand::Select { id: "sport".into() },
+                &EngineRules::default(),
+            )
+            .unwrap();
+        p.check_list(&r).unwrap();
+        for on in [
+            EngineRules {
+                enabled: true,
+                ..r.clone()
+            },
+            EngineRules {
+                dry_run: true,
+                ..r.clone()
+            },
+        ] {
+            p.check_editable(&on).unwrap();
+            let err = p.check_list(&on).unwrap_err();
+            assert!(err.contains("«Sport»") && err.contains("clonalo"), "{err}");
+        }
+    }
+
+    /// Duplica di un preset non attivo = i suoi valori sulla lista attiva, come «Clona».
+    #[test]
+    fn duplicate_of_a_preset_uses_the_active_list() {
+        let cur = user_like();
+        let mut p = EngineProfiles::seeded(&cur);
+        let mut mine = cur.clone();
+        mine.order = Some(vec![2, 5]);
+        mine.sync_order();
+        let dup = ProfileCommand::Duplicate {
+            id: "eco".into(),
+            name: Some("D".into()),
+        };
+        p.apply(&dup, &mine).unwrap();
+        let clone = ProfileCommand::CloneAs {
+            id: "eco".into(),
+            name: "C".into(),
+        };
+        p.apply(&clone, &mine).unwrap();
+        let rules = |n: &str| {
+            p.profiles
+                .iter()
+                .find(|m| m.name == n)
+                .map(|m| m.rules.clone())
+                .unwrap()
+        };
+        assert_eq!(rules("D"), rules("C"));
+        assert_eq!(rules("D").configured_order(), vec![2, 5]);
+        assert_eq!(rules("D").reserve_criterion, ReserveCriterion::ResetSoonest);
+    }
+
+    /// v0.1.0 con 32 mappe, un preset modificato non attivo, uno con un'altra lista e due preset
+    /// eliminati: nessuna mappa tolta, le copie in più restano, le nuove sono bloccate.
+    #[test]
+    fn v010_with_32_maps_keeps_everything() {
+        let mut maps = vec![
+            r#"{"id":"eco","name":"Eco","preset":"eco",
+                "rules":{"order":[6,1],"reserveCriterion":"reset-soonest","fiveHourThreshold":70}}"#
+                .to_owned(),
+            r#"{"id":"safe","name":"Sicura","preset":"safe",
+                "rules":{"order":[3,4],"reserveCriterion":"pace-safe"}}"#
+                .to_owned(),
+        ];
+        for n in 0..30 {
+            maps.push(format!(
+                r#"{{"id":"p{n}","name":"Mia {n}","rules":{{"order":[6,1]}}}}"#
+            ));
+        }
+        let text = format!(r#"{{"activeId":"p0","profiles":[{}]}}"#, maps.join(","));
+        let mut p: EngineProfiles = serde_json::from_str(&text).unwrap();
+        assert_eq!(p.profiles.len(), 32);
+        let engine = p.profiles[2].rules.clone();
+        let w = p.normalize(&engine);
+        assert_eq!(w.len(), 2, "{w:?}");
+        let personal = p.profiles.iter().filter(|m| m.preset.is_none()).count();
+        assert_eq!((personal, p.profiles.len()), (32, 36));
+        let names: Vec<&str> = p.profiles.iter().map(|m| m.name.as_str()).collect();
+        for n in ["Eco (personale)", "Sicura (personale)", "Mia 29", "Sport"] {
+            assert!(names.contains(&n), "{n}: {names:?}");
+        }
+        assert_eq!(p.active_id, "p0");
+        let err = p
+            .apply(&ProfileCommand::Create { name: "N".into() }, &engine)
+            .unwrap_err();
+        assert!(err.contains("al massimo"), "{err}");
+        p.apply(&ProfileCommand::Delete { id: "p29".into() }, &engine)
+            .unwrap();
+        p.apply(&ProfileCommand::Create { name: "N".into() }, &engine)
+            .unwrap();
+        // Idempotente: dopo la migrazione nessuna copia nuova.
+        let once = p.clone();
+        let saved: EngineProfiles =
+            serde_json::from_value(serde_json::to_value(&p).unwrap()).unwrap();
+        let mut again = saved;
+        assert!(again.normalize(&engine).is_empty());
+        assert_eq!(again, once);
     }
 
     /// Config della v0.1.0: preset modificati, rinominati, duplicati o mancanti.
@@ -859,15 +1055,19 @@ mod tests {
             {"id":"sport","name":"Corsa","preset":"sport",
              "rules":{"order":[6],"reserveCriterion":"lowest5h","fiveHourThreshold":98}},
             {"id":"safe","name":"Sicura","preset":"safe",
-             "rules":{"order":[3,4],"reserveCriterion":"pace-safe",
+             "rules":{"order":[6,1],"reserveCriterion":"pace-safe",
                       "scoreWeights":{"fiveHour":1,"sevenDay":0,"reset":0,"pace":0}}},
+            {"id":"pr","name":"Principale con riserve","preset":"priorityReserves",
+             "rules":{"order":[3,4],"returnHysteresis":45}},
             {"id":"map-1","name":"Eco (copia)","preset":"eco","rules":{"order":[9]}},
             {"id":"map-2","name":"sport","rules":{"order":[1]}}]}"#;
         let mut p: EngineProfiles = serde_json::from_str(text).unwrap();
+        assert_eq!(p.version, 0);
         let mut engine = p.profiles[1].rules.clone();
         engine.sync_order();
         let w = p.normalize(&engine);
-        assert_eq!(w.len(), 3, "{w:?}");
+        assert_eq!(w.len(), 4, "{w:?}");
+        assert_eq!(p.version, PROFILES_VERSION);
 
         let by_name =
             |p: &EngineProfiles, n: &str| p.profiles.iter().find(|m| m.name == n).cloned().unwrap();
@@ -897,13 +1097,22 @@ mod tests {
         // Pesi di un criterio che non li usa: non contano come modifica.
         assert_eq!(by_name(&p, "Sicura").rules.score_weights, None);
         assert!(p.profiles.iter().all(|m| m.name != "Sicura (personale)"));
-        // Copia di un preset: personale. Preset mancante: aggiunto con la lista attiva.
-        assert_eq!(by_name(&p, "Eco (copia)").preset, None);
+        // Lista salvata nel preset diversa da quella attiva: modifica, copia personale; il
+        // preset prende la lista attiva.
         let pr = by_name(&p, "Principale con riserve");
         assert_eq!(
             (pr.id.as_str(), pr.rules.configured_order()),
-            ("priority-reserves", vec![6, 1])
+            ("pr", vec![6, 1])
         );
+        let mine = by_name(&p, "Principale con riserve (personale)");
+        assert_eq!(
+            (mine.preset, mine.rules.configured_order()),
+            (None, vec![3, 4])
+        );
+        // Copia di un preset: personale. I preset prendono la lista attiva.
+        assert_eq!(by_name(&p, "Eco (copia)").preset, None);
+        let sport = by_name(&p, "Sport");
+        assert_eq!(sport.rules.configured_order(), vec![6, 1]);
         assert_eq!(by_name(&p, "Personale").preset, None);
         assert_eq!(p.profiles.iter().filter(|m| m.preset.is_some()).count(), 4);
 

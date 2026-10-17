@@ -14,6 +14,7 @@ import type { EngineState } from '../../backend/types.js';
 import { useI18n, type MessageKey } from '../../i18n/index.js';
 import {
   CRITERIA,
+  configuredOrder,
   flowRows,
   fromDraft,
   materialize,
@@ -23,6 +24,7 @@ import {
   toDraft,
   validateRules,
   type RulesDraft,
+  type RulesErrors,
 } from '../../lib/engineRules.js';
 import { shortEmail } from '../../lib/format.js';
 import { useLoad } from '../../lib/useLoad.js';
@@ -154,8 +156,30 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rulesNow]);
 
-  const rules = useMemo(() => fromDraft(draft, rulesNow), [draft, rulesNow]);
-  const errors = useMemo(() => validateRules(rules), [rules]);
+  /** Preset attivo senza lista: il motore non parte finché non lo si clona e si sceglie la lista. */
+  const noList = locked && configuredOrder(rulesNow).length === 0;
+  // Con un preset attivo si salvano solo le parti comuni a tutte le mappe: il resto è del preset.
+  const rules = useMemo(
+    () =>
+      locked
+        ? {
+            ...rulesNow,
+            enabled: draft.enabled,
+            dryRun: draft.dryRun,
+            ignoredConflicts: [...draft.ignoredConflicts],
+          }
+        : fromDraft(draft, rulesNow),
+    [locked, draft, rulesNow],
+  );
+  const errors = useMemo<RulesErrors>(
+    () =>
+      !locked
+        ? validateRules(rules)
+        : noList && (rules.enabled || rules.dryRun)
+          ? { order: 'maps.noList' }
+          : {},
+    [locked, noList, rules],
+  );
   const hasErrors = Object.keys(errors).length > 0;
   const rows = useMemo(() => flowRows(draft, accounts), [draft, accounts]);
   const missing = accountsKnown ? missingAccounts(draft.order, accounts) : [];
@@ -263,6 +287,10 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
 
   /** Accende il motore con le regole salvate (stesso comando del salvataggio); della bozza cambia solo l'interruttore. */
   async function turnOn() {
+    if (noList) {
+      setNotice({ tone: 'danger', text: t('maps.noList') });
+      return;
+    }
     await persist({ ...rulesNow, enabled: true }, t('rules.turnedOn'), true);
     setBase((b) => ({ ...b, enabled: true }));
     patch({ enabled: true });
@@ -375,7 +403,7 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
           )}
           {locked && (
             <div className="sd-notice sd-mapbox__locked" data-testid="map-readonly">
-              <span>{t('maps.readOnly')}</span>
+              <span>{t(noList ? 'maps.noList' : 'maps.readOnly')}</span>
               <Tooltip text={t('maps.clone.tip')}>
                 <button
                   type="button"

@@ -55,7 +55,10 @@ export function seedProfiles(rules: EngineRules): EngineProfiles {
 /** Parti comuni a tutte le mappe: non contano per la sola lettura dei preset. */
 function settings(rules: EngineRules): string {
   const { enabled: _e, dryRun: _d, ignoredConflicts: _i, ...rest } = rules;
-  return JSON.stringify({ ...rest, order: configuredOrder(rules) });
+  // Una sola forma della lista: esclusi fuori da `order` e in ordine di numero.
+  const order = configuredOrder(rules).filter((n) => !rules.excluded.includes(n));
+  const excluded = [...new Set(rules.excluded)].sort((a, b) => a - b);
+  return JSON.stringify({ ...rest, primary: null, reserves: [], order, excluded });
 }
 
 /** Errore se `next` modifica un preset attivo oltre le parti comuni (come `check_editable`). */
@@ -63,6 +66,15 @@ export function checkEditable(profiles: EngineProfiles, current: EngineRules, ne
   const active = profiles.profiles.find((p) => p.id === profiles.activeId);
   if (active?.preset && settings(current) !== settings(next))
     fail(`«${active.name}» è un preset in sola lettura: clonalo per modificarlo`);
+}
+
+/** Preset attivo senza lista: il motore non si accende (come `check_list`). */
+export function checkList(profiles: EngineProfiles, next: EngineRules) {
+  const active = profiles.profiles.find((p) => p.id === profiles.activeId);
+  if (active?.preset && (next.enabled || next.dryRun) && configuredOrder(next).length === 0)
+    fail(
+      `«${active.name}» non ha una lista di account: clonalo come mappa personale per sceglierla`,
+    );
 }
 
 /** Applica un'operazione; restituisce le nuove mappe (le regole attive sono quelle della mappa attiva). */
@@ -112,9 +124,10 @@ export function applyProfile(
       break;
     }
     case 'duplicate': {
-      const src = next.profiles[index(cmd.id)]!;
+      const i = index(cmd.id);
+      const src = next.profiles[i]!;
       const name = cmd.name ? freeName(cmd.name) : freeName(`${src.name} (copia)`);
-      next.profiles.push({ id: newId(), name, rules: structuredClone(src.rules) });
+      next.profiles.push({ id: newId(), name, rules: rulesFrom(i) });
       break;
     }
     case 'clone': {
