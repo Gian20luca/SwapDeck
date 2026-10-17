@@ -22,10 +22,18 @@ function setup(initialTab?: 'accounts' | 'tools') {
   return userEvent.setup();
 }
 
-const TABS = ['Account', 'Cartelle', 'Regole', 'Storico', 'Strumenti', 'Impostazioni'];
+const TABS = [
+  'Account',
+  'Cartelle',
+  'Regole',
+  'Storico',
+  'Chi consuma',
+  'Strumenti',
+  'Impostazioni',
+];
 
 describe('SwapDeckApp', () => {
-  it('mostra le sei schede e parte da Account', async () => {
+  it('mostra le sette schede e parte da Account', async () => {
     setup();
     const tabs = screen.getAllByRole('tab');
     expect(tabs.map((t) => t.textContent)).toEqual(TABS);
@@ -130,6 +138,45 @@ describe('SwapDeckApp: Storico dalla scheda di un account', () => {
     vi.spyOn(backend, 'getHistory').mockResolvedValue([]);
     await openHistoryOf('alias6', backend);
     expect((await screen.findAllByText('Nessun dato nello storico.')).length).toBeGreaterThan(0);
+  });
+});
+
+describe('SwapDeckApp: Chi consuma questa utenza', () => {
+  it('dalla scheda di un account apre «Chi consuma» già filtrata su quell’utenza', async () => {
+    const backend = new FakeBackend();
+    const spy = vi.spyOn(backend, 'getUsageBreakdown');
+    renderWith(<SwapDeckApp />, backend);
+    const user = userEvent.setup();
+    await user.click(
+      await screen.findByRole('button', { name: 'Chi consuma questa utenza: alias3' }),
+    );
+    expect(screen.getByRole('tab', { name: 'Chi consuma' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    expect(await screen.findByRole('heading', { name: 'Chi consuma' })).toBeInTheDocument();
+    expect(await screen.findByText('Nessun consumo registrato in questa finestra.')).toBeVisible();
+    expect(screen.getByLabelText('Utenza')).toHaveValue('3');
+    expect(spy).toHaveBeenLastCalledWith({ window: '5h', groupBy: 'project', account: 3 });
+  });
+
+  it('dallo Storico: il link dentro il pannello dell’utenza apre la scheda filtrata', async () => {
+    renderWith(<SwapDeckApp initialTab="history" />, new FakeBackend());
+    const user = userEvent.setup();
+    await screen.findByRole('list', { name: 'Grafici per account' });
+    await user.click(
+      await screen.findByRole('button', { name: 'Chi consuma questa utenza: alias6' }),
+    );
+    expect(await screen.findByText('Nessun consumo registrato in questa finestra.')).toBeVisible();
+    expect(screen.getByLabelText('Utenza')).toHaveValue('6');
+  });
+
+  it('un host che non sa leggere i consumi non mostra scheda né link', async () => {
+    renderWith(<SwapDeckApp />, bareBackend(new FakeBackend()));
+    await screen.findByRole('list', { name: 'Account' });
+    expect(screen.queryByRole('tab', { name: 'Chi consuma' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Chi consuma/ })).toBeNull();
+    expect(screen.getAllByRole('tab')).toHaveLength(6);
   });
 });
 

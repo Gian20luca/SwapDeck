@@ -12,6 +12,7 @@ pub mod notify;
 pub mod paths;
 pub mod setup;
 pub mod timeutil;
+pub mod usage;
 
 #[cfg(test)]
 mod ts_export;

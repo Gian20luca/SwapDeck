@@ -8,7 +8,13 @@ import type {
   SetupProgress,
 } from '@swapdeck/types';
 import type { HistoryPoint } from '@swapdeck/ui';
-import { ACTION_TIMEOUT_MS, CliError, SETUP_TIMEOUT_MS, type CliRunner } from './cli.js';
+import {
+  ACTION_TIMEOUT_MS,
+  CliError,
+  SETUP_TIMEOUT_MS,
+  USAGE_TIMEOUT_MS,
+  type CliRunner,
+} from './cli.js';
 import type { CliState } from './generated/index.js';
 import { isRequestMethod, type PickParams, type RequestMethod } from './protocol.js';
 
@@ -144,6 +150,8 @@ function plainObject(value: unknown, name: string): Record<string, unknown> {
   }
   return value as Record<string, unknown>;
 }
+
+const USAGE_GROUPS: readonly string[] = ['project', 'session', 'agent', 'model'];
 
 function optionalInt(value: unknown, name: string): number | undefined {
   if (value === undefined || value === null) return undefined;
@@ -295,6 +303,29 @@ export function createRequestHandler(deps: BridgeDeps) {
         if (since !== undefined) args.push('--since', String(since));
         if (account !== undefined) args.push('--account', String(account));
         return deps.cli(args);
+      }
+      case 'getUsageBreakdown': {
+        // Lettura a budget: ogni chiamata dura pochi secondi, la UI richiama finché c'è `partial`.
+        const query = plainObject(params['query'], 'richiesta dei consumi');
+        const window = query['window'];
+        if (window !== '5h' && window !== '7d' && window !== 'custom') {
+          throw invalid('finestra non valida');
+        }
+        const groupBy = query['groupBy'];
+        if (typeof groupBy !== 'string' || !USAGE_GROUPS.includes(groupBy)) {
+          throw invalid('raggruppamento non valido');
+        }
+        const account = optionalInt(query['account'], 'account');
+        const args = ['usage', 'breakdown', '--window', window, '--group-by', groupBy];
+        if (account !== undefined) args.push('--account', String(account));
+        if (window === 'custom') {
+          const from = optionalInt(query['fromSeconds'], 'fromSeconds');
+          const to = optionalInt(query['toSeconds'], 'toSeconds');
+          if (from === undefined) throw invalid('fromSeconds richiesto');
+          args.push('--from', String(from));
+          if (to !== undefined) args.push('--to', String(to));
+        }
+        return deps.cli(args, { timeoutMs: USAGE_TIMEOUT_MS });
       }
       case 'pickOpenFile':
       case 'pickSaveFile':

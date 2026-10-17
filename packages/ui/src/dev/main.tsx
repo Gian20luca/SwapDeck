@@ -90,6 +90,7 @@ function Preview() {
       new FakeBackend({
         scenario,
         latencyMs: 250,
+        usageScanCalls: 3,
         unclaimed: ['legacy-1f3a', 'legacy-9c2b'],
         mappings: [
           { path: String.raw`C:\Progetti\cliente-a`, account: 1, email: 'user1@example.com' },

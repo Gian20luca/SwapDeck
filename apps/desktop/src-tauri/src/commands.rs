@@ -16,6 +16,7 @@ use swapdeck_core::history::{
 };
 use swapdeck_core::notify::NotificationConfig;
 use swapdeck_core::timeutil::{now_unix, parse_iso};
+use swapdeck_core::usage::{self, UsageBreakdown, UsageError, UsagePaths, UsageQuery};
 use tauri::{AppHandle, State};
 
 use crate::api::{Outcome, Res};
@@ -372,6 +373,25 @@ pub async fn get_history_events(
         History::new(&dir)
             .events(&q, now_unix())
             .map_err(|e| CswapError::new(CswapErrorKind::Failed, format!("storico: {e}")))
+    })
+    .await
+}
+
+/// Chi consuma (F20): classifica dei consumi locali di Claude Code. Legge le sessioni in sola
+/// lettura e aggiorna l'indice nella cartella dati (la prima lettura può durare decine di
+/// secondi: gira fuori dal thread principale).
+#[tauri::command]
+pub async fn get_usage_breakdown(
+    data: State<'_, app::DataDir>,
+    query: serde_json::Value,
+) -> Res<UsageBreakdown> {
+    let q: UsageQuery = parse_arg("richiesta dei consumi", query)?;
+    let paths = UsagePaths::standard(data.0.clone());
+    blocking(move || {
+        usage::usage_breakdown(&paths, &q, now_unix()).map_err(|e| match e {
+            UsageError::Invalid(m) => CswapError::new(CswapErrorKind::InvalidUsage, m),
+            UsageError::Io(_) => CswapError::new(CswapErrorKind::Failed, e.to_string()),
+        })
     })
     .await
 }

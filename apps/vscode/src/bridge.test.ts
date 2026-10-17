@@ -195,7 +195,37 @@ describe('createRequestHandler', () => {
     }
     await expect(handle('setPreferences', { prefs: 1 })).rejects.toMatchObject(invalid);
     await expect(handle('getHistoryEvents', { sinceSeconds: 1.5 })).rejects.toMatchObject(invalid);
-    expect(calls).toHaveLength(7);
+    await handle('getUsageBreakdown', { query: { window: '7d', groupBy: 'agent', account: 3 } });
+    await handle('getUsageBreakdown', {
+      query: { window: 'custom', groupBy: 'model', fromSeconds: 10, toSeconds: 20 },
+    });
+    expect(calls.slice(-2).map((c) => c.args)).toEqual([
+      ['usage', 'breakdown', '--window', '7d', '--group-by', 'agent', '--account', '3'],
+      [
+        'usage',
+        'breakdown',
+        '--window',
+        'custom',
+        '--group-by',
+        'model',
+        '--from',
+        '10',
+        '--to',
+        '20',
+      ],
+    ]);
+    expect(calls.at(-1)?.options?.timeoutMs).toBeGreaterThan(60_000);
+    const before = calls.length;
+    for (const query of [
+      { window: '1h', groupBy: 'project' },
+      { window: '5h', groupBy: '--evil' },
+      { window: 'custom', groupBy: 'project' },
+      { window: '5h', groupBy: 'project', account: -1 },
+    ]) {
+      await expect(handle('getUsageBreakdown', { query })).rejects.toMatchObject(invalid);
+    }
+    expect(calls).toHaveLength(before);
+    expect(calls).toHaveLength(9);
   });
 });
 

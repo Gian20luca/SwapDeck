@@ -29,6 +29,7 @@
     "allow-get-notification-settings",
     "allow-set-notification-settings",
     "allow-get-history-events",
+    "allow-get-usage-breakdown",
     "allow-diagnose-setup",
     "allow-install-cswap",
     "allow-upgrade-cswap",

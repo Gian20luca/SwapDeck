@@ -465,3 +465,57 @@ fn notifications_get_set_and_poll_single_sender() {
     assert_eq!(v["sender"], "engine", "{v}");
     guard.release();
 }
+
+#[test]
+fn usage_breakdown_reads_sessions_read_only() {
+    let env = Env::new();
+    let claude = env.dir.path().join("claude");
+    let session = claude.join("projects").join("c--demo").join("s1.jsonl");
+    fs::create_dir_all(session.parent().unwrap()).unwrap();
+    let ts = swapdeck_core::timeutil::format_iso(swapdeck_core::timeutil::now_unix() - 60);
+    let line = json!({
+        "type": "assistant", "timestamp": ts,
+        "message": {"id": "m1", "model": "claude-opus-4-8", "content": [{"type": "text", "text": "riservato"}],
+            "usage": {"input_tokens": 3, "output_tokens": 4, "cache_creation_input_tokens": 5, "cache_read_input_tokens": 6}}
+    });
+    fs::write(&session, format!("{line}\n")).unwrap();
+    let before = fs::read(&session).unwrap();
+    let run = |args: &[&str]| {
+        parse(
+            env.command(args)
+                .env("CLAUDE_CONFIG_DIR", &claude)
+                .output()
+                .unwrap(),
+        )
+    };
+    let (code, v) = run(&[
+        "usage",
+        "breakdown",
+        "--window",
+        "7d",
+        "--group-by",
+        "model",
+    ]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["rows"][0]["key"], "claude-opus-4-8");
+    assert_eq!(v["rows"][0]["totals"]["tokens"]["cacheRead"], 6);
+    assert_eq!(v["unattributed"]["tokens"]["input"], 3);
+    assert_eq!(v["sourceAvailable"], true);
+    assert_eq!(v["scan"]["filesRead"], 1);
+    assert_eq!(
+        fs::read(&session).unwrap(),
+        before,
+        "sessione non modificata"
+    );
+    let index = fs::read_to_string(env.home().join("data/usage/index.json")).unwrap();
+    assert!(!index.contains("riservato"));
+    let (code, v) = run(&["usage", "breakdown"]);
+    assert_eq!(code, 0);
+    assert_eq!(v["scan"]["filesRead"], 0);
+    assert_eq!(v["window"], "5h");
+    let (code, v) = run(&["usage", "breakdown", "--window", "1h"]);
+    assert_eq!(code, 2);
+    assert_eq!(v["error"]["kind"], "invalidUsage");
+    let (code, _) = run(&["usage", "breakdown", "--window", "custom"]);
+    assert_eq!(code, 2, "custom senza --from");
+}

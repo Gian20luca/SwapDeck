@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -18,6 +19,7 @@ import { FoldersPage } from './manage/FoldersPage.js';
 import { HistoryPage } from './manage/HistoryPage.js';
 import { RulesPage } from './manage/RulesPage.js';
 import { SettingsPage } from './manage/SettingsPage.js';
+import { UsagePage } from './manage/UsagePage.js';
 import { ToolsPage } from './manage/ToolsPage.js';
 import { SetupWizard } from './SetupWizard.js';
 import { Tooltip } from './Tooltip.js';
@@ -29,6 +31,7 @@ const TABS: readonly { id: TabId; label: MessageKey }[] = [
   { id: 'folders', label: 'tabs.folders' },
   { id: 'rules', label: 'tabs.rules' },
   { id: 'history', label: 'tabs.history' },
+  { id: 'usage', label: 'tabs.usage' },
   { id: 'tools', label: 'tabs.tools' },
   { id: 'settings', label: 'tabs.settings' },
 ];
@@ -96,10 +99,18 @@ function Tabs({
   onTabChange,
 }: SwapDeckAppProps & { notice: ReactNode }) {
   const { t } = useI18n();
+  const backend = useBackend();
+  // «Chi consuma» c'è solo se l'host sa leggere i consumi delle sessioni.
+  const tabs = useMemo(
+    () => TABS.filter((x) => x.id !== 'usage' || typeof backend.getUsageBreakdown === 'function'),
+    [backend],
+  );
   const [tab, setTab] = useState<TabId>(initialTab);
   const tabChanged = useRef(onTabChange);
   tabChanged.current = onTabChange;
   useEffect(() => tabChanged.current?.(tab), [tab]);
+  /** Utenza da mostrare nella scheda Chi consuma; `key` cambia a ogni richiesta. */
+  const [usageTarget, setUsageTarget] = useState<{ account: number; key: number } | null>(null);
   /** Account da aprire nella scheda Storico; `key` cambia a ogni richiesta, anche per lo stesso account. */
   const [historyTarget, setHistoryTarget] = useState<{ account: number; key: number } | null>(null);
   const navigate = useCallback((target: NavTarget) => {
@@ -107,21 +118,25 @@ function Tabs({
       const account = target.account;
       setHistoryTarget((prev) => ({ account, key: (prev?.key ?? 0) + 1 }));
     }
+    if (target.tab === 'usage' && target.account !== undefined) {
+      const account = target.account;
+      setUsageTarget((prev) => ({ account, key: (prev?.key ?? 0) + 1 }));
+    }
     setTab(target.tab);
   }, []);
   const base = useId();
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const index = TABS.findIndex((x) => x.id === tab);
+    const index = tabs.findIndex((x) => x.id === tab);
     let next = index;
-    if (event.key === 'ArrowRight') next = (index + 1) % TABS.length;
-    else if (event.key === 'ArrowLeft') next = (index - 1 + TABS.length) % TABS.length;
+    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
     else if (event.key === 'Home') next = 0;
-    else if (event.key === 'End') next = TABS.length - 1;
+    else if (event.key === 'End') next = tabs.length - 1;
     else return;
     event.preventDefault();
-    const target = TABS[next]!;
+    const target = tabs[next]!;
     setTab(target.id);
     refs.current[target.id]?.focus();
   }
@@ -132,7 +147,7 @@ function Tabs({
         {header}
         {notice}
         <div className="sd-tabs" role="tablist" aria-label={t('tabs.label')} onKeyDown={onKeyDown}>
-          {TABS.map(({ id, label }) => (
+          {tabs.map(({ id, label }) => (
             <Tooltip key={id} text={t(`tabs.${id}.tip`)}>
               <button
                 ref={(node) => {
@@ -162,6 +177,7 @@ function Tabs({
           {tab === 'folders' && <FoldersPage />}
           {tab === 'rules' && <RulesPage />}
           {tab === 'history' && <HistoryPage target={historyTarget} />}
+          {tab === 'usage' && <UsagePage target={usageTarget} />}
           {tab === 'tools' && <ToolsPage />}
           {tab === 'settings' && <SettingsPage />}
         </div>

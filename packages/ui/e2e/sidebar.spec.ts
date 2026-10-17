@@ -44,7 +44,15 @@ test(`app completa a ${WIDTH} px (barra laterale di VS Code) senza scroll orizzo
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1, name: 'Account' })).toBeVisible();
   // Tutte le schede raggiungibili (vanno a capo, nessuna nascosta oltre il bordo).
-  for (const name of ['Account', 'Cartelle', 'Regole', 'Storico', 'Strumenti', 'Impostazioni']) {
+  for (const name of [
+    'Account',
+    'Cartelle',
+    'Regole',
+    'Storico',
+    'Chi consuma',
+    'Strumenti',
+    'Impostazioni',
+  ]) {
     await expect(page.getByRole('tab', { name })).toBeInViewport();
   }
   await noHorizontalScroll(page, 'Account');
@@ -68,6 +76,10 @@ test(`app completa a ${WIDTH} px (barra laterale di VS Code) senza scroll orizzo
   await expect(page.getByRole('heading', { name: 'Storico' })).toBeVisible();
   await expect(page.getByRole('img', { name: /Grafico/ }).first()).toBeVisible();
   await noHorizontalScroll(page, 'Storico');
+
+  await tab(page, 'Chi consuma');
+  await expect(page.getByRole('heading', { name: 'Chi consuma' })).toBeVisible();
+  await noHorizontalScroll(page, 'Chi consuma');
 
   await tab(page, 'Strumenti');
   await expect(page.getByRole('heading', { name: 'Strumenti' })).toBeVisible();

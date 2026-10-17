@@ -2,6 +2,7 @@ import { useId, type ReactNode } from 'react';
 import type { Notice } from '../../backend/useActionRunner.js';
 import { useI18n } from '../../i18n/index.js';
 import type { Loadable } from '../../lib/useLoad.js';
+import { InfoTip, WithInfo } from '../InfoTip.js';
 import { Tooltip } from '../Tooltip.js';
 
 /** Esito di un'azione: riga di stato (alert se è un errore). */
@@ -24,16 +25,21 @@ export function NoticeView({ notice }: { notice: Notice | null }) {
 export function Section({
   title,
   hint,
+  info,
   children,
 }: {
   title: string;
   hint?: ReactNode;
+  /** Spiegazione del concetto: mostra la «i» accanto al titolo. */
+  info?: string;
   children: ReactNode;
 }) {
   const id = useId();
   return (
     <section className="sd-section" aria-labelledby={id}>
-      <h3 id={id}>{title}</h3>
+      <WithInfo info={info} name={title}>
+        <h3 id={id}>{title}</h3>
+      </WithInfo>
       {hint && <p className="sd-hint">{hint}</p>}
       {children}
     </section>
@@ -56,6 +62,8 @@ export interface TextFieldProps {
   secret?: boolean;
   /** Tooltip: cosa fa il campo e cosa succede. */
   tip?: string;
+  /** Spiegazione del concetto: mostra la «i» accanto all'etichetta. */
+  info?: string;
 }
 
 /** Campo di testo con etichetta, suggerimento ed errore collegati per l'accessibilità. */
@@ -73,6 +81,7 @@ export function TextField({
   error,
   secret,
   tip,
+  info,
 }: TextFieldProps) {
   const id = useId();
   const describedBy = [hint ? `${id}-hint` : '', error ? `${id}-err` : '']
@@ -80,7 +89,9 @@ export function TextField({
     .join(' ');
   return (
     <div className="sd-form__field">
-      <label htmlFor={id}>{label}</label>
+      <WithInfo info={info} name={label}>
+        <label htmlFor={id}>{label}</label>
+      </WithInfo>
       <Tooltip text={tip ?? ''} block>
         <input
           id={id}
@@ -123,6 +134,7 @@ export function PathField({
   placeholder,
   tip,
   browseTip,
+  info,
 }: {
   label: string;
   value: string;
@@ -132,12 +144,15 @@ export function PathField({
   placeholder?: string;
   tip?: string;
   browseTip?: string;
+  info?: string;
 }) {
   const { t } = useI18n();
   const id = useId();
   return (
     <div className="sd-form__field">
-      <label htmlFor={id}>{label}</label>
+      <WithInfo info={info} name={label}>
+        <label htmlFor={id}>{label}</label>
+      </WithInfo>
       <div className="sd-row">
         <Tooltip text={tip ?? ''}>
           <input
@@ -180,6 +195,7 @@ export function CheckField({
   disabled,
   hint,
   tip,
+  info,
 }: {
   label: string;
   checked: boolean;
@@ -187,6 +203,7 @@ export function CheckField({
   disabled?: boolean;
   hint?: string;
   tip?: string;
+  info?: string;
 }) {
   const id = useId();
   return (
@@ -202,6 +219,7 @@ export function CheckField({
         />
       </Tooltip>
       <label htmlFor={id}>{label}</label>
+      {info && <InfoTip name={label} text={info} />}
       {hint && (
         <span id={`${id}-hint`} className="sd-hint">
           {hint}
@@ -219,6 +237,7 @@ export function SelectField({
   disabled,
   tip,
   hint,
+  info,
 }: {
   label: string;
   value: string;
@@ -228,11 +247,14 @@ export function SelectField({
   tip?: string;
   /** Riga sotto il campo (per esempio la descrizione della scelta). */
   hint?: string;
+  info?: string;
 }) {
   const id = useId();
   return (
     <div className="sd-form__field">
-      <label htmlFor={id}>{label}</label>
+      <WithInfo info={info} name={label}>
+        <label htmlFor={id}>{label}</label>
+      </WithInfo>
       <Tooltip text={tip ?? ''} block>
         <select
           id={id}
@@ -273,15 +295,19 @@ export function LoadGate<T>({
   state,
   onRetry,
   loadingText,
+  loading,
   children,
 }: {
   state: Loadable<T>;
   onRetry: () => void;
   loadingText?: string;
+  /** Al posto del semplice «Caricamento…» (per esempio con l'avanzamento). */
+  loading?: ReactNode;
   children: (data: T) => ReactNode;
 }) {
   const { t } = useI18n();
   if (state.status === 'loading') {
+    if (loading) return <>{loading}</>;
     return (
       <div className="sd-state" role="status">
         {loadingText ?? t('common.loading')}

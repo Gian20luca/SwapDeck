@@ -4,6 +4,7 @@ import { accountName, displayUsage, statusBadge, switchBlockedReason } from '../
 import type { EngineMarks } from '../lib/engineMarks.js';
 import { formatAge, formatClock, isStale, shortEmail } from '../lib/format.js';
 import { useI18n } from '../i18n/index.js';
+import { WithInfo } from './InfoTip.js';
 import { PaceIndicator } from './PaceIndicator.js';
 import { UsageBar } from './UsageBar.js';
 import { Tooltip } from './Tooltip.js';
@@ -17,6 +18,8 @@ export interface AccountCardProps {
   onSwitch: (account: Account) => void;
   /** Apre lo storico di questo account (scheda Storico); senza, il pulsante non c'è. */
   onOpenHistory?: (account: Account) => void;
+  /** Apre «Chi consuma» filtrata su questo account; senza, il pulsante non c'è. */
+  onOpenUsage?: (account: Account) => void;
   /** Azioni di gestione (alias, slot, rimozione, ...), sotto i pulsanti della scheda. */
   extra?: ReactNode;
   /** Trattini alle soglie del motore: solo sulle barre dell'account attivo. */
@@ -30,6 +33,7 @@ export function AccountCard({
   busy = false,
   onSwitch,
   onOpenHistory,
+  onOpenUsage,
   extra,
   engine,
 }: AccountCardProps) {
@@ -89,6 +93,7 @@ export function AccountCard({
           {usage.fiveHour && (
             <UsageBar
               label={t('usage.fiveHour')}
+              info={t('info.usage.fiveHour')}
               accountName={name}
               pct={usage.fiveHour.pct}
               resetsAt={usage.fiveHour.resetsAt}
@@ -99,6 +104,7 @@ export function AccountCard({
           {usage.sevenDay && (
             <UsageBar
               label={t('usage.sevenDay')}
+              info={t('info.usage.sevenDay')}
               accountName={name}
               pct={usage.sevenDay.pct}
               resetsAt={usage.sevenDay.resetsAt}
@@ -113,6 +119,7 @@ export function AccountCard({
               aheadOfPace={usage.sevenDay.aheadOfPace}
               willLastToReset={usage.sevenDay.willLastToReset}
               projectedExhaustionAt={usage.sevenDay.projectedExhaustionAt}
+              info={t('info.pace')}
             />
           )}
         </div>
@@ -120,7 +127,9 @@ export function AccountCard({
 
       {usage?.scoped && usage.scoped.length > 0 && (
         <div className="sd-card__scoped">
-          <h3>{t('usage.scoped')}</h3>
+          <WithInfo info={t('info.usage.scoped')} name={t('usage.scoped')}>
+            <h3>{t('usage.scoped')}</h3>
+          </WithInfo>
           {usage.scoped.map((window, index) => (
             <UsageBar
               key={`${window.name ?? index}`}
@@ -143,6 +152,18 @@ export function AccountCard({
           {ageText}
         </span>
         <span className="sd-card__actions">
+          {onOpenUsage && (
+            <Tooltip text={t('usage.link.tip')}>
+              <button
+                type="button"
+                className="sd-btn sd-btn--small"
+                aria-label={t('usage.linkLabel', { name })}
+                onClick={() => onOpenUsage(account)}
+              >
+                {t('usage.link')}
+              </button>
+            </Tooltip>
+          )}
           {onOpenHistory && usage && (
             <Tooltip text={t('account.history.tip')}>
               <button

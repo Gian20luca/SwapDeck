@@ -17,7 +17,10 @@ import type {
   SwitchReason,
   SwitchResponse,
   UpdateInfo,
+  UsageBreakdown,
+  UsageQuery,
 } from '@swapdeck/types';
+import { fakeUsageBreakdown } from './fakeUsage.js';
 import {
   BackendError,
   type ActionOutcome,
@@ -67,7 +70,15 @@ export interface FakeBackendOptions {
   miniWindow?: boolean;
   /** Stato simulato di cswap e uv per la procedura di primo avvio e l'aggiornamento. */
   setup?: FakeSetupOptions;
+  /**
+   * Prima lettura delle sessioni a budget: le prime N chiamate di «Chi consuma» rispondono con
+   * `partial` (avanzamento crescente), come il core (default 0: lettura già completa).
+   */
+  usageScanCalls?: number;
 }
+
+/** Byte totali simulati delle sessioni per `usageScanCalls`. */
+const FAKE_SCAN_TOTAL_BYTES = 2_000_000_000;
 
 /** Regole di default del motore (specchio di `EngineRules::default` del Rust). */
 export const DEFAULT_RULES: EngineRules = {
@@ -138,6 +149,9 @@ export class FakeBackend implements Backend, SetupBackend {
   private readonly picks: NonNullable<FakeBackendOptions['picks']>;
   private readonly listeners = new Set<(state: ListResponse) => void>();
   private readonly latencyMs: number;
+  /** Chiamate di «Chi consuma» ancora parziali e quante ne erano in tutto (`usageScanCalls`). */
+  private usageScanLeft: number;
+  private readonly usageScanCalls: number;
   private readonly now: () => number;
   private config: ConfigListResponse;
   /** Contatore delle chiamate a `listAccounts`, utile ai test. */
@@ -149,6 +163,8 @@ export class FakeBackend implements Backend, SetupBackend {
 
   constructor(options: FakeBackendOptions = {}) {
     this.latencyMs = options.latencyMs ?? 0;
+    this.usageScanCalls = Math.max(0, options.usageScanCalls ?? 0);
+    this.usageScanLeft = this.usageScanCalls;
     this.now = options.now ?? Date.now;
     this.list = loadScenario(options.scenario ?? 'default', this.now());
     this.config = structuredClone(configList) as unknown as ConfigListResponse;
@@ -238,6 +254,29 @@ export class FakeBackend implements Backend, SetupBackend {
   async getHistoryEvents(query: HistoryQuery = {}): Promise<HistoryEvents> {
     await this.delay();
     return generateEvents(this.list, this.now(), query.sinceSeconds);
+  }
+
+  async getUsageBreakdown(query: UsageQuery): Promise<UsageBreakdown> {
+    await this.delay();
+    try {
+      const result = fakeUsageBreakdown(query, this.now());
+      if (this.usageScanLeft > 0) {
+        const done = this.usageScanCalls - this.usageScanLeft + 1;
+        this.usageScanLeft -= 1;
+        result.partial = {
+          scannedBytes: Math.round((FAKE_SCAN_TOTAL_BYTES * done) / (this.usageScanCalls + 1)),
+          totalBytes: FAKE_SCAN_TOTAL_BYTES,
+        };
+      }
+      return result;
+    } catch (e) {
+      throw new BackendError({
+        kind: 'invalidUsage',
+        message: (e as Error).message,
+        exitCode: 2,
+        errorType: 'InvalidUsage',
+      });
+    }
   }
 
   async listMappings(): Promise<DirectoryMapping[]> {
