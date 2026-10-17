@@ -19,6 +19,8 @@ export const itUsage = {
   'usage.group.model': 'Modello',
   'usage.group.tip': 'Come raggruppare i consumi nella classifica.',
   'usage.firstScan': 'Prima analisi delle sessioni in corso…',
+  'usage.firstScan.label': 'Prima analisi',
+  'usage.privacy.label': 'Privacy',
   'usage.firstScan.progress': 'Letto il {pct}% delle sessioni',
   'usage.firstScan.hint':
     'La prima lettura può richiedere qualche decina di secondi; le successive sono immediate.',

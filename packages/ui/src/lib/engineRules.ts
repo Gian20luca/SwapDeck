@@ -75,6 +75,14 @@ export function toDraft(rules: EngineRules): RulesDraft {
  * Le regole salvate con i campi della bozza sopra. I pesi
  * e il modello si scrivono solo se cambiano rispetto a `base` (assenti = default del Rust).
  */
+/**
+ * L'accensione non chiede più conferma (specchio di `EngineRules::enable_confirmed`): confermata
+ * una volta, oppure motore già acceso o in osservazione.
+ */
+export function enableConfirmed(rules: EngineRules): boolean {
+  return Boolean(rules.firstEnableConfirmed) || rules.enabled || rules.dryRun;
+}
+
 export function fromDraft(draft: RulesDraft, base: EngineRules): EngineRules {
   const out: EngineRules = {
     ...base,

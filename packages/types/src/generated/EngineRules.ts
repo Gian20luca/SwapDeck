@@ -22,6 +22,11 @@ enabled: boolean,
  */
 dryRun: boolean, 
 /**
+ * Prima accensione già confermata nel dialogo «Accendi» (app e tutte le finestre di VS Code):
+ * dopo, l'accensione parte subito. Non torna mai falso (vedi [`Self::enable_confirmed`]).
+ */
+firstEnableConfirmed: boolean, 
+/**
  * Utenze in ordine di priorità (numeri di cswap): la prima è la principale. Con la sola
  * principale le altre sono tutte quelle di cswap, in ordine di numero. Le utenze che non
  * esistono in cswap si saltano. Quando c'è prevale su `primary` e `reserves`.

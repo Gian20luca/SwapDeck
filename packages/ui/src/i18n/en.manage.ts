@@ -102,6 +102,10 @@ export const enManage: Record<keyof typeof itManage, string> = {
   'rules.off': 'Engine off: no automatic switching',
   'rules.turnOn': 'Turn on',
   'rules.turnedOn': 'Engine on.',
+  'rules.observeOn': 'Engine on in observe-only mode.',
+  'rules.firstOn.title': 'Turn the engine on?',
+  'rules.firstOn.message':
+    'The engine will switch accounts by itself, for every open session. Do you want to try it in Observe only first?',
   'rules.dryRunOn': 'Observe only: logs decisions without switching account',
   'rules.observer': 'running in another instance: observing only here',
   'rules.suspend.disabled': 'The engine is off.',

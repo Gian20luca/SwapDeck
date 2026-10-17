@@ -59,7 +59,7 @@ test('riordino col mouse sulla maniglia ⋮⋮ e salvataggio', async ({ page }) 
 test('cambio di mappa dal selettore', async ({ page }) => {
   await open(page);
   await rules(page);
-  await page.getByLabel('Mappa attiva').selectOption('eco');
+  await page.getByLabel('Mappa attiva', { exact: true }).selectOption('eco');
   await expect(page.getByText('Mappa attiva: Eco.')).toBeVisible();
   await expect(page.getByLabel('Soglia sulle 5 ore (%)')).toHaveValue('90');
   // Preset in sola lettura nel riquadro della mappa: si clona come mappa personale.
@@ -82,7 +82,7 @@ test('cambio di mappa dal selettore', async ({ page }) => {
 test('preset attivo: si salva l’osservazione, il resto resta del preset', async ({ page }) => {
   await open(page);
   await rules(page);
-  await page.getByLabel('Mappa attiva').selectOption('sport');
+  await page.getByLabel('Mappa attiva', { exact: true }).selectOption('sport');
   await expect(page.getByText('Mappa attiva: Sport.')).toBeVisible();
   await page.getByLabel('Solo osservazione').check();
   await page.getByRole('button', { name: 'Salva' }).click();

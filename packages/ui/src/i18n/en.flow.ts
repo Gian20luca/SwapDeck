@@ -82,6 +82,7 @@ export const enFlow: Record<keyof typeof itFlow, string> = {
   'flow.removeMissing': 'Remove from list',
   'flow.removeMissing.tip': 'Removes from the list the accounts that no longer exist in cswap.',
   'flow.next': 'Right now it would go to: {name}',
+  'flow.next.label': 'Right now it would go to',
   'flow.next.fallback': 'no free reserve, fallback',
   'flow.next.none': 'Right now there is no free account to move to.',
   'flow.criterion.hint.lowest-weekly': 'Picks the account with the lowest weekly usage.',

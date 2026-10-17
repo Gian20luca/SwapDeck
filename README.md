@@ -52,7 +52,7 @@ Per provare l'installazione su una macchina pulita (Windows, Linux, macOS), il m
 ## Dashboard, mini-widget e notifiche
 
 - **Icona nell'area di notifica** (app): anello con il consumo dell'account attivo; il tooltip riassume lo stato. Cambia aspetto se il motore è sospeso.
-- **Spiegazioni:** accanto ai concetti (titoli di sezione, impostazioni, barre 5 ore e 7 giorni, ritmo, chiavi di configurazione di cswap) c'è una piccola «i» cerchiata: passandoci sopra, col focus da tastiera o col clic si legge cosa fa e quando serve (Esc o un clic fuori la chiude). I pulsanti hanno invece il solo tooltip.
+- **Spiegazioni:** accanto ai concetti (titoli di sezione, impostazioni, barre 5 ore e 7 giorni, ritmo, chiavi di configurazione di cswap, regole e mappe del motore, «Chi consuma») c'è una piccola «i» cerchiata: passandoci sopra, col focus da tastiera o col clic si legge cosa fa e quando serve (Esc o un clic fuori la chiude). I pulsanti hanno invece il solo tooltip.
 - **Dashboard:** una scheda per account con consumi a 5 ore e 7 giorni, ritmo atteso rispetto a quello reale, stima di esaurimento, storico con grafici, gestione completa degli account.
 - **Mini-widget:** piccola finestra sempre in primo piano, trascinabile, con l'account attivo: barre 5 ore, 7 giorni e per modello, ora dell'ultima lettura e selettore della mappa attiva. Il trattino sulla barra è la soglia del motore e nel suo tooltip c'è l'utenza a cui andrebbe adesso. In alto a destra: **Aggiorna** (rilegge i consumi; `cswap` li rinnova al massimo ogni 3 minuti), **Comprimi** (striscia con alias e % delle 5 ore; dalla striscia si torna con «Espandi») e **Nascondi** (resta l'icona nell'area di notifica). Le posizioni della striscia e del widget esteso si ricordano a parte.
 - **Notifiche di sistema:** si scelgono nella pagina **Notifiche** (dalle impostazioni, «Notifiche…»), divisa in tre gruppi:
@@ -118,6 +118,8 @@ Se la riserva scelta è al limite si passa alla successiva. L'isteresi vale solo
 **Un solo motore per utente.** Un lock impedisce che app, finestra VS Code o processo headless cambino account insieme: chi non ha il lock resta in osservazione e lo prende entro un giro quando il titolare si chiude.
 
 **Stato «sospeso» e conflitti.** Se rileva `cswap auto` in esecuzione o un'attività, timer, cron o LaunchAgent che richiama `cswap` (per esempio lo script pianificato di un altro motore che usa `cswap`), il motore si **sospende** da solo: icona «sospeso», riga nel tooltip e avviso sopra la dashboard. Non è un errore: evita due automatismi che si contraddicono. Per riattivarlo ferma l'altro automatismo (vedi la [guida alla migrazione](docs/GUIDA-MIGRAZIONE.md)). Conta un'attività o un timer che cita `cswap` o `claude-swap` nel nome o nel comando; un'attività disabilitata dà solo un avviso. Per ignorare un conflitto noto si mette il suo id (per esempio `task:nome-attività`) in `ignoredConflicts`. Provare prima in sola osservazione (`dryRun`) è sempre sicuro.
+
+**Prima accensione.** La prima volta che accendi il motore («Accendi» o «Motore acceso» nella scheda Regole, «SwapDeck: Avvia motore» in VS Code) SwapDeck avvisa che cambierà account da solo per tutte le sessioni aperte e propone di provarlo prima in **Solo osservazione**: scegli Accendi, Solo osservazione o Annulla. La scelta vale per l'app e per tutte le finestre di VS Code (`engine.firstEnableConfirmed` in `config.json`); dalle volte successive il motore parte subito. Chi aveva già il motore acceso non vede il dialogo.
 
 ## Modalità senza interfaccia
 

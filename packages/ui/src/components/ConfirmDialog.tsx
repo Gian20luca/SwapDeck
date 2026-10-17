@@ -14,6 +14,8 @@ export interface ConfirmDialogProps {
    * esatta (maiuscole e minuscole contano). Serve per le azioni irreversibili come `purge`.
    */
   requireWord?: string;
+  /** Terza scelta, tra «Annulla» e la conferma (per esempio «Solo osservazione»); come la conferma può essere asincrona. */
+  alt?: { label: string; onSelect: () => void | Promise<void> };
   /** Può essere asincrona: il dialogo resta aperto e occupato finché non termina. */
   onConfirm: () => void | Promise<void>;
   onCancel: () => void;
@@ -36,6 +38,7 @@ function OpenDialog({
   cancelLabel,
   tone = 'default',
   requireWord,
+  alt,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -66,18 +69,22 @@ function OpenDialog({
     else confirmRef.current?.focus();
   }, [step, tone]);
 
+  async function run(action: () => void | Promise<void>) {
+    setBusy(true);
+    try {
+      await action();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function confirm() {
     if (requireWord && step === 1) {
       setStep(2);
       return;
     }
     if (!wordOk || busy) return;
-    setBusy(true);
-    try {
-      await onConfirm();
-    } finally {
-      setBusy(false);
-    }
+    await run(onConfirm);
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -160,6 +167,16 @@ function OpenDialog({
           >
             {cancelLabel ?? t('common.cancel')}
           </button>
+          {alt && isFinal && (
+            <button
+              type="button"
+              className="sd-btn"
+              disabled={busy}
+              onClick={() => void (busy ? undefined : run(alt.onSelect))}
+            >
+              {alt.label}
+            </button>
+          )}
           <button
             type="button"
             ref={confirmRef}

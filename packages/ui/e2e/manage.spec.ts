@@ -126,7 +126,7 @@ test('regole: preset «Principale con riserve», salvataggio e conflitto ignorat
 }) => {
   await open(page);
   await tab(page, 'Regole');
-  await page.getByLabel('Mappa attiva').selectOption('priority-reserves');
+  await page.getByLabel('Mappa attiva', { exact: true }).selectOption('priority-reserves');
   await expect(page.getByText('Mappa attiva: Principale con riserve.')).toBeVisible();
   await page.getByLabel('Solo osservazione').check();
   await page.getByRole('button', { name: 'Salva' }).click();
@@ -151,8 +151,20 @@ test('motore spento: riga neutra con «Accendi»; sola osservazione e sospension
   await expect(status).toContainText('Motore spento: nessun cambio automatico');
   await noHorizontalScroll(page);
   await page.screenshot({ path: `${SHOTS}/regole-spento-420x640.png` });
+  // Prima accensione: dialogo con Accendi / Solo osservazione / Annulla, dentro i 420 px.
   await status.getByRole('button', { name: 'Accendi' }).click();
+  const first = page.getByRole('alertdialog', { name: 'Accendere il motore?' });
+  await expect(first).toContainText('Vuoi prima provarlo in Solo osservazione?');
+  await expect(first.getByRole('button')).toHaveText(['Annulla', 'Solo osservazione', 'Accendi']);
+  await noHorizontalScroll(page);
+  await page.screenshot({ path: `${SHOTS}/regole-prima-accensione-420x640.png` });
+  await first.getByRole('button', { name: 'Accendi' }).click();
   await expect(status).toContainText('Motore acceso');
+  // La «i» dello stato si apre al clic e resta nella finestra.
+  await status.getByRole('button', { name: 'Informazioni su Stato del motore' }).click();
+  await expect(page.getByRole('tooltip').filter({ hasText: 'Solo osservazione:' })).toBeVisible();
+  await noHorizontalScroll(page);
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('button', { name: 'Accendi' })).toHaveCount(0);
 
   await page.getByLabel('Motore (demo)').selectOption('observe');

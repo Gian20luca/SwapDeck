@@ -271,6 +271,8 @@ impl AppConfig {
     pub fn set_engine_rules(&mut self, rules: EngineRules) -> Result<(), ConfigError> {
         let mut rules = rules;
         rules.sync_order();
+        // La conferma della prima accensione resta anche se chi scrive non la conosce.
+        rules.first_enable_confirmed |= self.engine.enable_confirmed();
         let mut profiles = self.engine_profiles.clone();
         profiles.normalize(&self.engine);
         profiles
@@ -657,6 +659,11 @@ mod tests {
         };
         let c = update(&path, |c| c.apply_profile_command(&clone)).unwrap();
         assert_eq!(c.engine_profiles.active().unwrap().name, "Mia sport");
+        // Config con il motore già acceso: la prima accensione conta come confermata.
+        let observe = EngineRules {
+            first_enable_confirmed: true,
+            ..observe
+        };
         assert_eq!(c.engine, observe);
         let edited = EngineRules {
             five_hour_threshold: 80.0,
@@ -894,6 +901,8 @@ mod preferences_tests {
         let c = update(&path, |c| c.set_engine_rules(rules.clone())).unwrap();
         let rules = EngineRules {
             order: Some(vec![3]),
+            // Il motore era acceso nel file: la conferma della prima accensione resta.
+            first_enable_confirmed: true,
             ..rules
         };
         assert_eq!(c.engine, rules, "lista allineata alla principale");

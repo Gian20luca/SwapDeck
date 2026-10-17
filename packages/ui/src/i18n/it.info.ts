@@ -77,8 +77,6 @@ export const itInfo = {
     'Quanti giri di controllo consecutivi un’utenza deve risultare in errore prima di essere messa in quarantena, cioè esclusa dalla scelta. Evita di scartarla per un errore passeggero.',
   'info.config.model':
     'Quali limiti per modello (per esempio Fable) contano nella scelta. Nomi separati da virgola, oppure «all» per tutti; se è vuoto non conta nessun modello.',
-  'info.config.theme':
-    'Il tema dell’interfaccia a terminale di cswap. Non cambia l’aspetto di SwapDeck.',
 
   'info.notif.engine':
     'Avvisi sul motore: quando sta per cambiare utenza, quando l’ha fatto e quando non ha più dove andare.',
@@ -108,4 +106,35 @@ export const itInfo = {
     'Se i consumi non si aggiornano più, le barre mostrano numeri vecchi e il motore decide senza dati freschi.',
   'info.notif.quietCritical':
     'Gli avvisi critici (nessuna riserva, login da rifare) richiedono un’azione: se vuoi non perderli, lasciali passare anche di notte.',
+  'info.rules.state':
+    'Acceso: il motore cambia utenza da solo, per tutte le sessioni. Solo osservazione: decide e lo scrive nello storico, ma non cambia. Spento: non valuta nulla. Sospeso: si è fermato da solo (altro motore, regole non valide) e riparte quando il problema sparisce.',
+  'info.rules.next':
+    'L’utenza a cui il motore passerebbe se l’attiva arrivasse alla soglia adesso, con il motivo. Serve a provare le regole senza aspettare.',
+  'info.maps.map':
+    'Una mappa è un pacchetto con nome: lista delle utenze, soglie e criterio. La scegli tu, il motore non la cambia mai da solo. Acceso, osservazione e conflitti ignorati valgono per tutte le mappe.',
+  'info.maps.preset':
+    'I preset ci sono sempre e non si modificano. «Clona come mappa personale» ne fa una copia con un nome, che puoi modificare, rinominare ed eliminare. Un preset usa la lista della mappa da cui lo scegli.',
+  'info.maps.box':
+    'Le regole della mappa attiva: chi usare (lista), quando cambiare (soglie) e a chi passare (criterio). Valgono dal giro dopo il salvataggio.',
+  'info.rules.list':
+    'Chi può usare il motore e in che ordine. La prima è la principale: il motore parte da lì e, con «Torna al principale», ci torna dopo il suo reset. Le utenze escluse non le sceglie mai.',
+  'info.rules.thresholds':
+    'Quando cambiare: oltre la soglia delle 5 ore o dei 7 giorni l’utenza attiva lascia il posto. Dopo il reset si torna alla principale solo se è sotto la soglia di almeno l’isteresi; la pausa minima evita cambi a raffica.',
+  'info.rules.criterion':
+    'A chi passare tra le riserve sotto soglia. Settimanale più bassa; Migliore: più margine; Ordine fisso: la prima della lista; Reset più vicino; Ritmo sicuro: chi arriva al reset; 5 ore più libera; Bilanciato: pesi; Livellate; Margine sul modello.',
+  'info.rules.weights':
+    'Quanto conta ogni componente nel punteggio bilanciato: margine sulle 5 ore e sui 7 giorni, vicinanza del reset settimanale, ritmo. Contano le proporzioni; un fattore senza dati si toglie.',
+  'info.rules.model':
+    'Il limite settimanale proprio di un modello, per esempio Fable: il motore sceglie la riserva con più margine su quel limite e, a parità, la settimanale più bassa.',
+  'info.rules.conflicts':
+    'Un altro automatismo che cambia utenza con cswap (per esempio cswap auto) può contraddire questo motore: se è certo, SwapDeck si sospende finché c’è. «Ignora» lo fa andare avanti lo stesso.',
+
+  'info.usage.what':
+    'Il consumo di Claude Code su questo PC, letto dalle sessioni salvate: per progetto, sessione, agente o modello, attribuito all’utenza attiva in quel momento. Si misura in token equivalenti, pesati come i prezzi delle API.',
+  'info.usage.other':
+    'Quanto consumano con la stessa utenza gli altri dispositivi (altri PC, web): la quota letta dal server meno quella spiegata dai token di questo PC. La fiducia sale con il numero e la coerenza delle letture; servono almeno 3 intervalli.',
+  'info.usage.privacy':
+    'Resta tutto su questo PC, in un indice locale con orari, modelli e conteggi dei token. Il testo dei messaggi non si legge, il percorso delle cartelle non va nei log e l’app mostra solo il nome dell’ultima cartella.',
+  'info.usage.firstScan':
+    'La prima volta SwapDeck legge le sessioni degli ultimi 30 giorni e ne fa un indice; poi legge solo le righe nuove. Se cambi scheda, la lettura riprende da dove era arrivata.',
 } as const;

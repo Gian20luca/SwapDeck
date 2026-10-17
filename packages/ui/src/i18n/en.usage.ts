@@ -18,6 +18,8 @@ export const enUsage = {
   'usage.group.model': 'Model',
   'usage.group.tip': 'How to group the usage in the ranking.',
   'usage.firstScan': 'First analysis of the sessions in progress…',
+  'usage.firstScan.label': 'First analysis',
+  'usage.privacy.label': 'Privacy',
   'usage.firstScan.progress': '{pct}% of the sessions read',
   'usage.firstScan.hint':
     'The first read can take a few tens of seconds; the following ones are immediate.',

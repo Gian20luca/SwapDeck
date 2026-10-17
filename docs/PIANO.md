@@ -48,6 +48,7 @@ Esclusa: esportazione dello storico in CSV (punto 12).
 - `remove`, `import` (sovrascrive), `export` (il file contiene credenziali), `swap`/`move`, `unmap`, `disable` dell'account attivo, `unclaimed --purge`, installazione di uv/cswap: conferma semplice.
 - `purge`: doppia conferma, con la parola da digitare.
 - `switch` manuale: nessuna conferma.
+- Accensione del motore (17/10, decisione dell'utente): conferma solo alla prima accensione, da qualunque punto (scheda Regole, comando «Avvia motore» di VS Code), con «Il motore cambierà account da solo, per tutte le sessioni aperte. Vuoi prima provarlo in Solo osservazione?» e le scelte Accendi / Solo osservazione / Annulla; poi parte subito. Il ricordo è `engine.firstEnableConfirmed` nella config comune (vale per app e tutte le finestre di VS Code); una config con il motore già acceso o in osservazione conta come confermata.
 
 ## 2. Architettura
 

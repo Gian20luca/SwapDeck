@@ -39,5 +39,9 @@
   "automatic switching off": "cambio automatico spento",
   "SwapDeck: engine change failed: {0}": "SwapDeck: cambio del motore non riuscito: {0}",
   "SwapDeck: engine on, it switches accounts by the rules": "SwapDeck: motore acceso, cambia account secondo le regole",
+  "SwapDeck: engine on in observe-only mode, it never switches": "SwapDeck: motore acceso in sola osservazione, non cambia account",
+  "Turn on": "Accendi",
+  "Observe only": "Solo osservazione",
+  "The engine will switch accounts by itself, for every open session. Do you want to try it in Observe only first?": "Il motore cambierà account da solo, per tutte le sessioni aperte. Vuoi prima provarlo in Solo osservazione?",
   "SwapDeck: engine off, no automatic switches": "SwapDeck: motore spento, nessun cambio automatico"
 }
