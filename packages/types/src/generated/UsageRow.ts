@@ -10,7 +10,12 @@ export type UsageRow = {
 /**
  * Chiave unica nella classifica.
  */
-key: string, project?: string, session?: string, agent?: string, agentType?: string, description?: string, model?: string, totals: UsageTotals, 
+key: string, project?: string, 
+/**
+ * Nome da mostrare: solo l'ultima parte del percorso ([`source::project_label`]). `project`
+ * (nome della cartella di Claude Code, cioè il percorso intero) serve solo da chiave.
+ */
+projectLabel?: string, session?: string, agent?: string, agentType?: string, description?: string, model?: string, totals: UsageTotals, 
 /**
  * Quota sul totale (locale più altri dispositivi stimati, se disponibili), in percento.
  */

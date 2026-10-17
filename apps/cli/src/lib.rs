@@ -412,6 +412,8 @@ fn history(rest: &[&str]) -> Res<Vec<HistoryRecord>> {
         .into_iter()
         .filter(|r| match (r, account) {
             (HistoryRecord::Sample(s), Some(n)) => s.account == n,
+            // I battiti servono solo all'attribuzione dei consumi (F20).
+            (HistoryRecord::Heartbeat(_), _) => false,
             _ => true,
         })
         .collect())

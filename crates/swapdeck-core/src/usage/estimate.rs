@@ -21,6 +21,7 @@ use std::collections::{BTreeMap, HashMap};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use super::attribution::Timeline;
 use super::index::UsageIndex;
 use super::{BreakdownWindow, TokenCounts};
 use crate::cswap::UsageStatus;
@@ -39,6 +40,11 @@ const TOL: f64 = 0.4;
 const START_QUANTILE: f64 = 0.8;
 /// Quota minima di un modello in un intervallo per calibrarlo da solo.
 const MODEL_SHARE: f64 = 0.8;
+/// Intervalli minimi per usare il `k` di un modello invece di quello dell'utenza.
+pub const MIN_MODEL_SAMPLES: usize = 5;
+/// Quota di consumo locale stimata con il `k` dell'utenza (modelli senza calibrazione propria)
+/// oltre la quale la fiducia scende di un grado.
+const FALLBACK_SHARE: f64 = 0.1;
 /// Quota massima di consumo di utenza sconosciuta in un intervallo di calibrazione.
 const MAX_UNKNOWN_SHARE: f64 = 0.1;
 
@@ -198,9 +204,11 @@ impl MinuteSeries {
 
 /// Intervalli di una finestra per un'utenza.
 pub fn intervals(
+    account: u32,
     samples: &[&UsageSample],
     window: BreakdownWindow,
     series: &MinuteSeries,
+    timeline: &Timeline,
 ) -> Vec<Interval> {
     let (min_points, max_span) = match window {
         BreakdownWindow::FiveHour => (MIN_POINTS_5H, 3 * 3600),
@@ -216,6 +224,13 @@ pub fn intervals(
         };
         let delta = p.pct - a.pct;
         if !same_window(a.resets, p.resets) || delta < 0.0 || p.t - a.t > max_span {
+            anchor = Some(p);
+            continue;
+        }
+        // Utenza attiva per tutto l'intervallo più un giro di margine per lato (un cambio fatto
+        // fuori da SwapDeck si vede solo al giro dopo): altrimenti il consumo locale è incerto.
+        let margin = timeline.period_at(p.t);
+        if delta >= min_points && !timeline.active_throughout(account, a.t - margin, p.t + margin) {
             anchor = Some(p);
             continue;
         }
@@ -331,7 +346,10 @@ pub fn calibrate(intervals: &[Interval]) -> Option<Calibration> {
     }
     let per_model = by_model
         .into_iter()
-        .filter_map(|(m, pairs)| robust_ratio(&pairs).map(|(k, _, _)| (m, k)))
+        .filter_map(|(m, pairs)| match robust_ratio(&pairs) {
+            Some((k, n, _)) if n >= MIN_MODEL_SAMPLES => Some((m, k)),
+            _ => None,
+        })
         .collect();
     Some(Calibration {
         pooled,
@@ -347,6 +365,7 @@ pub fn estimate(
     window: BreakdownWindow,
     samples: &[&UsageSample],
     series: &MinuteSeries,
+    timeline: &Timeline,
     now: i64,
 ) -> OtherDevicesEstimate {
     let mut out = OtherDevicesEstimate {
@@ -383,17 +402,22 @@ pub fn estimate(
     out.from = Some(from);
     out.to = Some(last.t);
     out.server_pct = Some(last.pct);
-    let cal = calibrate(&intervals(samples, window, series));
+    let cal = calibrate(&intervals(account, samples, window, series, timeline));
     let Some(cal) = cal else {
         out.status = EstimateStatus::NotCalibrated;
         return out;
     };
-    let (local, unknown) = series.sum(from, last.t + 60);
+    let (local, unknown) = series.sum(from, last.t);
     let local_pct: f64 = local
         .iter()
         .map(|(m, u)| u / cal.per_model.get(m).copied().unwrap_or(cal.pooled))
         .sum();
     let known: f64 = local.values().sum();
+    let fallback: f64 = local
+        .iter()
+        .filter(|(m, _)| !cal.per_model.contains_key(m))
+        .map(|(_, u)| u)
+        .sum();
     out.history_gaps = unknown > MAX_UNKNOWN_SHARE * (known + unknown);
     let other = (last.pct - local_pct).max(0.0);
     out.status = EstimateStatus::Available;
@@ -404,10 +428,19 @@ pub fn estimate(
     out.samples = cal.samples as u32;
     out.confidence = Some(if out.history_gaps {
         Confidence::Low
+    } else if fallback > FALLBACK_SHARE * known {
+        lower(cal.confidence)
     } else {
         cal.confidence
     });
     out
+}
+
+fn lower(c: Confidence) -> Confidence {
+    match c {
+        Confidence::High => Confidence::Medium,
+        _ => Confidence::Low,
+    }
 }
 
 fn round2(v: f64) -> f64 {

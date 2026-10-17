@@ -24,9 +24,10 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use estimate::{Confidence, EstimateStatus, OtherDevicesEstimate};
-pub use index::{ScanStats, UsageIndex};
+pub use index::{ScanBudget, ScanProgress, ScanStats, UsageIndex};
 
 use crate::history::{DEFAULT_RETENTION_DAYS, History, HistoryRecord, UsageSample};
+use attribution::Timeline;
 
 /// Pesi dei token equivalenti: input, output, scrittura e lettura della cache (rapporti dei
 /// prezzi delle API rispetto all'input). La differenza tra modelli la assorbe la calibrazione
@@ -164,6 +165,11 @@ pub struct UsageRow {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub project: Option<String>,
+    /// Nome da mostrare: solo l'ultima parte del percorso ([`source::project_label`]). `project`
+    /// (nome della cartella di Claude Code, cioè il percorso intero) serve solo da chiave.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub project_label: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub session: Option<String>,
@@ -214,6 +220,11 @@ pub struct UsageBreakdown {
     /// Cartella delle sessioni di Claude Code trovata.
     pub source_available: bool,
     pub scan: ScanStats,
+    /// Lettura fermata dal budget: righe ancora da leggere. La classifica è parziale; si richiama
+    /// finché il campo non manca.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub partial: Option<ScanProgress>,
 }
 
 /// Dove leggere e dove tenere l'indice.
@@ -248,24 +259,55 @@ pub enum UsageError {
 /// vince, ed entrambi partono dagli stessi file).
 static SCAN_LOCK: Mutex<()> = Mutex::new(());
 
-/// Legge le righe nuove, aggiorna l'indice e restituisce la classifica.
+/// Legge le righe nuove entro il budget predefinito, aggiorna l'indice e restituisce la
+/// classifica (con `partial` se restano righe da leggere: si richiama).
 pub fn usage_breakdown(
     paths: &UsagePaths,
     query: &UsageQuery,
     now: i64,
 ) -> Result<UsageBreakdown, UsageError> {
+    usage_breakdown_with(paths, query, now, ScanBudget::default())
+}
+
+/// Come [`usage_breakdown`], con il budget dato. Storico illeggibile: errore, prima di toccare
+/// l'indice (niente salvataggio, posizioni ferme).
+pub fn usage_breakdown_with(
+    paths: &UsagePaths,
+    query: &UsageQuery,
+    now: i64,
+    budget: ScanBudget,
+) -> Result<UsageBreakdown, UsageError> {
     resolve_window(query, None, now)?;
     let _guard = SCAN_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let cutoff = now - i64::from(DEFAULT_RETENTION_DAYS) * 86_400;
+    let records = match paths.data_dir.as_deref() {
+        Some(d) => History::new(d).read_range(cutoff - attribution::LOOKBACK_SECS, now),
+        None => Ok(Vec::new()),
+    };
+    scan_and_rank(paths, query, now, budget, records)
+}
+
+/// Lettura e classifica con lo storico già letto (errore: niente lettura né salvataggio).
+fn scan_and_rank(
+    paths: &UsagePaths,
+    query: &UsageQuery,
+    now: i64,
+    budget: ScanBudget,
+    records: io::Result<Vec<HistoryRecord>>,
+) -> Result<UsageBreakdown, UsageError> {
+    let records = records?;
     let cutoff = now - i64::from(DEFAULT_RETENTION_DAYS) * 86_400;
     let (mut idx, reset) = match &paths.data_dir {
         Some(d) => index::load(d),
         None => (UsageIndex::default(), false),
     };
-    let history = paths.data_dir.as_deref().map(History::new);
     let projects = paths.projects_dir.as_deref().filter(|p| p.is_dir());
     let before = (idx.files.len(), idx.hours.len());
     let mut stats = match projects {
-        Some(p) => index::scan(&mut idx, p, history.as_ref(), now, cutoff),
+        Some(p) => {
+            let timeline = Timeline::from_records(&records);
+            index::scan(&mut idx, p, &timeline, now, cutoff, budget)
+        }
         None => {
             idx.prune(cutoff);
             ScanStats::default()
@@ -281,19 +323,9 @@ pub fn usage_breakdown(
             }
         }
     }
-    let records = match &history {
-        Some(h) => h.read_range(cutoff, now)?,
-        None => Vec::new(),
-    };
-    let samples: Vec<UsageSample> = records
-        .into_iter()
-        .filter_map(|r| match r {
-            HistoryRecord::Sample(s) => Some(s),
-            _ => None,
-        })
-        .collect();
-    let mut out = breakdown(&idx, &samples, query, now)?;
+    let mut out = breakdown(&idx, &records, query, now)?;
     out.source_available = projects.is_some();
+    out.partial = stats.partial;
     out.scan = stats;
     Ok(out)
 }
@@ -352,10 +384,19 @@ fn resolve_window(
 /// Classifica da un indice e dai campioni dello storico (funzione pura, usata dai test).
 pub fn breakdown(
     idx: &UsageIndex,
-    samples: &[UsageSample],
+    history: &[HistoryRecord],
     query: &UsageQuery,
     now: i64,
 ) -> Result<UsageBreakdown, UsageError> {
+    let samples: Vec<UsageSample> = history
+        .iter()
+        .filter_map(|r| match r {
+            HistoryRecord::Sample(s) => Some(s.clone()),
+            _ => None,
+        })
+        .collect();
+    let samples = samples.as_slice();
+    let timeline = Timeline::from_records(history);
     let reset = query
         .account
         .and_then(|a| current_reset(samples, a, query.window, now));
@@ -385,6 +426,7 @@ pub fn breakdown(
         let mut row = UsageRow {
             key: String::new(),
             project: None,
+            project_label: None,
             session: None,
             agent: None,
             agent_type: None,
@@ -397,15 +439,18 @@ pub fn breakdown(
         row.key = match query.group_by {
             UsageGroupBy::Project => {
                 row.project = Some(source.project.clone());
+                row.project_label = Some(source::project_label(&source.project));
                 source.project.clone()
             }
             UsageGroupBy::Session => {
                 row.project = Some(source.project.clone());
+                row.project_label = Some(source::project_label(&source.project));
                 row.session = Some(source.session.clone());
                 format!("{}/{}", source.project, source.session)
             }
             UsageGroupBy::Agent => {
                 row.project = Some(source.project.clone());
+                row.project_label = Some(source::project_label(&source.project));
                 row.session = Some(source.session.clone());
                 match &source.agent {
                     Some(a) => {
@@ -445,7 +490,7 @@ pub fn breakdown(
         let own: Vec<&UsageSample> = samples.iter().filter(|s| s.account == a).collect();
         let series = estimate::MinuteSeries::for_account(idx, a);
         for w in [BreakdownWindow::FiveHour, BreakdownWindow::SevenDay] {
-            other_devices.push(estimate::estimate(a, w, &own, &series, now));
+            other_devices.push(estimate::estimate(a, w, &own, &series, &timeline, now));
         }
     }
     let other_equivalent = query
@@ -494,5 +539,6 @@ pub fn breakdown(
         other_devices_share_pct: other_equivalent.map(pct),
         source_available: true,
         scan: ScanStats::default(),
+        partial: None,
     })
 }

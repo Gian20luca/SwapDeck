@@ -287,7 +287,14 @@ fn scan_reads_sessions_subagents_and_grows_incrementally() {
     let (main, agent) = sessions_fixture(&e);
     let mut idx = UsageIndex::default();
     let now = t0() + 3600;
-    let stats = index::scan(&mut idx, &e.projects, None, now, now - 30 * 86_400);
+    let stats = index::scan(
+        &mut idx,
+        &e.projects,
+        &Timeline::default(),
+        now,
+        now - 30 * 86_400,
+        ScanBudget::unlimited(),
+    );
     assert_eq!(stats.files, 3);
     assert_eq!(stats.files_read, 3);
     assert_eq!(stats.messages, 4);
@@ -312,7 +319,14 @@ fn scan_reads_sessions_subagents_and_grows_incrementally() {
     assert_eq!(b.unattributed.tokens, b.total.tokens);
 
     // Nessun cambiamento: nessun file riletto.
-    let again = index::scan(&mut idx, &e.projects, None, now, now - 30 * 86_400);
+    let again = index::scan(
+        &mut idx,
+        &e.projects,
+        &Timeline::default(),
+        now,
+        now - 30 * 86_400,
+        ScanBudget::unlimited(),
+    );
     assert_eq!(again.files_read, 0);
 
     // Il file cresce: si leggono solo le righe nuove.
@@ -322,7 +336,14 @@ fn scan_reads_sessions_subagents_and_grows_incrementally() {
         &[assistant(t0() + 50, "a2", "claude-haiku-4-5", 1, 1, 0, 0)],
     );
     touch(&agent, 5);
-    let grown = index::scan(&mut idx, &e.projects, None, now, now - 30 * 86_400);
+    let grown = index::scan(
+        &mut idx,
+        &e.projects,
+        &Timeline::default(),
+        now,
+        now - 30 * 86_400,
+        ScanBudget::unlimited(),
+    );
     assert_eq!(grown.files_read, 1);
     assert_eq!(grown.messages, 1);
     assert_eq!(grown.bytes, fs::metadata(&agent).unwrap().len() - before);
@@ -344,7 +365,14 @@ fn replaced_file_is_not_counted_twice() {
     );
     let mut idx = UsageIndex::default();
     let now = t0() + 600;
-    index::scan(&mut idx, &e.projects, None, now, now - 86_400);
+    index::scan(
+        &mut idx,
+        &e.projects,
+        &Timeline::default(),
+        now,
+        now - 86_400,
+        ScanBudget::unlimited(),
+    );
     // Riscritto più corto con lo stesso messaggio e uno nuovo.
     fs::remove_file(&path).unwrap();
     append(
@@ -355,7 +383,14 @@ fn replaced_file_is_not_counted_twice() {
         ],
     );
     touch(&path, 10);
-    index::scan(&mut idx, &e.projects, None, now, now - 86_400);
+    index::scan(
+        &mut idx,
+        &e.projects,
+        &Timeline::default(),
+        now,
+        now - 86_400,
+        ScanBudget::unlimited(),
+    );
     let b = breakdown(&idx, &[], &query(UsageGroupBy::Project, None), now).unwrap();
     assert_eq!(b.total.tokens, TokenCounts::new(11, 10, 0, 0));
 }
@@ -478,7 +513,14 @@ fn retention_drops_old_hours_and_files() {
     sessions_fixture(&e);
     let mut idx = UsageIndex::default();
     let now = t0() + 3600;
-    index::scan(&mut idx, &e.projects, None, now, now - 86_400);
+    index::scan(
+        &mut idx,
+        &e.projects,
+        &Timeline::default(),
+        now,
+        now - 86_400,
+        ScanBudget::unlimited(),
+    );
     assert!(!idx.hours.is_empty());
     idx.prune(t0() + 2 * 3600);
     assert!(idx.hours.is_empty() && idx.minutes.is_empty());
@@ -518,7 +560,14 @@ fn symlinks_are_not_followed() {
     std::os::unix::fs::symlink(&outside, dir.join("link.jsonl")).unwrap();
     std::os::unix::fs::symlink(&e.data, e.projects.join("linkdir")).unwrap();
     let mut idx = UsageIndex::default();
-    let stats = index::scan(&mut idx, &e.projects, None, t0() + 60, t0() - 86_400);
+    let stats = index::scan(
+        &mut idx,
+        &e.projects,
+        &Timeline::default(),
+        t0() + 60,
+        t0() - 86_400,
+        ScanBudget::unlimited(),
+    );
     assert_eq!(stats.files, 0);
     assert!(source::open_regular(&dir.join("link.jsonl")).is_err());
 }
@@ -575,16 +624,18 @@ fn estimate_local_only_is_zero_with_high_confidence() {
     let (idx, samples, now) = calibration_fixture(1000.0, 28, |_| 0.0);
     let refs: Vec<&UsageSample> = samples.iter().collect();
     let cal = estimate::calibrate(&estimate::intervals(
+        1,
         &refs,
         BreakdownWindow::FiveHour,
         &MinuteSeries::for_account(&idx, 1),
+        &Timeline::from_records(&recs(&samples)),
     ))
     .unwrap();
     assert!((cal.pooled - 1000.0).abs() < 1.0, "{}", cal.pooled);
     assert!(cal.per_model.contains_key(&MODEL));
     let mut q = query(UsageGroupBy::Model, Some(1));
     q.window = BreakdownWindow::FiveHour;
-    let b = breakdown(&idx, &samples, &q, now).unwrap();
+    let b = breakdown(&idx, &recs(&samples), &q, now).unwrap();
     let e = five_hour(&b.other_devices);
     assert_eq!(e.status, EstimateStatus::Available);
     assert!(e.other_pct.unwrap() < 0.5, "{e:?}");
@@ -604,7 +655,7 @@ fn estimate_finds_remote_share() {
         );
     let mut q = query(UsageGroupBy::Project, Some(1));
     q.window = BreakdownWindow::FiveHour;
-    let b = breakdown(&idx, &samples, &q, now).unwrap();
+    let b = breakdown(&idx, &recs(&samples), &q, now).unwrap();
     let e = five_hour(&b.other_devices);
     assert_eq!(e.status, EstimateStatus::Available);
     assert!((e.tokens_per_point.unwrap() - 1000.0).abs() < 50.0, "{e:?}");
@@ -628,7 +679,7 @@ fn estimate_needs_enough_samples() {
     let (idx, samples, now) = calibration_fixture(1000.0, 2, |_| 0.0);
     let mut q = query(UsageGroupBy::Project, Some(1));
     q.window = BreakdownWindow::FiveHour;
-    let b = breakdown(&idx, &samples, &q, now).unwrap();
+    let b = breakdown(&idx, &recs(&samples), &q, now).unwrap();
     let e = five_hour(&b.other_devices);
     assert_eq!(e.status, EstimateStatus::NotCalibrated);
     assert_eq!(e.other_pct, None);
@@ -650,7 +701,7 @@ fn estimate_flags_history_gaps() {
     }
     let mut q = query(UsageGroupBy::Project, Some(1));
     q.window = BreakdownWindow::FiveHour;
-    let b = breakdown(&idx, &samples, &q, now).unwrap();
+    let b = breakdown(&idx, &recs(&samples), &q, now).unwrap();
     let e = five_hour(&b.other_devices);
     assert!(e.history_gaps);
     assert_eq!(e.confidence, Some(Confidence::Low));
@@ -669,27 +720,58 @@ fn real_sessions_timing() {
     let history = crate::paths::AppPaths::from_system().map(|p| History::new(&p.data_dir));
     let now = crate::timeutil::now_unix();
     let cutoff = now - 30 * 86_400;
+    let records = history
+        .as_ref()
+        .and_then(|h| h.read_range(cutoff - attribution::LOOKBACK_SECS, now).ok())
+        .unwrap_or_default();
+    let timeline = Timeline::from_records(&records);
+    // Prima lettura a budget (256 MB / 8 s), con salvataggio dopo ogni chiamata come l'app.
     let mut idx = UsageIndex::default();
-    let first = index::scan(&mut idx, &projects, history.as_ref(), now, cutoff);
+    let mut first = ScanStats::default();
+    for call in 1..=50 {
+        let s = index::scan(
+            &mut idx,
+            &projects,
+            &timeline,
+            now,
+            cutoff,
+            ScanBudget::default(),
+        );
+        index::save(tmp.path(), &idx).unwrap();
+        println!(
+            "chiamata {call}: letti {} MB in {} ms; avanzamento {:?}",
+            s.bytes / 1_000_000,
+            s.duration_ms,
+            s.partial
+                .map(|p| (p.scanned_bytes / 1_000_000, p.total_bytes / 1_000_000))
+        );
+        first.files = s.files;
+        first.files_read += s.files_read;
+        first.lines += s.lines;
+        first.bytes += s.bytes;
+        first.messages += s.messages;
+        first.skipped += s.skipped;
+        first.duration_ms += s.duration_ms;
+        if s.partial.is_none() {
+            break;
+        }
+    }
     let saved = index::save(tmp.path(), &idx).unwrap();
     let t = std::time::Instant::now();
     let (mut loaded, _) = index::load(tmp.path());
     let load_ms = t.elapsed().as_millis();
-    let second = index::scan(&mut loaded, &projects, history.as_ref(), now + 1, cutoff);
+    let second = index::scan(
+        &mut loaded,
+        &projects,
+        &timeline,
+        now + 1,
+        cutoff,
+        ScanBudget::default(),
+    );
     let t = std::time::Instant::now();
-    let samples: Vec<UsageSample> = history
-        .as_ref()
-        .and_then(|h| h.read_range(cutoff, now).ok())
-        .unwrap_or_default()
-        .into_iter()
-        .filter_map(|r| match r {
-            HistoryRecord::Sample(s) => Some(s),
-            _ => None,
-        })
-        .collect();
     let mut q = query(UsageGroupBy::Session, None);
     q.window = BreakdownWindow::SevenDay;
-    let b = breakdown(&loaded, &samples, &q, now).unwrap();
+    let b = breakdown(&loaded, &records, &q, now).unwrap();
     let breakdown_ms = t.elapsed().as_millis();
     let attributed = b.total.equivalent - b.unattributed.equivalent;
     println!(
@@ -759,4 +841,274 @@ fn real_sessions_timing() {
         seen.len(),
         cross
     );
+}
+
+// ---- Correzioni della revisione ----
+
+fn recs(samples: &[UsageSample]) -> Vec<HistoryRecord> {
+    samples.iter().cloned().map(HistoryRecord::Sample).collect()
+}
+
+fn heartbeat(ts: i64, active: Option<u32>, interval_secs: u32) -> HistoryRecord {
+    HistoryRecord::Heartbeat(crate::history::HeartbeatRecord {
+        ts,
+        active,
+        interval_secs,
+    })
+}
+
+#[test]
+fn heartbeats_witness_active_account_and_set_max_gap() {
+    let t = t0();
+    // Battiti ogni minuto senza campioni nuovi: l'utenza resta nota.
+    let mut recs: Vec<HistoryRecord> = (0..10)
+        .map(|i| heartbeat(t + i * 60, Some(2), 60))
+        .collect();
+    // Cambio visto solo dal battito (nessun campione, nessun cambio di SwapDeck).
+    recs.push(heartbeat(t + 600, Some(3), 60));
+    let tl = Timeline::from_records(&recs);
+    assert_eq!(tl.account_at(t + 590), Some(2));
+    assert_eq!(tl.account_at(t + 600), Some(3));
+    // Silenzio ammesso dall'intervallo: 2 × 60 + 120 s.
+    assert_eq!(tl.account_at(t + 600 + 240), Some(3));
+    assert_eq!(tl.account_at(t + 600 + 241), None);
+    // Intervallo di un'ora: silenzio ammesso più lungo.
+    let tl = Timeline::from_records(&[heartbeat(t, Some(1), 3600)]);
+    assert_eq!(tl.account_at(t + 2 * 3600), Some(1));
+    // Battito senza utenza attiva: sconosciuta.
+    let tl = Timeline::from_records(&[heartbeat(t, Some(1), 60), heartbeat(t + 60, None, 60)]);
+    assert_eq!(tl.account_at(t + 61), None);
+    assert!(tl.active_throughout(1, t, t + 59));
+    assert!(!tl.active_throughout(1, t, t + 60));
+}
+
+#[test]
+fn unreadable_history_stops_without_saving() {
+    let e = env();
+    sessions_fixture(&e);
+    let q = query(UsageGroupBy::Project, None);
+    let now = t0() + 3600;
+    let err = scan_and_rank(
+        &e.paths(),
+        &q,
+        now,
+        ScanBudget::unlimited(),
+        Err(io::Error::other("storico rotto")),
+    );
+    assert!(matches!(err, Err(UsageError::Io(_))));
+    assert!(
+        !e.data
+            .join(index::USAGE_DIR)
+            .join(index::INDEX_FILE)
+            .exists()
+    );
+    // Alla lettura dopo riesce e conta tutto.
+    let b = usage_breakdown(&e.paths(), &q, now).unwrap();
+    assert!(b.total.messages >= 4, "{:?}", b.total);
+}
+
+#[test]
+fn budget_reads_in_several_calls_with_progress() {
+    let e = env();
+    sessions_fixture(&e);
+    let q = query(UsageGroupBy::Agent, None);
+    let now = t0() + 3600;
+    let tiny = ScanBudget {
+        max_bytes: 1,
+        max_duration: std::time::Duration::from_secs(60),
+    };
+    let mut calls = 0;
+    let last = loop {
+        calls += 1;
+        let b = usage_breakdown_with(&e.paths(), &q, now, tiny).unwrap();
+        match b.partial {
+            Some(p) => {
+                assert!(p.scanned_bytes < p.total_bytes, "{p:?}");
+                assert!(b.scan.bytes > 0);
+            }
+            None => break b,
+        }
+        assert!(calls < 50);
+    };
+    assert!(calls > 3, "una riga per chiamata: {calls}");
+    let fresh = env();
+    sessions_fixture(&fresh);
+    let all = usage_breakdown_with(&fresh.paths(), &q, now, ScanBudget::unlimited()).unwrap();
+    assert!(all.partial.is_none());
+    assert_eq!(last.total, all.total);
+    assert_eq!(last.rows, all.rows);
+}
+
+#[test]
+fn replaced_file_skips_later_lines_of_old_messages() {
+    let e = env();
+    let path = e.projects.join("p").join("s.jsonl");
+    append(
+        &path,
+        &[
+            assistant(t0(), "m1", "claude-opus-4-8", 10, 10, 0, 0),
+            // Riga lunga: il file nuovo è più corto (rilettura da capo anche dove il file
+            // system ricrea il file con la stessa identità).
+            serde_json::json!({"type": "user", "pad": "x".repeat(8000)}).to_string(),
+        ],
+    );
+    let mut idx = UsageIndex::default();
+    let now = t0() + 600;
+    let tl = Timeline::default();
+    index::scan(
+        &mut idx,
+        &e.projects,
+        &tl,
+        now,
+        now - 86_400,
+        ScanBudget::unlimited(),
+    );
+    fs::remove_file(&path).unwrap();
+    // Il messaggio già contato ricompare con una riga successiva più grande: non va aggiunta.
+    // Budget minimo: la rilettura passa per più chiamate e il limite resta tra l'una e l'altra.
+    append(
+        &path,
+        &[
+            assistant(t0(), "m1", "claude-opus-4-8", 10, 10, 0, 0),
+            assistant(t0(), "m1", "claude-opus-4-8", 10, 99, 0, 0),
+            assistant(t0() + 40, "m9", "claude-opus-4-8", 1, 0, 0, 0),
+        ],
+    );
+    touch(&path, 10);
+    let one_line = ScanBudget {
+        max_bytes: 1,
+        max_duration: std::time::Duration::from_secs(60),
+    };
+    let mut calls = 0;
+    while index::scan(&mut idx, &e.projects, &tl, now, now - 86_400, one_line)
+        .partial
+        .is_some()
+    {
+        calls += 1;
+        assert!(calls < 10);
+    }
+    assert!(calls >= 2, "{calls}");
+    let b = breakdown(&idx, &[], &query(UsageGroupBy::Project, None), now).unwrap();
+    assert_eq!(b.total.tokens, TokenCounts::new(11, 10, 0, 0));
+    assert!(idx.files.values().all(|f| f.floor.is_none()));
+}
+
+#[test]
+fn calibration_skips_intervals_around_account_changes() {
+    let (idx, samples, _) = calibration_fixture(1000.0, 28, |_| 0.0);
+    let refs: Vec<&UsageSample> = samples.iter().collect();
+    let series = MinuteSeries::for_account(&idx, 1);
+    let base = recs(&samples);
+    let count = |records: &[HistoryRecord]| {
+        estimate::intervals(
+            1,
+            &refs,
+            BreakdownWindow::FiveHour,
+            &series,
+            &Timeline::from_records(records),
+        )
+        .len()
+    };
+    let before = count(&base);
+    assert!(before >= 20, "{before}");
+    // Cambio a un'altra utenza e ritorno dentro un intervallo: quell'intervallo e i vicini
+    // (margine di un giro) si scartano.
+    let mut changed = base.clone();
+    changed.push(switch(t0() + 3 * 600 + 100, 1, 2));
+    changed.push(switch(t0() + 3 * 600 + 200, 2, 1));
+    let after = count(&changed);
+    assert!(after < before && after >= before - 3, "{before} -> {after}");
+    // Utenza non attiva (solo campioni con active: false): nessun intervallo.
+    let inactive: Vec<UsageSample> = samples
+        .iter()
+        .cloned()
+        .map(|mut s| {
+            s.active = false;
+            s
+        })
+        .collect();
+    assert_eq!(count(&recs(&inactive)), 0);
+}
+
+#[test]
+fn local_sum_stops_at_last_reading() {
+    let (mut idx, samples, now) = calibration_fixture(1000.0, 28, |_| 0.0);
+    let mut q = query(UsageGroupBy::Model, Some(1));
+    q.window = BreakdownWindow::FiveHour;
+    let est = |idx: &UsageIndex| {
+        five_hour(
+            &breakdown(idx, &recs(&samples), &q, now)
+                .unwrap()
+                .other_devices,
+        )
+        .clone()
+    };
+    let before = est(&idx);
+    assert_eq!(before.status, EstimateStatus::Available);
+    // Consumo nel minuto dell'ultima lettura (dopo il dato del server): non conta.
+    let last_t = samples.last().unwrap().ts;
+    idx.minutes.insert(
+        (last_t, Some(1), MODEL),
+        TokenCounts::new(1_000_000, 0, 0, 0),
+    );
+    assert_eq!(before.local_pct, est(&idx).local_pct);
+}
+
+#[test]
+fn model_k_needs_five_intervals_and_lowers_confidence() {
+    let interval = |m: u32, u: f64| estimate::Interval {
+        from: 0,
+        to: 1,
+        points: 4.0,
+        local: [(m, u)].into_iter().collect(),
+        unknown: 0.0,
+    };
+    let mut list: Vec<estimate::Interval> = (0..10).map(|_| interval(0, 4000.0)).collect();
+    list.extend((0..4).map(|_| interval(1, 4400.0)));
+    let cal = estimate::calibrate(&list).unwrap();
+    assert!(cal.per_model.contains_key(&0));
+    assert!(!cal.per_model.contains_key(&1), "solo 4 intervalli");
+    list.push(interval(1, 4400.0));
+    assert!(
+        estimate::calibrate(&list)
+            .unwrap()
+            .per_model
+            .contains_key(&1)
+    );
+
+    // Nella finestra corrente un modello senza k proprio oltre il 10%: fiducia di un grado sotto.
+    let (mut idx, samples, now) = calibration_fixture(1000.0, 28, |_| 0.0);
+    idx.models.push("claude-haiku-4-5".into());
+    let last_t = samples.last().unwrap().ts;
+    idx.minutes.insert(
+        (last_t - 300, Some(1), 1),
+        TokenCounts::new(20_000, 0, 0, 0),
+    );
+    let mut q = query(UsageGroupBy::Model, Some(1));
+    q.window = BreakdownWindow::FiveHour;
+    let e = five_hour(
+        &breakdown(&idx, &recs(&samples), &q, now)
+            .unwrap()
+            .other_devices,
+    )
+    .clone();
+    assert_eq!(e.confidence, Some(Confidence::Medium), "{e:?}");
+}
+
+#[test]
+fn project_label_is_only_the_last_part() {
+    assert_eq!(
+        source::project_label("C--ProgettiMieiAi-WidgetCswap"),
+        "WidgetCswap"
+    );
+    assert_eq!(source::project_label("-home-utente-progetti-app-"), "app");
+    assert_eq!(source::project_label("solo"), "solo");
+    let e = env();
+    sessions_fixture(&e);
+    let b = usage_breakdown(&e.paths(), &query(UsageGroupBy::Session, None), t0() + 3600).unwrap();
+    assert!(!b.rows.is_empty());
+    for r in &b.rows {
+        let label = r.project_label.as_deref().unwrap();
+        assert!(label == "uno" || label == "due", "{label}");
+    }
 }

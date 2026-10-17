@@ -39,6 +39,21 @@ pub fn claude_dir() -> Option<PathBuf> {
     directories::BaseDirs::new().map(|b| b.home_dir().join(".claude"))
 }
 
+/// Nome da mostrare di un progetto: solo l'ultima parte del percorso, ricostruita dal nome della
+/// cartella di Claude Code (che scrive il percorso con ogni carattere non alfanumerico mutato in
+/// `-`: `C--Progetti-SwapDeck` → `SwapDeck`). Un trattino del nome originale non si distingue da
+/// un separatore: `my-app` diventa `app`. Mai il percorso intero nella UI o nei log.
+pub fn project_label(folder: &str) -> String {
+    folder
+        .rsplit('-')
+        .find(|s| !s.is_empty())
+        .unwrap_or("?")
+        .chars()
+        .filter(|c| !c.is_control())
+        .take(64)
+        .collect()
+}
+
 /// File di sessione trovato.
 #[derive(Debug, Clone)]
 pub struct SessionFile {
@@ -215,6 +230,8 @@ pub struct ReadOutcome {
     pub bytes: u64,
     /// Righe illeggibili o troppo lunghe.
     pub skipped: u64,
+    /// Lettura fermata da `stop` prima di `end`: il resto alla chiamata dopo.
+    pub more: bool,
 }
 
 /// Legge le righe complete da `offset` fino a `end` (lunghezza vista all'apertura). L'ultima riga
@@ -224,6 +241,18 @@ pub fn read_lines(
     file: &mut File,
     offset: u64,
     end: u64,
+    on_line: impl FnMut(&[u8]) -> bool,
+) -> io::Result<ReadOutcome> {
+    read_lines_until(file, offset, end, |_| false, on_line)
+}
+
+/// Come [`read_lines`], ma dopo ogni riga completa `stop(byte consumati)` può fermare la lettura
+/// (budget di byte o di tempo): si ferma sempre a fine riga, quindi avanza di almeno una riga.
+pub fn read_lines_until(
+    file: &mut File,
+    offset: u64,
+    end: u64,
+    mut stop: impl FnMut(u64) -> bool,
     mut on_line: impl FnMut(&[u8]) -> bool,
 ) -> io::Result<ReadOutcome> {
     let mut out = ReadOutcome {
@@ -267,6 +296,10 @@ pub fn read_lines(
             line.clear();
             oversize = false;
             out.offset = pos;
+            if pos < end && stop(pos - offset) {
+                out.more = true;
+                break;
+            }
         }
     }
     if !line.is_empty()

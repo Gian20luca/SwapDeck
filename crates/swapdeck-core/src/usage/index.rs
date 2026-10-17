@@ -11,14 +11,13 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::{self, Read, Write};
 use std::path::Path;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 
 use super::TokenCounts;
-use super::attribution::{LOOKBACK_SECS, Timeline};
+use super::attribution::Timeline;
 use super::source::{self, AgentMeta, Parsed, SessionFile};
-use crate::history::History;
 use crate::paths::create_private_dir;
 
 pub const USAGE_DIR: &str = "usage";
@@ -50,6 +49,10 @@ pub struct FileState {
     /// Istante dell'ultimo messaggio contato.
     #[serde(default)]
     pub last_ts: i64,
+    /// Rilettura da capo di un file sostituito in corso: si contano solo i messaggi dopo questo
+    /// istante (resta tra una lettura a budget e la successiva).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub floor: Option<i64>,
     #[serde(default)]
     pub recent: Vec<(String, TokenCounts)>,
 }
@@ -137,6 +140,10 @@ pub struct ScanStats {
     pub save_failed: bool,
     /// Elenco dei file incompleto (cartella illeggibile): i file non visti restano nell'indice.
     pub incomplete: bool,
+    /// Budget esaurito: avanzamento (riportato in `UsageBreakdown::partial`).
+    #[serde(skip)]
+    #[ts(skip)]
+    pub partial: Option<ScanProgress>,
 }
 
 impl UsageIndex {
@@ -366,51 +373,80 @@ pub fn save(data_dir: &Path, index: &UsageIndex) -> io::Result<u64> {
     }
 }
 
-/// Legge le righe nuove dei file di sessione e aggiorna l'indice. L'utenza di ogni messaggio
-/// viene dallo storico; `cutoff` è l'inizio della conservazione.
+/// Limiti di una lettura: oltre, ci si ferma a fine riga, si salva e il resto va alla chiamata
+/// dopo (la UI e l'estensione richiamano finché `partial` non sparisce).
+#[derive(Debug, Clone, Copy)]
+pub struct ScanBudget {
+    pub max_bytes: u64,
+    pub max_duration: Duration,
+}
+
+impl Default for ScanBudget {
+    fn default() -> Self {
+        Self {
+            max_bytes: 256 * 1024 * 1024,
+            max_duration: Duration::from_secs(8),
+        }
+    }
+}
+
+impl ScanBudget {
+    /// Senza limiti (test e misure).
+    pub fn unlimited() -> Self {
+        Self {
+            max_bytes: u64::MAX,
+            max_duration: Duration::MAX,
+        }
+    }
+}
+
+/// Avanzamento di una lettura interrotta dal budget: byte già nell'indice sul totale dei file.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanProgress {
+    #[ts(type = "number")]
+    pub scanned_bytes: u64,
+    #[ts(type = "number")]
+    pub total_bytes: u64,
+}
+
+/// Legge le righe nuove dei file di sessione e aggiorna l'indice, entro `budget`. L'utenza di ogni
+/// messaggio viene da `timeline`; `cutoff` è l'inizio della conservazione.
 pub fn scan(
     index: &mut UsageIndex,
     projects: &Path,
-    history: Option<&History>,
+    timeline: &Timeline,
     now: i64,
     cutoff: i64,
+    budget: ScanBudget,
 ) -> ScanStats {
     let started = Instant::now();
+    let deadline = started.checked_add(budget.max_duration);
     let mut stats = ScanStats::default();
     let mut found = Vec::new();
     let complete = source::discover(projects, cutoff.saturating_mul(1000), &mut found);
     stats.incomplete = !complete;
     stats.files = found.len() as u32;
 
-    let changed: Vec<&SessionFile> = found
-        .iter()
-        .filter(|f| {
-            index
-                .files
-                .get(&f.rel)
-                .is_none_or(|s| s.len != f.len || s.mtime_ms != f.mtime_ms)
-        })
-        .collect();
-
-    if !changed.is_empty() {
-        // Storico dall'istante più vecchio che può comparire nelle righe nuove.
-        let earliest = changed
-            .iter()
-            .map(|f| {
-                index
-                    .files
-                    .get(&f.rel)
-                    .map_or(cutoff, |s| s.mtime_ms / 1000 - 3600)
-            })
-            .min()
-            .unwrap_or(cutoff)
-            .max(cutoff);
-        let records = history
-            .and_then(|h| h.read_range(earliest - LOOKBACK_SECS, now).ok())
-            .unwrap_or_default();
-        let timeline = Timeline::from_records(&records);
-        for f in changed {
-            read_file(index, f, &timeline, cutoff, &mut stats);
+    let mut exhausted = false;
+    for f in &found {
+        let unchanged = index
+            .files
+            .get(&f.rel)
+            .is_some_and(|s| s.len == f.len && s.mtime_ms == f.mtime_ms);
+        if unchanged {
+            continue;
+        }
+        let over =
+            |read: u64| read >= budget.max_bytes || deadline.is_some_and(|d| Instant::now() >= d);
+        if over(stats.bytes) {
+            exhausted = true;
+            break;
+        }
+        let used = stats.bytes;
+        if read_file(index, f, timeline, cutoff, &mut stats, |n| over(used + n)) {
+            exhausted = true;
+            break;
         }
     }
 
@@ -420,22 +456,32 @@ pub fn scan(
     }
     index.prune(cutoff);
     index.updated_at = now;
+    if exhausted {
+        let mut p = ScanProgress::default();
+        for f in &found {
+            p.total_bytes += f.len;
+            p.scanned_bytes += index.files.get(&f.rel).map_or(0, |s| s.offset.min(f.len));
+        }
+        stats.partial = Some(p);
+    }
     stats.duration_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
     stats
 }
 
+/// Legge un file; `true` se `stop` l'ha fermato prima della fine.
 fn read_file(
     index: &mut UsageIndex,
     f: &SessionFile,
     timeline: &Timeline,
     cutoff: i64,
     stats: &mut ScanStats,
-) {
+    stop: impl FnMut(u64) -> bool,
+) -> bool {
     let Ok(mut file) = source::open_regular(&f.path) else {
-        return;
+        return false;
     };
     let Ok(meta) = file.metadata() else {
-        return;
+        return false;
     };
     let identity = source::identity(&meta);
     let len = meta.len();
@@ -448,7 +494,7 @@ fn read_file(
     let mut state = match index.files.get(&f.rel) {
         Some(s) if s.identity == identity && s.offset <= len && s.source == src => s.clone(),
         // File nuovo, sostituito o accorciato: si rilegge da capo contando solo i messaggi
-        // successivi all'ultimo già contato.
+        // successivi all'ultimo già contato (`floor`, tenuto finché la rilettura non finisce).
         previous => FileState {
             source: src,
             offset: 0,
@@ -456,14 +502,11 @@ fn read_file(
             mtime_ms: 0,
             identity,
             last_ts: previous.map_or(i64::MIN, |p| p.last_ts),
+            floor: previous.map(|p| p.last_ts),
             recent: Vec::new(),
         },
     };
-    let floor = if state.offset == 0 {
-        state.last_ts
-    } else {
-        i64::MIN
-    };
+    let floor = state.floor.unwrap_or(i64::MIN);
     if let Some(agent) = &f.agent {
         if !index.agents.contains_key(agent) {
             if let Some(m) = source::read_agent_meta(&f.path, agent) {
@@ -472,21 +515,23 @@ fn read_file(
         }
     }
     let mut entries = Vec::new();
-    let outcome = source::read_lines(
-        &mut file,
-        state.offset,
-        len,
-        |line| match source::parse_line(line) {
-            Parsed::Usage(e) => {
-                entries.push(e);
-                true
-            }
-            Parsed::Other => true,
-            Parsed::Invalid => false,
-        },
-    );
+    let outcome =
+        source::read_lines_until(
+            &mut file,
+            state.offset,
+            len,
+            stop,
+            |line| match source::parse_line(line) {
+                Parsed::Usage(e) => {
+                    entries.push(e);
+                    true
+                }
+                Parsed::Other => true,
+                Parsed::Invalid => false,
+            },
+        );
     let Ok(outcome) = outcome else {
-        return;
+        return false;
     };
     stats.files_read += 1;
     stats.lines += outcome.lines;
@@ -494,7 +539,14 @@ fn read_file(
     stats.skipped += outcome.skipped;
     for e in entries {
         let (delta, new_message) = dedupe(&mut state.recent, e.id.as_deref(), e.tokens);
-        if delta.total() == 0 || e.ts < cutoff || (new_message && e.ts <= floor) {
+        if new_message && e.ts <= floor {
+            // Già contato prima della sostituzione: anche le righe dopo con lo stesso id.
+            if let Some(id) = e.id.as_deref() {
+                saturate(&mut state.recent, id);
+            }
+            continue;
+        }
+        if delta.total() == 0 || e.ts < cutoff {
             continue;
         }
         state.last_ts = state.last_ts.max(e.ts);
@@ -514,9 +566,23 @@ fn read_file(
             .add(delta);
     }
     state.offset = outcome.offset;
-    state.len = len;
+    if outcome.more {
+        // Lunghezza diversa da quella del file: alla prossima lettura risulta cambiato.
+        state.len = outcome.offset;
+    } else {
+        state.len = len;
+        state.floor = None;
+    }
     state.mtime_ms = mtime_ms;
     index.files.insert(f.rel.clone(), state);
+    outcome.more
+}
+
+/// Segna un messaggio come già contato per intero: le sue righe successive non aggiungono nulla.
+fn saturate(recent: &mut [(String, TokenCounts)], id: &str) {
+    if let Some((_, seen)) = recent.iter_mut().find(|(k, _)| k == id) {
+        *seen = TokenCounts::new(u64::MAX, u64::MAX, u64::MAX, u64::MAX);
+    }
 }
 
 /// Quota nuova di un messaggio: Claude Code scrive lo stesso messaggio (stesso id) su più righe
