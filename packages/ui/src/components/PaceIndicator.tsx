@@ -1,4 +1,5 @@
 import { useI18n } from '../i18n/index.js';
+import { InfoTip } from './InfoTip.js';
 
 export interface PaceIndicatorProps {
   /** Consumo atteso a questo punto della finestra (0–100). Senza, il componente non si mostra. */
@@ -7,6 +8,8 @@ export interface PaceIndicatorProps {
   willLastToReset?: boolean | null | undefined;
   /** ISO 8601: solo se la finestra si esaurisce prima del reset. */
   projectedExhaustionAt?: string | null | undefined;
+  /** Spiegazione del ritmo: mostra la «i» in coda alla riga. */
+  info?: string;
 }
 
 /** Indicatore del ritmo di consumo: testo e simbolo, mai solo colore. */
@@ -15,6 +18,7 @@ export function PaceIndicator({
   aheadOfPace,
   willLastToReset,
   projectedExhaustionAt,
+  info,
 }: PaceIndicatorProps) {
   const { t, locale } = useI18n();
   if (expectedPct === null || expectedPct === undefined || !Number.isFinite(expectedPct)) {
@@ -51,6 +55,7 @@ export function PaceIndicator({
           {when ? ` · ${t('pace.exhaustion', { when })}` : ''}
         </span>
       )}
+      {info && <InfoTip name={t('pace.label')} text={info} />}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   type Thresholds,
 } from '../lib/format.js';
 import { useI18n } from '../i18n/index.js';
+import { InfoTip } from './InfoTip.js';
 
 export interface UsageBarProps {
   /** Nome della finestra, es. «5 ore». */
@@ -28,6 +29,8 @@ export interface UsageBarProps {
   /** Esaurimento previsto (ISO 8601): se cade prima del reset, una riga lo dice. Solo sulle settimanali. */
   exhaustionAt?: string | null | undefined;
   compact?: boolean;
+  /** Spiegazione della barra: mostra la «i» accanto al nome della finestra. */
+  info?: string;
 }
 
 type Translate = ReturnType<typeof useI18n>['t'];
@@ -129,6 +132,7 @@ export function UsageBar({
   engineMark,
   exhaustionAt,
   compact = false,
+  info,
 }: UsageBarProps) {
   const { t, locale } = useI18n();
   const known = pct !== null && pct !== undefined && Number.isFinite(pct);
@@ -160,7 +164,10 @@ export function UsageBar({
       data-expired={past ? true : undefined}
     >
       <div className="sd-bar__head">
-        <span>{label}</span>
+        <span className="sd-bar__label">
+          {label}
+          {info && <InfoTip name={label} text={info} />}
+        </span>
         <span className="sd-bar__pct">{pctText}</span>
       </div>
       <div className="sd-bar__rail">

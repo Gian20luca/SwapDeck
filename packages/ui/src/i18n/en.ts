@@ -1,5 +1,6 @@
 import { enFlow } from './en.flow.js';
 import { enNotify } from './en.notify.js';
+import { enInfo } from './en.info.js';
 import { enTips } from './en.tips.js';
 import { enManage } from './en.manage.js';
 import { enUsage } from './en.usage.js';
@@ -12,6 +13,7 @@ export const en: Record<MessageKey, string> = {
   ...enFlow,
   ...enNotify,
   ...enTips,
+  ...enInfo,
   'app.name': 'SwapDeck',
   'common.cancel': 'Cancel',
   'common.confirm': 'Confirm',

@@ -1,0 +1,81 @@
+/* «i» che spiega un concetto (InfoTip): piccola, cerchiata, a fianco dell'etichetta. */
+.sd-info-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+.sd-info {
+  display: inline-flex;
+  flex: none;
+}
+.sd-info__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--sd-muted);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sd-muted);
+  font:
+    italic 700 11px/1 Georgia,
+    'Times New Roman',
+    serif;
+  cursor: help;
+}
+.sd-info__btn:hover,
+.sd-info__btn[aria-expanded='true'] {
+  border-color: var(--sd-accent);
+  background: var(--sd-surface-2);
+  color: var(--sd-accent);
+}
+.sd-info__btn:focus-visible {
+  outline: 2px solid var(--sd-focus);
+  outline-offset: 2px;
+}
+.sd-info__bubble {
+  position: fixed;
+  z-index: 50;
+  box-sizing: border-box;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 8px 10px;
+  border: 1px solid var(--sd-border);
+  border-radius: 8px;
+  background: var(--sd-surface);
+  color: var(--sd-text);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: left;
+  white-space: normal;
+}
+.sd-info__bubble[hidden] {
+  display: none;
+}
+.sd-info-row > label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sd-text);
+}
+.sd-bar__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sd-pace {
+  position: relative;
+}
+.sd-pace > .sd-info {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+.sd-toolbar .sd-info-row h1 {
+  min-width: 0;
+}

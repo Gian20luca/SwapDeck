@@ -77,7 +77,7 @@ export function AccountDetailPage({
         <h2>{t('detail.title', { name })}</h2>
       </div>
 
-      <Section title={t('detail.name')}>
+      <Section title={t('detail.name')} info={t('info.detail.name')}>
         <div className="sd-form">
           <TextField
             label={t('manage.alias.label')}
@@ -123,7 +123,7 @@ export function AccountDetailPage({
         </div>
       </Section>
 
-      <Section title={t('detail.use')}>
+      <Section title={t('detail.use')} info={t('info.detail.use')}>
         <div className="sd-row">
           <Tooltip text={t(disabled ? 'detail.enable.tip' : 'detail.disable.tip')}>
             <button
@@ -164,7 +164,7 @@ export function AccountDetailPage({
         </div>
       </Section>
 
-      <Section title={t('detail.slot')}>
+      <Section title={t('detail.slot')} info={t('info.detail.slot')}>
         <div className="sd-form">
           <TextField
             label={t('manage.move.label')}
@@ -245,7 +245,7 @@ export function AccountDetailPage({
         )}
       </Section>
 
-      <Section title={t('detail.danger')}>
+      <Section title={t('detail.danger')} info={t('info.detail.danger')}>
         <div className="sd-row">
           <Tooltip text={t('detail.remove.tip')}>
             <button

@@ -10,6 +10,7 @@ import { useLoad } from '../../lib/useLoad.js';
 import { AccountSummary } from '../AccountSummary.js';
 import { HistoryPanel } from '../HistoryPanel.js';
 import { useNow } from '../../lib/useNow.js';
+import { WithInfo } from '../InfoTip.js';
 import { LoadGate, Section } from './common.js';
 import { Tooltip } from '../Tooltip.js';
 
@@ -108,9 +109,11 @@ export function HistoryPage({ target }: { target?: { account: number; key: numbe
     <div className="sd-page">
       <h2>{t('history.title')}</h2>
       <div className="sd-row" role="group" aria-labelledby={rangeId}>
-        <span id={rangeId} className="sd-label">
-          {t('history.range')}
-        </span>
+        <WithInfo info={t('info.history.range')} name={t('history.range')}>
+          <span id={rangeId} className="sd-label">
+            {t('history.range')}
+          </span>
+        </WithInfo>
         {RANGES.map((range) => (
           <Tooltip key={range.hours} text={t('history.range.tip')}>
             <button
@@ -125,7 +128,7 @@ export function HistoryPage({ target }: { target?: { account: number; key: numbe
         ))}
       </div>
 
-      <Section title={t('history.charts')}>
+      <Section title={t('history.charts')} info={t('info.history.charts')}>
         {state.status === 'loading' && (
           <div className="sd-state" role="status">
             {t('common.loading')}
@@ -217,7 +220,7 @@ function EventsSection({ hours }: { hours: number }) {
   if (!supported) return null;
 
   return (
-    <Section title={t('history.events')}>
+    <Section title={t('history.events')} info={t('info.history.events')}>
       <LoadGate state={state} onRetry={() => void reload()}>
         {(events) => {
           const rows = mergeEvents(events);

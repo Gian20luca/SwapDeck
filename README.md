@@ -50,6 +50,7 @@ Aggiornamenti automatici: spenti di default finché il repo è privato; si scari
 ## Dashboard, mini-widget e notifiche
 
 - **Icona nell'area di notifica** (app): anello con il consumo dell'account attivo; il tooltip riassume lo stato. Cambia aspetto se il motore è sospeso.
+- **Spiegazioni:** accanto ai concetti (titoli di sezione, impostazioni, barre 5 ore e 7 giorni, ritmo, chiavi di configurazione di cswap) c'è una piccola «i» cerchiata: passandoci sopra, col focus da tastiera o col clic si legge cosa fa e quando serve (Esc o un clic fuori la chiude). I pulsanti hanno invece il solo tooltip.
 - **Dashboard:** una scheda per account con consumi a 5 ore e 7 giorni, ritmo atteso rispetto a quello reale, stima di esaurimento, storico con grafici, gestione completa degli account.
 - **Mini-widget:** piccola finestra sempre in primo piano, trascinabile, con l'account attivo: barre 5 ore, 7 giorni e per modello, ora dell'ultima lettura e selettore della mappa attiva. Il trattino sulla barra è la soglia del motore e nel suo tooltip c'è l'utenza a cui andrebbe adesso. In alto a destra: **Aggiorna** (rilegge i consumi; `cswap` li rinnova al massimo ogni 3 minuti), **Comprimi** (striscia con alias e % delle 5 ore; dalla striscia si torna con «Espandi») e **Nascondi** (resta l'icona nell'area di notifica). Le posizioni della striscia e del widget esteso si ricordano a parte.
 - **Notifiche di sistema:** si scelgono nella pagina **Notifiche** (dalle impostazioni, «Notifiche…»), divisa in tre gruppi:

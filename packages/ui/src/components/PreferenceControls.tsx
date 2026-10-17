@@ -1,6 +1,7 @@
 import { useId } from 'react';
 import { LOCALES, useI18n, type LocalePreference } from '../i18n/index.js';
 import { THEME_MODES, useTheme, type ThemeMode } from '../theme/index.js';
+import { WithInfo } from './InfoTip.js';
 import { Tooltip } from './Tooltip.js';
 
 const LOCALE_OPTIONS: readonly LocalePreference[] = ['auto', ...LOCALES];
@@ -8,12 +9,15 @@ const LOCALE_OPTIONS: readonly LocalePreference[] = ['auto', ...LOCALES];
 /** Selettore della lingua (automatica, italiano, inglese). */
 export function LanguageSelect({
   onChange,
-}: { onChange?: (value: LocalePreference) => void } = {}) {
+  info,
+}: { onChange?: (value: LocalePreference) => void; info?: string } = {}) {
   const { t, preference, setPreference } = useI18n();
   const id = useId();
   return (
     <span className="sd-field">
-      <label htmlFor={id}>{t('settings.language')}</label>
+      <WithInfo info={info} name={t('settings.language')}>
+        <label htmlFor={id}>{t('settings.language')}</label>
+      </WithInfo>
       <Tooltip text={t('settings.language.tip')}>
         <select
           id={id}
@@ -37,13 +41,18 @@ export function LanguageSelect({
 }
 
 /** Selettore del tema (automatico, chiaro, scuro). */
-export function ThemeSelect({ onChange }: { onChange?: (value: ThemeMode) => void } = {}) {
+export function ThemeSelect({
+  onChange,
+  info,
+}: { onChange?: (value: ThemeMode) => void; info?: string } = {}) {
   const { t } = useI18n();
   const { mode, setMode } = useTheme();
   const id = useId();
   return (
     <span className="sd-field">
-      <label htmlFor={id}>{t('settings.theme')}</label>
+      <WithInfo info={info} name={t('settings.theme')}>
+        <label htmlFor={id}>{t('settings.theme')}</label>
+      </WithInfo>
       <Tooltip text={t('settings.theme.tip')}>
         <select
           id={id}

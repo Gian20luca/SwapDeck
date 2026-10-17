@@ -32,7 +32,7 @@ export function ToolsPage() {
       <h2>{t('tools.title')}</h2>
       <NoticeView notice={notice} />
 
-      <Section title={t('tools.export')}>
+      <Section title={t('tools.export')} info={t('info.tools.export')}>
         <div className="sd-notice" data-tone="danger" role="note">
           {t('tools.export.warning')}
         </div>
@@ -98,7 +98,7 @@ export function ToolsPage() {
         </div>
       </Section>
 
-      <Section title={t('tools.import')}>
+      <Section title={t('tools.import')} info={t('info.tools.import')}>
         <div className="sd-form">
           <PathField
             label={t('tools.file')}
@@ -119,6 +119,7 @@ export function ToolsPage() {
           <CheckField
             label={t('tools.import.force')}
             tip={t('tools.import.force.tip')}
+            info={t('info.tools.import.force')}
             hint={t('tools.import.forceHint')}
             checked={force}
             onChange={setForce}
@@ -153,7 +154,11 @@ export function ToolsPage() {
         </div>
       </Section>
 
-      <Section title={t('tools.unclaimed')} hint={t('tools.unclaimed.hint')}>
+      <Section
+        title={t('tools.unclaimed')}
+        hint={t('tools.unclaimed.hint')}
+        info={t('info.tools.unclaimed')}
+      >
         {unclaimed.length === 0 ? (
           <div className="sd-state">
             <p>{t('tools.unclaimed.empty')}</p>
@@ -191,7 +196,7 @@ export function ToolsPage() {
         )}
       </Section>
 
-      <Section title={t('tools.purge')} hint={t('tools.purge.hint')}>
+      <Section title={t('tools.purge')} hint={t('tools.purge.hint')} info={t('info.tools.purge')}>
         <div className="sd-row">
           <Tooltip text={t('tools.purge.action.tip')}>
             <button
