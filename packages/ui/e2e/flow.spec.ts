@@ -79,6 +79,20 @@ test('cambio di mappa dal selettore', async ({ page }) => {
   await noHorizontalScroll(page);
 });
 
+test('preset attivo: si salva l’osservazione, il resto resta del preset', async ({ page }) => {
+  await open(page);
+  await rules(page);
+  await page.getByLabel('Mappa attiva').selectOption('sport');
+  await expect(page.getByText('Mappa attiva: Sport.')).toBeVisible();
+  await page.getByLabel('Solo osservazione').check();
+  await page.getByRole('button', { name: 'Salva' }).click();
+  await expect(page.getByText('Regole salvate.', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Solo osservazione')).toBeChecked();
+  await expect(page.getByLabel('Soglia sulle 5 ore (%)')).toHaveValue('98');
+  await noHorizontalScroll(page);
+  await page.screenshot({ path: `${SHOTS}/regole-preset-420x640.png`, fullPage: true });
+});
+
 test('dettaglio dell’utenza e ritorno all’elenco', async ({ page }) => {
   await open(page);
   await page.getByRole('button', { name: 'Gestisci l’account alias3' }).click();
