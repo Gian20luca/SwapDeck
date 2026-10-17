@@ -5,7 +5,7 @@ members = ["crates/swapdeck-core", "apps/desktop/src-tauri", "apps/cli"]
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.90"
+rust-version = "1.85"
 publish = false
 
 [workspace.lints.rust]

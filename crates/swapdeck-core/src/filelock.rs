@@ -1,10 +1,13 @@
 //! Lock esclusivo fra processi su un file accanto a quello da proteggere.
 //!
-//! Lock del sistema operativo (`File::try_lock`: `flock` su Unix, `LockFileEx` su Windows): si libera da solo se
+//! Lock del sistema operativo (`fs4`: `flock` su Unix, `LockFileEx` su Windows; stessa API di
+//! `File::try_lock` della libreria standard, che richiederebbe Rust 1.89): si libera da solo se
 //! il processo termina, quindi nessun lock orfano. Il file di lock resta sul disco (vuoto) e non
 //! si cancella mai: cancellarlo aprirebbe una corsa fra chi lo ha appena aperto e chi lo ricrea.
 
-use std::fs::{File, OpenOptions, TryLockError};
+use std::fs::{File, OpenOptions};
+
+use fs4::{FileExt, TryLockError};
 use std::io;
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -43,7 +46,8 @@ pub fn acquire(path: &Path, timeout: Duration) -> Result<FileLock, LockError> {
     let start = Instant::now();
     let mut pause = Duration::from_millis(5);
     loop {
-        match file.try_lock() {
+        // Chiamate esplicite al trait: i metodi omonimi di `File` esistono solo da Rust 1.89.
+        match FileExt::try_lock(&file) {
             Ok(()) => return Ok(FileLock { file }),
             Err(TryLockError::WouldBlock) => {}
             Err(TryLockError::Error(e)) => return Err(e.into()),
@@ -59,7 +63,7 @@ pub fn acquire(path: &Path, timeout: Duration) -> Result<FileLock, LockError> {
 impl Drop for FileLock {
     fn drop(&mut self) {
         // Si libera comunque alla chiusura dello handle; qui subito, senza aspettare.
-        let _ = self.file.unlock();
+        let _ = FileExt::unlock(&self.file);
     }
 }
 
