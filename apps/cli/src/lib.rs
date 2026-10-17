@@ -34,6 +34,9 @@ use swapdeck_core::notify::{self, NotificationConfig, NotifyPoll};
 use swapdeck_core::paths::AppPaths;
 use swapdeck_core::setup::{Setup, SetupProgress};
 use swapdeck_core::timeutil::now_unix;
+use swapdeck_core::usage::{
+    self, BreakdownWindow, UsageBreakdown, UsageError, UsageGroupBy, UsagePaths, UsageQuery,
+};
 
 use output::{CliErrorEnvelope, CliState, CliVersion, ConfigView, EngineStatus, PROTOCOL};
 
@@ -53,6 +56,8 @@ pub const USAGE: &str = "uso: swapdeck-cli <comando>
   action -                     (azione JSON da stdin)
   history [--from SECONDI] [--to SECONDI] [--account N]
   history events [--since SECONDI] [--account N]
+  usage breakdown [--account N] [--window 5h|7d|custom] [--from SECONDI --to SECONDI]
+                  [--group-by project|session|agent|model]
   mappings
   config get
   config set <json|->
@@ -138,6 +143,7 @@ fn dispatch(args: &[String]) -> Res<Value> {
         ))),
         ["history", "events", rest @ ..] => to_value(history_events(rest)?),
         ["history", rest @ ..] => to_value(history(rest)?),
+        ["usage", "breakdown", rest @ ..] => to_value(usage_breakdown(rest)?),
         ["mappings"] => to_value(client()?.mappings()?),
         ["preferences", "get"] => to_value(preferences_get()?),
         ["preferences", "set", input] => to_value(preferences_set(&read_input(input)?)?),
@@ -408,6 +414,8 @@ fn history(rest: &[&str]) -> Res<Vec<HistoryRecord>> {
         .into_iter()
         .filter(|r| match (r, account) {
             (HistoryRecord::Sample(s), Some(n)) => s.account == n,
+            // I battiti servono solo all'attribuzione dei consumi (F20).
+            (HistoryRecord::Heartbeat(_), _) => false,
             _ => true,
         })
         .collect())
@@ -435,6 +443,52 @@ fn history_events(rest: &[&str]) -> Res<HistoryEvents> {
     History::new(&paths()?.data_dir)
         .events(&query, now_unix())
         .map_err(|e| failed(format!("storico non leggibile: {e}")))
+}
+
+/// `usage breakdown`: classifica dei consumi locali di Claude Code (F20). Legge le sessioni in
+/// sola lettura e aggiorna l'indice nella cartella dati.
+fn usage_breakdown(rest: &[&str]) -> Res<UsageBreakdown> {
+    let mut query = UsageQuery {
+        account: None,
+        window: BreakdownWindow::FiveHour,
+        from_seconds: None,
+        to_seconds: None,
+        group_by: UsageGroupBy::Project,
+    };
+    let mut it = rest.iter();
+    while let Some(flag) = it.next() {
+        let value = it
+            .next()
+            .ok_or_else(|| usage_error(format!("{flag}: manca il valore")))?;
+        match *flag {
+            "--account" => query.account = Some(parse_u32(flag, value)?),
+            "--from" => query.from_seconds = Some(parse_i64(flag, value)?),
+            "--to" => query.to_seconds = Some(parse_i64(flag, value)?),
+            "--window" | "--group-by" => {
+                let json = serde_json::Value::String((*value).to_owned());
+                let bad = || usage_error(format!("{flag}: valore non valido"));
+                if *flag == "--window" {
+                    query.window = serde_json::from_value(json).map_err(|_| bad())?;
+                } else {
+                    query.group_by = serde_json::from_value(json).map_err(|_| bad())?;
+                }
+            }
+            _ => {
+                return Err(usage_error(format!(
+                    "opzione sconosciuta: {flag}
+{USAGE}"
+                )));
+            }
+        }
+    }
+    if query.window == BreakdownWindow::Custom {
+        query.to_seconds.get_or_insert_with(now_unix);
+    }
+    let paths = UsagePaths::standard(Some(paths()?.data_dir));
+    usage::usage_breakdown(&paths, &query, now_unix()).map_err(|e| match e {
+        UsageError::Invalid(m) => usage_error(m),
+        UsageError::Io(_) => failed(e.to_string()),
+    })
 }
 
 /// Errore della config: valori non validi = uso sbagliato.

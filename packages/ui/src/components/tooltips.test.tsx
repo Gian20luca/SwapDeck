@@ -37,7 +37,15 @@ function missingTooltips(root: HTMLElement): string[] {
   return out;
 }
 
-const TABS = ['Account', 'Cartelle', 'Regole', 'Storico', 'Strumenti', 'Impostazioni'];
+const TABS = [
+  'Account',
+  'Cartelle',
+  'Regole',
+  'Storico',
+  'Chi consuma',
+  'Strumenti',
+  'Impostazioni',
+];
 
 describe('Tooltip', () => {
   it('si apre al focus, collega aria-describedby, si chiude con Esc; niente tooltip annidati', async () => {

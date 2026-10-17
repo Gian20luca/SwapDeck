@@ -1,7 +1,8 @@
 //! Storico (F1): un file JSONL al giorno (UTC) in `<dati>/history/AAAA-MM-GG.jsonl`.
 //!
 //! Righe: campioni di consumo per account (solo quando cambia `usageFetchedAt` o lo stato),
-//! cambi di account e decisioni del motore. Lo scrive solo chi tiene il lock del motore;
+//! cambi di account, decisioni del motore e un battito a ogni giro (utenza attiva e intervallo:
+//! testimonia l'utenza anche senza letture nuove). Lo scrive solo chi tiene il lock del motore;
 //! la lettura per intervallo (interfaccia, estensione) salta le righe troncate o illeggibili.
 
 use std::collections::HashMap;
@@ -99,6 +100,20 @@ pub struct DecisionRecord {
     pub why: Option<String>,
 }
 
+/// Battito di un giro del motore: utenza attiva vista da `cswap list` e intervallo configurato
+/// (da questo si ricava il silenzio massimo ammesso dello storico).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HeartbeatRecord {
+    #[ts(type = "number")]
+    pub ts: i64,
+    /// Utenza attiva; assente se nessuna lo è.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub active: Option<u32>,
+    pub interval_secs: u32,
+}
+
 /// Una riga dello storico.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -106,6 +121,7 @@ pub enum HistoryRecord {
     Sample(UsageSample),
     Switch(SwitchRecord),
     Decision(DecisionRecord),
+    Heartbeat(HeartbeatRecord),
 }
 
 impl HistoryRecord {
@@ -114,6 +130,7 @@ impl HistoryRecord {
             Self::Sample(s) => s.ts,
             Self::Switch(s) => s.ts,
             Self::Decision(d) => d.ts,
+            Self::Heartbeat(h) => h.ts,
         }
     }
 }
@@ -390,6 +407,20 @@ impl HistoryWriter {
         Ok(written)
     }
 
+    /// Battito del giro: utenza attiva di `list` e intervallo del motore.
+    pub fn record_heartbeat(
+        &mut self,
+        list: &ListResponse,
+        interval_secs: u32,
+        now: i64,
+    ) -> io::Result<()> {
+        self.append(&HistoryRecord::Heartbeat(HeartbeatRecord {
+            ts: now,
+            active: list.accounts.iter().find(|a| a.active).map(|a| a.number),
+            interval_secs,
+        }))
+    }
+
     /// Dopo un riavvio riprende gli ultimi campioni di oggi, per non duplicarli.
     fn prime(&mut self, now: i64) {
         let from = utc_date(now).map_or(now, day_start);
@@ -428,6 +459,43 @@ mod tests {
             switched: true,
             message: "switched".to_owned(),
         })
+    }
+
+    #[test]
+    fn heartbeat_witnesses_active_account_without_new_samples() {
+        let dir = tempfile::tempdir().unwrap();
+        let g = guard(dir.path());
+        let h = History::new(dir.path());
+        let mut w = h.writer(&g, 30).unwrap();
+        let l = list(Some(3), vec![acc(3, 10.0, 5.0), acc(6, 20.0, 5.0)]);
+        // Stessi dati a ogni giro: campioni una volta sola, battito ogni volta.
+        for i in 0..3 {
+            w.record_samples(&l, T0 + i * 60).unwrap();
+            w.record_heartbeat(&l, 60, T0 + i * 60).unwrap();
+        }
+        let rows = h.read_range(T0, T0 + 600).unwrap();
+        let beats: Vec<_> = rows
+            .iter()
+            .filter_map(|r| match r {
+                HistoryRecord::Heartbeat(b) => Some(b),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(beats.len(), 3);
+        assert!(
+            beats
+                .iter()
+                .all(|b| b.active == Some(3) && b.interval_secs == 60)
+        );
+        assert_eq!(rows.len(), 2 + 3);
+        let line = serde_json::to_string(rows.last().unwrap()).unwrap();
+        assert_eq!(
+            line,
+            format!(
+                r#"{{"type":"heartbeat","ts":{},"active":3,"intervalSecs":60}}"#,
+                T0 + 120
+            )
+        );
     }
 
     #[test]

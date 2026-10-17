@@ -325,7 +325,12 @@ impl Runner<'_, '_> {
             }
         };
         if let Some(h) = self.holder.as_mut() {
-            if let Err(e) = h.writer.record_samples(&list, now) {
+            // Battito anche senza campioni nuovi: testimonia l'utenza attiva (F20).
+            let written = h
+                .writer
+                .record_samples(&list, now)
+                .and_then(|_| h.writer.record_heartbeat(&list, self.interval, now));
+            if let Err(e) = written {
                 self.log(now, &format!("storico non scritto: {e}"));
             }
         }

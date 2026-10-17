@@ -13,6 +13,7 @@ import { useNavigate } from './navigation.js';
 import { AccountActions } from './manage/AccountActions.js';
 import { AccountDetailPage } from './manage/AccountDetailPage.js';
 import { AddAccount } from './manage/AddAccount.js';
+import { WithInfo } from './InfoTip.js';
 import { QuickSwitch, type QuickStrategy } from './QuickSwitch.js';
 import { Tooltip } from './Tooltip.js';
 
@@ -91,6 +92,9 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
       {...(navigate
         ? {
             onOpenHistory: (a: Account) => navigate({ tab: 'history', account: a.number }),
+            ...(typeof backend.getUsageBreakdown === 'function'
+              ? { onOpenUsage: (a: Account) => navigate({ tab: 'usage', account: a.number }) }
+              : {}),
           }
         : {})}
       {...(manage ? { extra: <AccountActions account={account} onManage={setDetail} /> } : {})}
@@ -137,7 +141,9 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
   return (
     <main className="sd-app" aria-labelledby="sd-dashboard-title">
       <div className="sd-toolbar">
-        <h1 id="sd-dashboard-title">{t('dashboard.title')}</h1>
+        <WithInfo info={t('info.dashboard')} name={t('dashboard.title')}>
+          <h1 id="sd-dashboard-title">{t('dashboard.title')}</h1>
+        </WithInfo>
         <div className="sd-toolbar__group">
           <QuickSwitch onSwitch={onQuick} disabled={busy || state.status !== 'ready'} />
           <Tooltip text={t('dashboard.refresh.tip')}>

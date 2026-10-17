@@ -94,3 +94,23 @@ describe('FakeBackend: gestione completa', () => {
     );
   });
 });
+
+describe('FakeBackend: chi consuma (F20)', () => {
+  it('classifica, utenza sconosciuta a parte e stime degli altri dispositivi', async () => {
+    const backend = new FakeBackend();
+    const byAgent = await backend.getUsageBreakdown({ window: '5h', groupBy: 'agent', account: 1 });
+    expect(byAgent.rows.map((r) => r.key)).toContain('agent:ag1');
+    const shares = byAgent.rows.reduce((s, r) => s + r.sharePct, 0);
+    expect(shares + (byAgent.otherDevicesSharePct ?? 0)).toBeCloseTo(100, 0);
+    expect(byAgent.otherDevices.map((e) => e.status)).toEqual(['available', 'notCalibrated']);
+    const all = await backend.getUsageBreakdown({ window: '7d', groupBy: 'project' });
+    expect(all.unattributed.messages).toBe(1);
+    expect(all.otherDevicesSharePct).toBeNull();
+    expect(all.rows[0]!.totals.equivalent).toBeGreaterThanOrEqual(all.rows[1]!.totals.equivalent);
+    await expect(
+      backend.getUsageBreakdown({ window: 'custom', groupBy: 'model' }),
+    ).rejects.toMatchObject({
+      info: { kind: 'invalidUsage' },
+    });
+  });
+});

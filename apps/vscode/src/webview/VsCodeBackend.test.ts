@@ -46,6 +46,7 @@ describe('VsCodeBackend', () => {
     void backend.setPreferences({ theme: 'dark' });
     void backend.getHistoryEvents({ account: 2 });
     void backend.getHistoryEvents();
+    void backend.getUsageBreakdown({ window: '5h', groupBy: 'project', account: 2 });
     expect(sent.map((m) => (m.type === 'request' ? [m.method, m.params] : m.type))).toEqual([
       ['listMappings', {}],
       ['getEngineState', {}],
@@ -54,6 +55,7 @@ describe('VsCodeBackend', () => {
       ['setPreferences', { prefs: { theme: 'dark' } }],
       ['getHistoryEvents', { account: 2 }],
       ['getHistoryEvents', {}],
+      ['getUsageBreakdown', { query: { window: '5h', groupBy: 'project', account: 2 } }],
     ]);
   });
 

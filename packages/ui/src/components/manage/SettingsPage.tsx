@@ -56,7 +56,7 @@ export function SettingsPage() {
     <div className="sd-page">
       <h2>{t('settings.title')}</h2>
       {notifications && (
-        <Section title={t('notif.title')} hint={t('notif.hint')}>
+        <Section title={t('notif.title')} hint={t('notif.hint')} info={t('info.settings.notif')}>
           <div className="sd-row">
             <Tooltip text={t('notif.open.tip')}>
               <button type="button" className="sd-btn" onClick={() => setPage('notifications')}>
@@ -101,14 +101,16 @@ function PreferencesSection() {
   }
 
   return (
-    <Section title={t('settings.app')}>
+    <Section title={t('settings.app')} info={t('info.settings.app')}>
       <div className="sd-row">
         <LanguageSelect
+          info={t('info.settings.language')}
           onChange={(value: LocalePreference) =>
             void save({ language: resolveLocale(value) }, t('settings.saved'))
           }
         />
         <ThemeSelect
+          info={t('info.settings.theme')}
           onChange={(mode) => void save({ theme: THEME_TO_CONFIG[mode] }, t('settings.saved'))}
         />
       </div>
@@ -176,6 +178,7 @@ function PollForm({
       <TextField
         label={t('settings.interval')}
         tip={t('settings.interval.tip')}
+        info={t('info.settings.interval')}
         type="number"
         min={60}
         max={3600}
@@ -189,6 +192,7 @@ function PollForm({
         <TextField
           label={t('settings.thresholds')}
           tip={t('settings.thresholds.tip')}
+          info={t('info.settings.thresholds')}
           hint={t('settings.thresholds.hint')}
           value={thresholds}
           onChange={setThresholds}
@@ -231,6 +235,7 @@ function AutostartSection() {
       <CheckField
         label={t('settings.autostart')}
         tip={t('settings.autostart.tip')}
+        info={t('info.settings.autostart')}
         checked={settings.autostart}
         disabled={busy}
         {...(settings.autostartManaged ? {} : { hint: t('settings.autostart.dev') })}
@@ -267,7 +272,7 @@ function CswapConfigSection() {
   }
 
   return (
-    <Section title={t('config.title')} hint={t('config.hint')}>
+    <Section title={t('config.title')} hint={t('config.hint')} info={t('info.config')}>
       <LoadGate state={state} onRetry={() => void reload()}>
         {(config) => (
           <>
@@ -318,12 +323,13 @@ function ConfigRow({
   onUnset: () => void;
 }) {
   const { t } = useI18n();
-  const info = CONFIG_KEYS[setting.key];
+  const keyInfo = CONFIG_KEYS[setting.key];
+  const info = keyInfo ? t(keyInfo.info) : undefined;
   const initial = configValueText(setting.value);
   const [text, setText] = useState(initial);
   const error = validateConfigValue(setting.key, text);
-  const label = info ? t(info.label) : setting.key;
-  const kind: ConfigKind = info?.kind ?? { type: 'string' };
+  const label = keyInfo ? t(keyInfo.label) : setting.key;
+  const kind: ConfigKind = keyInfo?.kind ?? { type: 'string' };
   const range =
     kind.type === 'number' ? t('config.range', { min: kind.min, max: kind.max }) : undefined;
   const choiceLabel = (value: string) => value;
@@ -340,17 +346,19 @@ function ConfigRow({
         <SelectField
           label={label}
           tip={t('config.field.tip')}
+          {...(info ? { info } : {})}
           value={text}
           onChange={setText}
           disabled={busy}
           options={kind.choices.map((c) => ({ value: c, label: choiceLabel(c) }))}
-          {...(info?.hint ? { hint: t(info.hint) } : {})}
+          {...(keyInfo?.hint ? { hint: t(keyInfo.hint) } : {})}
         />
       )}
       {kind.type === 'bool' && (
         <CheckField
           label={label}
           tip={t('config.field.tip')}
+          {...(info ? { info } : {})}
           checked={text === 'true'}
           onChange={(checked) => setText(checked ? 'true' : 'false')}
           disabled={busy}
@@ -360,6 +368,7 @@ function ConfigRow({
         <TextField
           label={label}
           tip={t('config.field.tip')}
+          {...(info ? { info } : {})}
           type={kind.type === 'number' ? 'number' : 'text'}
           {...(kind.type === 'number' ? { step: 'any' as const } : {})}
           {...(range ? { hint: range } : {})}

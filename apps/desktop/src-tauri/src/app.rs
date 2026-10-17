@@ -257,6 +257,7 @@ pub fn run(api: Arc<dyn CswapApi>) {
             commands::get_notification_settings,
             commands::set_notification_settings,
             commands::get_history_events,
+            commands::get_usage_breakdown,
             setup_cmd::diagnose_setup,
             setup_cmd::install_cswap,
             setup_cmd::upgrade_cswap,

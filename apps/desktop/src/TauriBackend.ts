@@ -16,6 +16,8 @@ import type {
   SuspendReason,
   SwitchResponse,
   UpdateInfo,
+  UsageBreakdown,
+  UsageQuery,
 } from '@swapdeck/types';
 import {
   BackendError,
@@ -279,6 +281,10 @@ export class TauriBackend implements Backend, SetupBackend {
 
   getHistoryEvents(query?: HistoryQuery): Promise<HistoryEvents> {
     return this.call('get_history_events', { query: query ?? {} });
+  }
+
+  getUsageBreakdown(query: UsageQuery): Promise<UsageBreakdown> {
+    return this.call('get_usage_breakdown', { query });
   }
 
   diagnoseSetup(): Promise<SetupDiagnosis> {

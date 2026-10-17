@@ -50,6 +50,7 @@ Aggiornamenti automatici: spenti di default finché il repo è privato; si scari
 ## Dashboard, mini-widget e notifiche
 
 - **Icona nell'area di notifica** (app): anello con il consumo dell'account attivo; il tooltip riassume lo stato. Cambia aspetto se il motore è sospeso.
+- **Spiegazioni:** accanto ai concetti (titoli di sezione, impostazioni, barre 5 ore e 7 giorni, ritmo, chiavi di configurazione di cswap) c'è una piccola «i» cerchiata: passandoci sopra, col focus da tastiera o col clic si legge cosa fa e quando serve (Esc o un clic fuori la chiude). I pulsanti hanno invece il solo tooltip.
 - **Dashboard:** una scheda per account con consumi a 5 ore e 7 giorni, ritmo atteso rispetto a quello reale, stima di esaurimento, storico con grafici, gestione completa degli account.
 - **Mini-widget:** piccola finestra sempre in primo piano, trascinabile, con l'account attivo: barre 5 ore, 7 giorni e per modello, ora dell'ultima lettura e selettore della mappa attiva. Il trattino sulla barra è la soglia del motore e nel suo tooltip c'è l'utenza a cui andrebbe adesso. In alto a destra: **Aggiorna** (rilegge i consumi; `cswap` li rinnova al massimo ogni 3 minuti), **Comprimi** (striscia con alias e % delle 5 ore; dalla striscia si torna con «Espandi») e **Nascondi** (resta l'icona nell'area di notifica). Le posizioni della striscia e del widget esteso si ricordano a parte.
 - **Notifiche di sistema:** si scelgono nella pagina **Notifiche** (dalle impostazioni, «Notifiche…»), divisa in tre gruppi:
@@ -59,6 +60,7 @@ Aggiornamenti automatici: spenti di default finché il repo è privato; si scari
 
   Per gli avvisi su consumi e reset si sceglie se seguire solo l'utenza attiva o tutte. In più: **Non disturbare** a orari (anche a cavallo della mezzanotte, con i critici che possono passare) e un **riepilogo giornaliero** all'ora scelta. Le regole stanno nella sezione `notifications` di `config.json` e valgono dalla lettura successiva.
 
+- **Chi consuma:** scheda (anche dalla scheda dell'account e dallo Storico, «Chi consuma questa utenza») con la classifica dei consumi di Claude Code di questo PC per progetto, sessione, agente o modello, sulle 5 ore o sui 7 giorni, per un'utenza o per tutte, più la quota stimata consumata da altri dispositivi con il suo grado di fiducia. Si leggono in sola lettura solo conteggi di token, orari, nomi di progetto e sessione e le descrizioni degli agenti; il testo dei messaggi non si legge e nulla esce dal PC. La prima lettura di molte sessioni procede a blocchi con l'avanzamento in percentuale; le successive sono immediate. Metodo e limiti in `docs/CHI-CONSUMA.md`; da riga di comando `swapdeck-cli usage breakdown`.
 - **Conferme:** le azioni delicate (`remove`, `import`, `export`, `swap`/`move`, `unmap`, `disable` dell'account attivo, `purge`) chiedono conferma; `purge` chiede di digitare una parola. Il cambio di account non chiede nulla.
 
 ## Motore delle regole

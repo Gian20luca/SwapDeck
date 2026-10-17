@@ -1,6 +1,7 @@
 import type { Account, Decision, IdleReason, SuspendReason, SwitchCause } from '@swapdeck/types';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useBackend } from '../../backend/context.js';
+import { useNavigate } from '../navigation.js';
 import { useAccounts } from '../../backend/useAccounts.js';
 import { useI18n, type MessageKey, type Translate } from '../../i18n/index.js';
 import { accountName } from '../../lib/account.js';
@@ -9,6 +10,7 @@ import { useLoad } from '../../lib/useLoad.js';
 import { AccountSummary } from '../AccountSummary.js';
 import { HistoryPanel } from '../HistoryPanel.js';
 import { useNow } from '../../lib/useNow.js';
+import { WithInfo } from '../InfoTip.js';
 import { LoadGate, Section } from './common.js';
 import { Tooltip } from '../Tooltip.js';
 
@@ -72,6 +74,9 @@ export function HistoryPage({ target }: { target?: { account: number; key: numbe
   const { t } = useI18n();
   const { state } = useAccounts();
   const now = useNow();
+  const backend = useBackend();
+  const navigate = useNavigate();
+  const usageLink = navigate !== null && typeof backend.getUsageBreakdown === 'function';
   const [hours, setHours] = useState<number>(168);
   const [openAccounts, setOpenAccounts] = useState<Set<number> | null>(null);
   const accounts: Account[] = state.status === 'ready' ? state.data.accounts : [];
@@ -104,9 +109,11 @@ export function HistoryPage({ target }: { target?: { account: number; key: numbe
     <div className="sd-page">
       <h2>{t('history.title')}</h2>
       <div className="sd-row" role="group" aria-labelledby={rangeId}>
-        <span id={rangeId} className="sd-label">
-          {t('history.range')}
-        </span>
+        <WithInfo info={t('info.history.range')} name={t('history.range')}>
+          <span id={rangeId} className="sd-label">
+            {t('history.range')}
+          </span>
+        </WithInfo>
         {RANGES.map((range) => (
           <Tooltip key={range.hours} text={t('history.range.tip')}>
             <button
@@ -121,7 +128,7 @@ export function HistoryPage({ target }: { target?: { account: number; key: numbe
         ))}
       </div>
 
-      <Section title={t('history.charts')}>
+      <Section title={t('history.charts')} info={t('info.history.charts')}>
         {state.status === 'loading' && (
           <div className="sd-state" role="status">
             {t('common.loading')}
@@ -165,6 +172,20 @@ export function HistoryPage({ target }: { target?: { account: number; key: numbe
                 </div>
                 {isOpen && (
                   <div className="sd-card__history">
+                    {usageLink && (
+                      <div className="sd-row">
+                        <Tooltip text={t('usage.link.tip')}>
+                          <button
+                            type="button"
+                            className="sd-btn sd-btn--small"
+                            aria-label={t('usage.linkLabel', { name })}
+                            onClick={() => navigate?.({ tab: 'usage', account: account.number })}
+                          >
+                            {t('usage.linkFull')}
+                          </button>
+                        </Tooltip>
+                      </div>
+                    )}
                     <HistoryPanel account={account.number} rangeHours={hours} />
                   </div>
                 )}
@@ -199,7 +220,7 @@ function EventsSection({ hours }: { hours: number }) {
   if (!supported) return null;
 
   return (
-    <Section title={t('history.events')}>
+    <Section title={t('history.events')} info={t('info.history.events')}>
       <LoadGate state={state} onRetry={() => void reload()}>
         {(events) => {
           const rows = mergeEvents(events);

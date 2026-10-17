@@ -19,6 +19,8 @@ import type {
   SetupProgress,
   StatusResponse,
   UpdateInfo,
+  UsageBreakdown,
+  UsageQuery,
 } from '@swapdeck/types';
 import {
   BackendError,
@@ -181,6 +183,10 @@ export class VsCodeBackend implements Backend, SetupBackend {
 
   getHistoryEvents(query?: HistoryQuery): Promise<HistoryEvents> {
     return this.request({ method: 'getHistoryEvents', params: historyParams(query) });
+  }
+
+  getUsageBreakdown(query: UsageQuery): Promise<UsageBreakdown> {
+    return this.request({ method: 'getUsageBreakdown', params: { query } });
   }
 
   confirmationFor(action: CswapAction): Promise<Confirmation> {

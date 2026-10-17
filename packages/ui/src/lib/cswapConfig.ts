@@ -12,6 +12,8 @@ export interface ConfigKeyInfo {
   label: MessageKey;
   /** Spiegazione mostrata sotto il campo. */
   hint?: MessageKey;
+  /** Spiegazione della chiave (la «i»). */
+  info: MessageKey;
   /** Valore di default di cswap, come testo. */
   default: string;
 }
@@ -20,43 +22,56 @@ export const CONFIG_KEYS: Record<string, ConfigKeyInfo> = {
   'autoswitch.threshold': {
     kind: { type: 'number', min: 50, max: 99.9 },
     label: 'config.key.threshold',
+    info: 'info.config.threshold',
     default: '90',
   },
   'autoswitch.intervalSeconds': {
     kind: { type: 'number', min: 15, max: 3600 },
     label: 'config.key.intervalSeconds',
+    info: 'info.config.intervalSeconds',
     default: '60',
   },
   'autoswitch.cooldownSeconds': {
     kind: { type: 'number', min: 0, max: 86400 },
     label: 'config.key.cooldownSeconds',
+    info: 'info.config.cooldownSeconds',
     default: '300',
   },
   'autoswitch.hysteresisPct': {
     kind: { type: 'number', min: 0, max: 50 },
     label: 'config.key.hysteresisPct',
+    info: 'info.config.hysteresisPct',
     default: '10',
   },
   'autoswitch.strategy': {
     kind: { type: 'choice', choices: ['best', 'consume-first'] },
     label: 'config.key.strategy',
+    info: 'info.config.strategy',
     default: 'best',
   },
   'autoswitch.includeApiKeyAccounts': {
     kind: { type: 'bool' },
     label: 'config.key.includeApiKeyAccounts',
+    info: 'info.config.includeApiKeyAccounts',
     default: 'false',
   },
   'autoswitch.unhealthyTicks': {
     kind: { type: 'number', min: 1, max: 100, integer: true },
     label: 'config.key.unhealthyTicks',
+    info: 'info.config.unhealthyTicks',
     default: '3',
   },
-  'autoswitch.model': { kind: { type: 'string' }, label: 'config.key.model', default: '' },
+  'autoswitch.model': {
+    kind: { type: 'string' },
+    label: 'config.key.model',
+    info: 'info.config.model',
+    default: '',
+  },
   'ui.theme': {
     kind: { type: 'choice', choices: ['dark', 'light', 'auto'] },
     label: 'config.key.theme',
     hint: 'config.key.theme.hint',
+    info: 'info.config.theme',
     default: 'auto',
   },
 };

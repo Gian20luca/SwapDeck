@@ -20,6 +20,8 @@ import type {
   StatusResponse,
   SwitchResponse,
   UpdateInfo,
+  UsageBreakdown,
+  UsageQuery,
 } from '@swapdeck/types';
 
 export type Unsubscribe = () => void;
@@ -163,6 +165,11 @@ export interface Backend {
   setAutostart?(enabled: boolean): Promise<HostSettings>;
   /** Cambi di account e decisioni del motore. */
   getHistoryEvents?(query?: HistoryQuery): Promise<HistoryEvents>;
+  /**
+   * Chi consuma (F20): consumi locali di Claude Code per progetto, sessione, agente o modello, con
+   * la stima degli altri dispositivi. La prima lettura può durare decine di secondi.
+   */
+  getUsageBreakdown?(query: UsageQuery): Promise<UsageBreakdown>;
   /** Selettori nativi: percorso scelto, `null` se annullato. */
   pickOpenFile?(options?: PickOptions): Promise<string | null>;
   pickSaveFile?(options?: PickOptions): Promise<string | null>;

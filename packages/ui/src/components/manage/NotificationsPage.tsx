@@ -25,6 +25,18 @@ const MAX_THRESHOLDS = 5;
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 type Section = Exclude<keyof NotificationConfig, 'thresholds'>;
+
+/** Avvisi con una «i»: perché servono, oltre a cosa fanno (il tooltip). */
+const INFO: Partial<Record<Section, MessageKey>> = {
+  switchPreview: 'info.notif.switchPreview',
+  noReserve: 'info.notif.noReserve',
+  percent: 'info.notif.percent',
+  exhaustion: 'info.notif.exhaustion',
+  modelLimit: 'info.notif.modelLimit',
+  engineState: 'info.notif.engineState',
+  login: 'info.notif.login',
+  stale: 'info.notif.stale',
+};
 type Texts = Record<TextPath, string>;
 
 function read(config: NotificationConfig, path: TextPath): unknown {
@@ -180,11 +192,13 @@ function NotificationsForm({
 
   const toggle = (section: Section, label: MessageKey, tip: MessageKey, children?: ReactNode) => {
     const rule = config[section] as { enabled: boolean };
+    const infoKey = INFO[section];
     return (
       <div className="sd-notif" data-testid={`notif-${section}`}>
         <CheckField
           label={t(label)}
           tip={t(tip)}
+          {...(infoKey ? { info: t(infoKey) } : {})}
           checked={rule.enabled}
           disabled={saving}
           onChange={(enabled) => update(section, { enabled } as never)}
@@ -228,7 +242,7 @@ function NotificationsForm({
         void save();
       }}
     >
-      <Section title={t('notif.group.engine')}>
+      <Section title={t('notif.group.engine')} info={t('info.notif.engine')}>
         {toggle(
           'switchPreview',
           'notif.switchPreview',
@@ -251,7 +265,7 @@ function NotificationsForm({
         {toggle('noReserve', 'notif.noReserve', 'notif.noReserve.tip')}
       </Section>
 
-      <Section title={t('notif.group.usage')}>
+      <Section title={t('notif.group.usage')} info={t('info.notif.usage')}>
         {toggle(
           'percent',
           'notif.percent',
@@ -288,7 +302,7 @@ function NotificationsForm({
         )}
       </Section>
 
-      <Section title={t('notif.group.state')}>
+      <Section title={t('notif.group.state')} info={t('info.notif.state')}>
         {toggle('engineState', 'notif.engineState', 'notif.engineState.tip')}
         {toggle(
           'login',
@@ -311,7 +325,7 @@ function NotificationsForm({
         {toggle('updates', 'notif.updates', 'notif.updates.tip')}
       </Section>
 
-      <Section title={t('notif.quiet')} hint={t('notif.quiet.hint')}>
+      <Section title={t('notif.quiet')} hint={t('notif.quiet.hint')} info={t('info.notif.quiet')}>
         {toggle(
           'quietHours',
           'notif.quiet.enabled',
@@ -337,6 +351,7 @@ function NotificationsForm({
             <CheckField
               label={t('notif.quiet.critical')}
               tip={t('notif.quiet.critical.tip')}
+              info={t('info.notif.quietCritical')}
               checked={config.quietHours.allowCritical}
               disabled={saving}
               onChange={(allowCritical) => update('quietHours', { allowCritical })}
@@ -345,7 +360,7 @@ function NotificationsForm({
         )}
       </Section>
 
-      <Section title={t('notif.summary')}>
+      <Section title={t('notif.summary')} info={t('info.notif.summary')}>
         {toggle(
           'dailySummary',
           'notif.summary.enabled',
