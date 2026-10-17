@@ -86,7 +86,7 @@ pub fn project_label_from_cwd(projects: &Path, project: &str) -> Option<String> 
         })
         .filter_map(|e| Some((mtime_ms(&e.metadata().ok()?), e.path())))
         .collect();
-    files.sort_by(|a, b| b.0.cmp(&a.0));
+    files.sort_by_key(|f| std::cmp::Reverse(f.0));
     files
         .iter()
         .take(CWD_PROBE_FILES)
