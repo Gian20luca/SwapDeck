@@ -109,3 +109,6 @@ Gli agenti si scelgono secondo le regole globali. Step 2 e 3 possono andare in p
 ## 5. Repo
 - GitHub privato: https://github.com/Gian20luca/SwapDeck. CI con GitHub Actions; artefatti e updater sulle GitHub Releases.
 - Aperto: con il repo privato l'updater (F8) e i download dei colleghi richiedono un accesso al repo. Scelta provvisoria: updater predisposto ma spento di default finché il repo è privato; i colleghi vengono aggiunti come collaboratori.
+
+## 6. Idee non pianificate
+- Più AI diverse (17/10): monitorare e sfruttare insieme abbonamenti di altre AI (CLI e limiti propri). Fuori da cswap, che gestisce solo account Claude: servirebbero per ogni AI la lettura dei consumi e lo scambio delle credenziali. Nessuno sviluppo senza brainstorming e decisione dell'utente.
