@@ -10,6 +10,7 @@ import type {
   ListResponse,
   ProfileCommand,
   SetupProgress,
+  UsageQuery,
 } from '@swapdeck/types';
 
 /** Metodi del `Backend` inoltrati all'host. */
@@ -31,6 +32,7 @@ export const REQUEST_METHODS = [
   'getPreferences',
   'setPreferences',
   'getHistoryEvents',
+  'getUsageBreakdown',
   'pickOpenFile',
   'pickSaveFile',
   'pickFolder',
@@ -77,6 +79,7 @@ export type RequestParams =
   | { method: 'setNotificationSettings'; params: { patch: Record<string, unknown> } }
   | { method: 'setPreferences'; params: { prefs: Partial<AppPreferences> } }
   | { method: 'getHistoryEvents'; params: HistoryParams }
+  | { method: 'getUsageBreakdown'; params: { query: UsageQuery } }
   | { method: 'pickOpenFile' | 'pickSaveFile' | 'pickFolder'; params: PickParams }
   | { method: 'diagnoseSetup' | 'installCswap' | 'upgradeCswap'; params: Record<string, never> }
   | { method: 'checkCswapUpdate'; params: { force?: boolean } }

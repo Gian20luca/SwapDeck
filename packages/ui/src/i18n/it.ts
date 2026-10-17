@@ -3,9 +3,11 @@ import { itFlow } from './it.flow.js';
 import { itNotify } from './it.notify.js';
 import { itTips } from './it.tips.js';
 import { itManage } from './it.manage.js';
+import { itUsage } from './it.usage.js';
 
 export const it = {
   ...itManage,
+  ...itUsage,
   ...itFlow,
   ...itNotify,
   ...itTips,
