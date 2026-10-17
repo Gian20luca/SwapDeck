@@ -14,6 +14,7 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 | 7 Estensione VS Code | chiuso | 5860707 | 7 rilievi corretti; .vsix installato nel VS Code reale, motore spento |
 | 8 Pacchetti e CI | chiuso | 2351569 | CI verde 3 OS; prove di rilascio verdi; firma separata dalla build; docs/RILASCIO.md |
 | 9 Verifica finale e documenti | chiuso | aabb4ec (tag v0.1.0) | release in bozza con tutti gli asset; dist-locale aggiornata; vsix nel VS Code |
+| v0.2.0 | chiuso | 5ecd7fd (tag v0.2.0) | suite verde; CI e release bloccate dal billing di GitHub Actions; dist-locale 0.2.0; app e vsix installati col motore spento |
 
 ## Domande aperte per l'utente
 (raccolte durante l'esecuzione, con scelta provvisoria)
@@ -42,3 +43,12 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 - Scheda Regole e VS Code: a motore spento compare un riquadro rosso «Motore sospeso. Il motore è spento.» (da decidere lo stile).
 - Da provare su macchine reali: installer NSIS su Windows pulito, AppImage/.deb, .dmg, vsix Linux/macOS, updater dopo repo pubblico.
 - «Accendi» del motore (17/10, deciso): conferma solo alla prima accensione, con Accendi / Solo osservazione / Annulla; poi parte subito. Da fare dopo le mappe, insieme alle «i» della pagina Regole.
+
+## 17/10
+- Integrate in v0.2.0: Chi consuma (F20), mappe con preset in sola lettura e «Clona come mappa personale», vista completa di VS Code nella barra laterale con sincronia tra finestre, icone «i», conferma alla prima accensione del motore, log e diagnostica, lock della config, aggiornamento automatico delle schede, autostart Linux/macOS corretto. Novità in `docs/RILASCIO.md`.
+- Suite finale verde: `cargo test --workspace`, `lint:rust`, `gen:types` senza differenze, `pnpm lint`, `pnpm test` (types 3, ui 377, desktop 21, vscode 78), `check:tauri`, Playwright 32/32, `test:ext` col finto cswap.
+- Tag `v0.2.0` pubblicato; CI e Release falliti subito per il billing di GitHub Actions (pagamento o limite di spesa): da rilanciare dall'utente.
+- `dist-locale/` rifatta con i file 0.2.0 (setup NSIS per utente, zip portatile, vsix win32-x64; `swapdeck-cli` e `libunwind.dll` del vsix partono col PATH ridotto). Corretto `dist:local`, che copiava il primo .vsix trovato in `apps/vscode/dist` (anche di una versione vecchia).
+- Sul PC dell'utente: chiusa la 0.1.0 portatile in esecuzione da `dist-locale` (motore acceso nella config reale, avvio automatico registrato); config reale portata a `autostart:false` e motore spento (copia `config.json.bak-*` accanto), voce Run tolta; installata la 0.2.0 per utente in `%LOCALAPPDATA%\SwapDeck` e avviata minimizzata (log: avvio automatico spento, motore sospeso perché spento); .vsix 0.2.0 installato con `swapdeck.engine.enabled: false` (copia `settings.json.bak-*`), finestre VS Code da ricaricare a cura dell'utente.
+- Prove reali (macchine pulite, motore con cambi veri, Linux e macOS): `docs/PROVE-REALI.md`.
+- Domande aperte: invariate, più rileggere i testi delle «i» e confermare il motore spento sul PC (nella config reale era acceso, con la 0.1.0 in esecuzione; si riaccende dalla scheda Regole).

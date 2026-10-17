@@ -167,7 +167,7 @@ let vsix;
 if (hasCli) {
   must(pnpm(['--filter', 'swapdeck-vscode', 'package']), '.vsix win32-x64');
   const dist = join(repo, 'apps', 'vscode', 'dist');
-  vsix = readdirSync(dist).find((f) => f.endsWith('.vsix') && f.includes('win32-x64'));
+  vsix = readdirSync(dist).find((f) => f === `swapdeck-vscode-win32-x64-${version}.vsix`);
   must(vsix, '.vsix in apps/vscode/dist');
   copyFileSync(join(dist, vsix), join(out, vsix));
 }
@@ -200,8 +200,8 @@ const lines = [
   "- L'app parte nell'area di notifica (icona ad anello) e apre la finestra principale.",
   "  Il menu dell'icona ha il cambio rapido, il mini-widget ed Esci.",
   '- Il motore delle regole è SPENTO di default: SwapDeck legge soltanto lo stato di cswap',
-  '  (cswap list) e non cambia account da solo. Per accenderlo, in %APPDATA%\\swapdeck\\config.json:',
-  '  "engine": { "enabled": true }   oppure   "engine": { "dryRun": true }  (prova senza cambi).',
+  '  (cswap list) e non cambia account da solo. Si accende dalla scheda Regole: la prima volta',
+  '  chiede conferma (Accendi, Solo osservazione senza cambi, Annulla).',
   "- Con un altro motore attivo (cswap auto o un'attività pianificata) il motore risulta «sospeso» (icona nella",
   '  variante sospesa e avviso sopra la dashboard): è voluto, per non cambiare account in',
   "  concorrenza con l'altro motore.",
@@ -209,6 +209,7 @@ const lines = [
   '  reale e chiedono conferma.',
   '- Gli aggiornamenti automatici sono spenti finché il repo è privato.',
   '- Avvio automatico al login: attivato al primo avvio, si toglie dalla finestra principale.',
+  '- Log: %APPDATA%\\swapdeck\\logs\\swapdeck.log; Strumenti > Diagnostica > «Copia diagnostica».',
   '',
   'PROVA SENZA TOCCARE IL CSWAP REALE',
   '  set SWAPDECK_CSWAP=C:\\prova\\cswap.exe      (finto cswap)',
