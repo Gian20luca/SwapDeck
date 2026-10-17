@@ -3,6 +3,21 @@
 Workflow: `.github/workflows/release.yml`. Produce installer, `swapdeck-cli`, `.vsix` per piattaforma,
 firme dell'updater e `latest.json`, e li mette in una release **in bozza**: la pubblicazione resta manuale.
 
+## Novità 0.2.0 (17/10)
+
+- **Chi consuma**: classifica in sola lettura per progetto, sessione e agente su 5h e 7d dalle sessioni
+  di Claude Code del PC (solo conteggi, mai il contenuto), più la quota stimata di altri dispositivi.
+- **Mappe**: i quattro preset sono sempre presenti e in sola lettura; «Clona come mappa personale»
+  crea una copia modificabile. Le config della v0.1.0 con preset modificati si migrano in mappe personali.
+- **VS Code**: vista completa nella barra laterale, sincronizzata tra le finestre aperte.
+- **Icone «i»** con la spiegazione di ogni impostazione della pagina Regole.
+- **Prima accensione del motore** con conferma (Accendi, Solo osservazione, Annulla).
+- **Log e diagnostica**: log per utente con rotazione e redazione, «Copia diagnostica» in app, VS Code
+  e `swapdeck-cli diagnostics`.
+- **Lock della config**: app, estensione e CLI non si sovrascrivono le modifiche a `config.json`.
+- **Schede aggiornate da sole** quando cambiano lo stato di `cswap` o la config.
+- **Avvio automatico** corretto su Linux e macOS; la voce spenta dal desktop viene rispettata.
+
 ## Prova senza release
 
 Actions → Release → Run workflow sul branch, con `dry_run` attivo e `platforms` scelto (macOS costa
