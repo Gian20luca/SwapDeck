@@ -1,6 +1,7 @@
 import type { Account, Decision, IdleReason, SuspendReason, SwitchCause } from '@swapdeck/types';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useBackend } from '../../backend/context.js';
+import { useNavigate } from '../navigation.js';
 import { useAccounts } from '../../backend/useAccounts.js';
 import { useI18n, type MessageKey, type Translate } from '../../i18n/index.js';
 import { accountName } from '../../lib/account.js';
@@ -72,6 +73,9 @@ export function HistoryPage({ target }: { target?: { account: number; key: numbe
   const { t } = useI18n();
   const { state } = useAccounts();
   const now = useNow();
+  const backend = useBackend();
+  const navigate = useNavigate();
+  const usageLink = navigate !== null && typeof backend.getUsageBreakdown === 'function';
   const [hours, setHours] = useState<number>(168);
   const [openAccounts, setOpenAccounts] = useState<Set<number> | null>(null);
   const accounts: Account[] = state.status === 'ready' ? state.data.accounts : [];
@@ -165,6 +169,20 @@ export function HistoryPage({ target }: { target?: { account: number; key: numbe
                 </div>
                 {isOpen && (
                   <div className="sd-card__history">
+                    {usageLink && (
+                      <div className="sd-row">
+                        <Tooltip text={t('usage.link.tip')}>
+                          <button
+                            type="button"
+                            className="sd-btn sd-btn--small"
+                            aria-label={t('usage.linkLabel', { name })}
+                            onClick={() => navigate?.({ tab: 'usage', account: account.number })}
+                          >
+                            {t('usage.linkFull')}
+                          </button>
+                        </Tooltip>
+                      </div>
+                    )}
                     <HistoryPanel account={account.number} rangeHours={hours} />
                   </div>
                 )}

@@ -91,6 +91,9 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
       {...(navigate
         ? {
             onOpenHistory: (a: Account) => navigate({ tab: 'history', account: a.number }),
+            ...(typeof backend.getUsageBreakdown === 'function'
+              ? { onOpenUsage: (a: Account) => navigate({ tab: 'usage', account: a.number }) }
+              : {}),
           }
         : {})}
       {...(manage ? { extra: <AccountActions account={account} onManage={setDetail} /> } : {})}

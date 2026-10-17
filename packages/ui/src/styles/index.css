@@ -572,6 +572,7 @@ body {
   color: var(--sd-warn);
 }
 .sd-card__actions {
+  flex-wrap: wrap;
   display: flex;
   gap: 6px;
 }
@@ -1044,4 +1045,54 @@ body {
 .sd-bar,
 .sd-mini {
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* Chi consuma (F20) */
+.sd-usage__controls {
+  display: grid;
+  gap: 8px;
+}
+.sd-usage__list .sd-usage__row {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.sd-usage__name {
+  font-weight: 600;
+  color: var(--sd-text);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.sd-usage__sub,
+.sd-usage__foot {
+  font-size: 12px;
+  color: var(--sd-muted);
+  overflow-wrap: anywhere;
+}
+.sd-usage__progress {
+  width: 100%;
+  max-width: 280px;
+}
+.sd-usage__unknown p {
+  margin: 4px 0 0;
+}
+.sd-usage__otherhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.sd-usage__other {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.sd-usage__other p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.sd-usage__privacy {
+  border-top: 1px solid var(--sd-border);
+  padding-top: 8px;
 }

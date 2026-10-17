@@ -273,15 +273,19 @@ export function LoadGate<T>({
   state,
   onRetry,
   loadingText,
+  loading,
   children,
 }: {
   state: Loadable<T>;
   onRetry: () => void;
   loadingText?: string;
+  /** Al posto del semplice «Caricamento…» (per esempio con l'avanzamento). */
+  loading?: ReactNode;
   children: (data: T) => ReactNode;
 }) {
   const { t } = useI18n();
   if (state.status === 'loading') {
+    if (loading) return <>{loading}</>;
     return (
       <div className="sd-state" role="status">
         {loadingText ?? t('common.loading')}

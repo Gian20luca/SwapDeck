@@ -1,8 +1,8 @@
 import { createContext, useContext } from 'react';
 
-export type TabId = 'accounts' | 'folders' | 'rules' | 'history' | 'tools' | 'settings';
+export type TabId = 'accounts' | 'folders' | 'rules' | 'history' | 'usage' | 'tools' | 'settings';
 
-/** Destinazione di una navigazione tra le schede; `account` (numero di cswap) vale per `history`. */
+/** Destinazione di una navigazione tra le schede; `account` (numero di cswap) vale per `history` e `usage`. */
 export interface NavTarget {
   tab: TabId;
   account?: number;

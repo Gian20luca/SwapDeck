@@ -2,11 +2,13 @@ import { enFlow } from './en.flow.js';
 import { enNotify } from './en.notify.js';
 import { enTips } from './en.tips.js';
 import { enManage } from './en.manage.js';
+import { enUsage } from './en.usage.js';
 import type { MessageKey } from './it.js';
 
 /** English dictionary: must cover every key of the Italian one. */
 export const en: Record<MessageKey, string> = {
   ...enManage,
+  ...enUsage,
   ...enFlow,
   ...enNotify,
   ...enTips,

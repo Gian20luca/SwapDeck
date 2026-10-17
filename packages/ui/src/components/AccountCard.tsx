@@ -17,6 +17,8 @@ export interface AccountCardProps {
   onSwitch: (account: Account) => void;
   /** Apre lo storico di questo account (scheda Storico); senza, il pulsante non c'è. */
   onOpenHistory?: (account: Account) => void;
+  /** Apre «Chi consuma» filtrata su questo account; senza, il pulsante non c'è. */
+  onOpenUsage?: (account: Account) => void;
   /** Azioni di gestione (alias, slot, rimozione, ...), sotto i pulsanti della scheda. */
   extra?: ReactNode;
   /** Trattini alle soglie del motore: solo sulle barre dell'account attivo. */
@@ -30,6 +32,7 @@ export function AccountCard({
   busy = false,
   onSwitch,
   onOpenHistory,
+  onOpenUsage,
   extra,
   engine,
 }: AccountCardProps) {
@@ -143,6 +146,18 @@ export function AccountCard({
           {ageText}
         </span>
         <span className="sd-card__actions">
+          {onOpenUsage && (
+            <Tooltip text={t('usage.link.tip')}>
+              <button
+                type="button"
+                className="sd-btn sd-btn--small"
+                aria-label={t('usage.linkLabel', { name })}
+                onClick={() => onOpenUsage(account)}
+              >
+                {t('usage.link')}
+              </button>
+            </Tooltip>
+          )}
           {onOpenHistory && usage && (
             <Tooltip text={t('account.history.tip')}>
               <button
