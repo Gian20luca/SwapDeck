@@ -11,6 +11,7 @@
     "./fake": "./src/dev/index.ts",
     "./format": "./src/lib/format.ts",
     "./account": "./src/lib/account.ts",
+    "./engineRules": "./src/lib/engineRules.ts",
     "./styles.css": "./src/styles/index.css"
   },
   "scripts": {
