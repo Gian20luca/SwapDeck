@@ -87,7 +87,7 @@ const tests: Array<[string, (api: SwapDeckApi) => Promise<void>]> = [
         rules: Record<string, unknown>;
       };
       execFileSync(cli, ['engine', 'rules', 'set', '-'], {
-        input: JSON.stringify({ ...state.rules, order: [6, 3] }),
+        input: JSON.stringify({ ...state.rules, order: [6, 3], primary: 6, reserves: [3] }),
       });
       await vscode.commands.executeCommand('swapdeck.startEngine');
       await waitFor('motore attivo', () => api.engineRunning());
