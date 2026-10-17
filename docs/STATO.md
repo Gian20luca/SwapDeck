@@ -41,4 +41,4 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 - **GitHub Actions fermo per limite di spesa o pagamento non riuscito** dell'account: CI di 82f4ec1 (solo README) da rilanciare.
 - Scheda Regole e VS Code: a motore spento compare un riquadro rosso «Motore sospeso. Il motore è spento.» (da decidere lo stile).
 - Da provare su macchine reali: installer NSIS su Windows pulito, AppImage/.deb, .dmg, vsix Linux/macOS, updater dopo repo pubblico.
-- «Accendi» del motore non chiede conferma (non era tra le azioni delicate): valutare una conferma alla prima accensione.
+- «Accendi» del motore (17/10, deciso): conferma solo alla prima accensione, con Accendi / Solo osservazione / Annulla; poi parte subito. Da fare dopo le mappe, insieme alle «i» della pagina Regole.
