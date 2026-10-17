@@ -91,6 +91,7 @@ impl PresetKind {
         let mut r = EngineRules {
             enabled: base.enabled,
             dry_run: base.dry_run,
+            first_enable_confirmed: base.first_enable_confirmed,
             ignored_conflicts: base.ignored_conflicts.clone(),
             order: Some(
                 base.configured_order()
@@ -198,6 +199,7 @@ pub enum ProfileCommand {
 fn carry_globals(rules: &mut EngineRules, from: &EngineRules) {
     rules.enabled = from.enabled;
     rules.dry_run = from.dry_run;
+    rules.first_enable_confirmed = from.first_enable_confirmed;
     rules.ignored_conflicts.clone_from(&from.ignored_conflicts);
 }
 

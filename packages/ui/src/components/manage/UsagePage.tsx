@@ -14,6 +14,7 @@ import { useI18n, type MessageKey, type Translate } from '../../i18n/index.js';
 import { accountName } from '../../lib/account.js';
 import { formatPct, formatTokens, rowLabel } from '../../lib/usageView.js';
 import { useLoad } from '../../lib/useLoad.js';
+import { InfoTip, WithInfo } from '../InfoTip.js';
 import { Tooltip } from '../Tooltip.js';
 import { LoadGate, Section, SelectField } from './common.js';
 
@@ -115,7 +116,9 @@ export function UsagePage({ target }: { target?: { account: number; key: number 
 
   return (
     <div className="sd-page sd-usage">
-      <h2>{t('usage.title')}</h2>
+      <WithInfo info={t('info.usage.what')} name={t('usage.title')}>
+        <h2>{t('usage.title')}</h2>
+      </WithInfo>
       {supported && (
         <div className="sd-usage__controls">
           <SelectField
@@ -157,7 +160,8 @@ export function UsagePage({ target }: { target?: { account: number; key: number 
       )}
 
       <p className="sd-hint sd-usage__privacy" role="note">
-        {t('usage.privacy')}
+        {t('usage.privacy')}{' '}
+        <InfoTip name={t('usage.privacy.label')} text={t('info.usage.privacy')} />
       </p>
     </div>
   );
@@ -233,7 +237,10 @@ function FirstScan({ progress }: { progress: ScanProgress | null }) {
               <p>{t('usage.firstScan.progress', { pct: formatPct(Math.floor(pct), locale) })}</p>
             </>
           )}
-          <p className="sd-hint">{t('usage.firstScan.hint')}</p>
+          <p className="sd-hint">
+            {t('usage.firstScan.hint')}{' '}
+            <InfoTip name={t('usage.firstScan.label')} text={t('info.usage.firstScan')} />
+          </p>
         </>
       )}
     </div>
@@ -397,7 +404,7 @@ function OtherDevices({
   const estimates = data.otherDevices.filter((e) => e.window === data.window);
   if (estimates.length === 0) return null;
   return (
-    <Section title={t('usage.other.title')}>
+    <Section title={t('usage.other.title')} info={t('info.usage.other')}>
       <ul className="sd-list" aria-label={t('usage.other.title')}>
         {estimates.map((e) => (
           <li key={`${e.account}:${e.window}`} className="sd-card sd-usage__other">

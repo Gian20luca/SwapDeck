@@ -54,7 +54,13 @@ export function seedProfiles(rules: EngineRules): EngineProfiles {
 
 /** Parti comuni a tutte le mappe: non contano per la sola lettura dei preset. */
 function settings(rules: EngineRules): string {
-  const { enabled: _e, dryRun: _d, ignoredConflicts: _i, ...rest } = rules;
+  const {
+    enabled: _e,
+    dryRun: _d,
+    firstEnableConfirmed: _f,
+    ignoredConflicts: _i,
+    ...rest
+  } = rules;
   // Una sola forma della lista: esclusi fuori da `order` e in ordine di numero.
   const order = configuredOrder(rules).filter((n) => !rules.excluded.includes(n));
   const excluded = [...new Set(rules.excluded)].sort((a, b) => a - b);

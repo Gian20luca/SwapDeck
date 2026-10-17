@@ -77,8 +77,6 @@ export const enInfo: Record<keyof typeof itInfo, string> = {
     'How many consecutive check rounds an account must fail before it is put in quarantine, that is left out of the choice. It avoids dropping an account for a passing error.',
   'info.config.model':
     'Which per-model limits (for example Fable) count in the choice. Names separated by commas, or “all” for every one; if empty, no model counts.',
-  'info.config.theme':
-    'The theme of cswap’s terminal interface. It does not change how SwapDeck looks.',
 
   'info.notif.engine':
     'Alerts about the engine: when it is about to switch account, when it did, and when it has nowhere left to go.',
@@ -108,4 +106,35 @@ export const enInfo: Record<keyof typeof itInfo, string> = {
     'If usage stops updating, the bars show old numbers and the engine decides without fresh data.',
   'info.notif.quietCritical':
     'Critical alerts (no reserve, login to redo) need an action: to avoid missing them, let them through at night too.',
+  'info.rules.state':
+    'On: the engine switches account by itself, for every session. Observe only: it decides and logs it, but never switches. Off: it evaluates nothing. Suspended: it stopped by itself (another engine, invalid rules) and resumes when the problem is gone.',
+  'info.rules.next':
+    'The account the engine would move to if the active one reached the threshold right now, with the reason. Handy to test the rules without waiting.',
+  'info.maps.map':
+    'A map is a named bundle: account list, thresholds and criterion. You pick it; the engine never changes it by itself. On, observe only and ignored conflicts apply to every map.',
+  'info.maps.preset':
+    'Presets are always there and cannot be changed. «Clone as a personal map» makes a named copy you can edit, rename and delete. A preset uses the list of the map you pick it from.',
+  'info.maps.box':
+    'The rules of the active map: who to use (list), when to switch (thresholds) and where to go (criterion). They apply from the round after saving.',
+  'info.rules.list':
+    'Who the engine may use, and in what order. The first one is the primary: the engine starts there and, with «Return to the primary», goes back after its reset. Excluded accounts are never picked.',
+  'info.rules.thresholds':
+    'When to switch: past the 5-hour or 7-day threshold the active account gives way. After the reset it returns to the primary only if it is below the threshold by at least the hysteresis; the minimum pause avoids bursts of switches.',
+  'info.rules.criterion':
+    'Which reserve below the thresholds to move to. Lowest weekly; Best: most headroom; Fixed order: first in the list; Soonest reset; Pace-safe: lasts until the reset; Freest 5 hours; Balanced: weights; Even spread; Model headroom.',
+  'info.rules.weights':
+    'How much each part counts in the balanced score: 5-hour and 7-day headroom, closeness of the weekly reset, pace. Only the proportions matter; a factor without data is dropped.',
+  'info.rules.model':
+    'The weekly limit of a single model, for example Fable: the engine picks the reserve with the most headroom on that limit and, on a tie, the lowest weekly usage.',
+  'info.rules.conflicts':
+    'Another automation that switches account through cswap (for example cswap auto) can contradict this engine: if it is certain, SwapDeck pauses while it is there. «Ignore» lets it go on anyway.',
+
+  'info.usage.what':
+    'Claude Code usage on this PC, read from the saved sessions: by project, session, agent or model, credited to the account active at that time. It is measured in equivalent tokens, weighted like the API prices.',
+  'info.usage.other':
+    'How much the other devices (other PCs, web) use on the same account: the share read from the server minus the part explained by this PC’s tokens. Confidence grows with the number and consistency of the readings; at least 3 intervals are needed.',
+  'info.usage.privacy':
+    'Everything stays on this PC, in a local index with times, models and token counts. Message text is never read, folder paths never go to the logs and the app shows only the last folder name.',
+  'info.usage.firstScan':
+    'The first time SwapDeck reads the sessions of the last 30 days and builds an index; after that it reads only the new lines. If you switch tab, reading resumes where it stopped.',
 };

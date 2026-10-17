@@ -100,6 +100,10 @@ export const itManage = {
   'rules.off': 'Motore spento: nessun cambio automatico',
   'rules.turnOn': 'Accendi',
   'rules.turnedOn': 'Motore acceso.',
+  'rules.observeOn': 'Motore acceso in sola osservazione.',
+  'rules.firstOn.title': 'Accendere il motore?',
+  'rules.firstOn.message':
+    'Il motore cambierà account da solo, per tutte le sessioni aperte. Vuoi prima provarlo in Solo osservazione?',
   'rules.dryRunOn': 'In sola osservazione: registra le decisioni senza cambiare utenza',
   'rules.observer': 'attivo in un’altra istanza: qui solo osservazione',
   'rules.suspend.disabled': 'Il motore è spento.',

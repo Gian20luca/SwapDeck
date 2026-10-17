@@ -12,8 +12,8 @@ export interface ConfigKeyInfo {
   label: MessageKey;
   /** Spiegazione mostrata sotto il campo. */
   hint?: MessageKey;
-  /** Spiegazione della chiave (la «i»). */
-  info: MessageKey;
+  /** Spiegazione della chiave (la «i»); assente se basta quella visibile sotto il campo (`hint`). */
+  info?: MessageKey;
   /** Valore di default di cswap, come testo. */
   default: string;
 }
@@ -71,7 +71,6 @@ export const CONFIG_KEYS: Record<string, ConfigKeyInfo> = {
     kind: { type: 'choice', choices: ['dark', 'light', 'auto'] },
     label: 'config.key.theme',
     hint: 'config.key.theme.hint',
-    info: 'info.config.theme',
     default: 'auto',
   },
 };

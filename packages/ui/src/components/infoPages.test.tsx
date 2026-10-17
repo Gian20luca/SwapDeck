@@ -10,8 +10,10 @@ import { Dashboard } from './Dashboard.js';
 import { FoldersPage } from './manage/FoldersPage.js';
 import { HistoryPage } from './manage/HistoryPage.js';
 import { NotificationsPage } from './manage/NotificationsPage.js';
+import { RulesPage } from './manage/RulesPage.js';
 import { SettingsPage } from './manage/SettingsPage.js';
 import { ToolsPage } from './manage/ToolsPage.js';
+import { UsagePage } from './manage/UsagePage.js';
 
 vi.mock('uplot', () => ({
   default: class {
@@ -32,10 +34,14 @@ describe('testi delle «i»', () => {
       if (key !== 'info.label') expect(itDict[key].length, key).toBeLessThan(320);
     }
   });
-  it('ogni chiave di configurazione di cswap ha la sua spiegazione', () => {
+  it('ogni chiave di configurazione di cswap ha la sua spiegazione, una sola', () => {
     for (const [name, info] of Object.entries(CONFIG_KEYS)) {
-      expect(itDict[info.info], name).toBeTruthy();
+      const key = info.info ?? info.hint;
+      expect(key && itDict[key], name).toBeTruthy();
     }
+    // Il tema ha la spiegazione visibile sotto il campo: niente «i» con lo stesso testo.
+    expect(CONFIG_KEYS['ui.theme']?.info).toBeUndefined();
+    expect(CONFIG_KEYS['ui.theme']?.hint).toBe('config.key.theme.hint');
   });
 });
 
@@ -104,6 +110,57 @@ describe('«i» nelle pagine', () => {
     await screen.findByText('Esporta');
     const names = infoButtons().map((b) => b.getAttribute('aria-label'));
     for (const name of ['Esporta', 'Importa', 'Credenziali parcheggiate'])
+      expect(names, name).toContain(`Informazioni su ${name}`);
+  });
+
+  it('Regole: stato, mappa, riquadro, lista, soglie, criterio, pesi, adesso andrebbe a, altri motori', async () => {
+    const backend = new FakeBackend({
+      rules: { enabled: true, primary: 6, reserves: [1, 3], reserveCriterion: 'balanced-score' },
+      conflicts: [{ id: 'process:tui', kind: 'process', label: 'cswap tui', certain: false }],
+    });
+    renderWith(<RulesPage />, backend);
+    await screen.findByTestId('flow-next');
+    const names = infoButtons().map((b) => b.getAttribute('aria-label'));
+    for (const name of [
+      'Stato del motore',
+      'Mappa attiva',
+      'Regole della mappa «Personale»',
+      'Lista delle utenze',
+      'Soglie e criteri',
+      'Criterio di scelta della riserva',
+      'Pesi del punteggio',
+      'Adesso andrebbe a',
+      'Altri motori rilevati',
+    ])
+      expect(names, name).toContain(`Informazioni su ${name}`);
+    // Il gruppo dei pesi ha il nome pulito, senza il testo della «i».
+    expect(screen.getByRole('group', { name: 'Pesi del punteggio' })).toBeInTheDocument();
+    // Niente «i» sui pulsanti: hanno il tooltip.
+    for (const b of infoButtons()) expect(b.closest('.sd-btn')).toBeNull();
+  });
+
+  it('Regole: preset in sola lettura e modello', async () => {
+    const backend = new FakeBackend({
+      rules: {
+        primary: 6,
+        reserves: [1, 3],
+        reserveCriterion: 'model-headroom',
+        headroomModel: 'Fable',
+      },
+    });
+    renderWith(<RulesPage />, backend);
+    await screen.findByLabelText('Modello');
+    expect(screen.getByRole('button', { name: 'Informazioni su Modello' })).toBeInTheDocument();
+    await userEvent.setup().selectOptions(screen.getByLabelText('Mappa attiva'), 'sport');
+    await screen.findByTestId('map-readonly');
+    expect(screen.getByRole('button', { name: 'Informazioni su preset' })).toBeInTheDocument();
+  });
+
+  it('Chi consuma: cosa misura, altri dispositivi, privacy', async () => {
+    renderWith(<UsagePage />, new FakeBackend());
+    await screen.findByRole('list', { name: 'Classifica dei consumi' });
+    const names = infoButtons().map((b) => b.getAttribute('aria-label'));
+    for (const name of ['Chi consuma', 'Altri dispositivi (stima)', 'Privacy'])
       expect(names, name).toContain(`Informazioni su ${name}`);
   });
 });

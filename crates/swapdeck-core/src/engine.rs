@@ -86,6 +86,9 @@ pub struct EngineRules {
     pub enabled: bool,
     /// Solo osservazione: decide e registra, ma non cambia account.
     pub dry_run: bool,
+    /// Prima accensione già confermata nel dialogo «Accendi» (app e tutte le finestre di VS Code):
+    /// dopo, l'accensione parte subito. Non torna mai falso (vedi [`Self::enable_confirmed`]).
+    pub first_enable_confirmed: bool,
     /// Utenze in ordine di priorità (numeri di cswap): la prima è la principale. Con la sola
     /// principale le altre sono tutte quelle di cswap, in ordine di numero. Le utenze che non
     /// esistono in cswap si saltano. Quando c'è prevale su `primary` e `reserves`.
@@ -129,6 +132,7 @@ impl Default for EngineRules {
         Self {
             enabled: false,
             dry_run: false,
+            first_enable_confirmed: false,
             order: None,
             primary: None,
             reserves: Vec::new(),
@@ -173,6 +177,12 @@ impl Serialize for EngineRules {
 }
 
 impl EngineRules {
+    /// L'accensione non chiede più conferma: confermata una volta, oppure motore già acceso o in
+    /// osservazione (anche da una config precedente al dialogo).
+    pub fn enable_confirmed(&self) -> bool {
+        self.first_enable_confirmed || self.enabled || self.dry_run
+    }
+
     /// Lista configurata: `order` se c'è, altrimenti `primary` più `reserves`.
     pub fn configured_order(&self) -> Vec<u32> {
         match (&self.order, self.primary) {

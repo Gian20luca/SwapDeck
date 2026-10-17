@@ -491,3 +491,51 @@ fn suspension_and_view() {
     assert_eq!(json["suspended"], "conflict");
     assert_eq!(EngineView::new(true, &rules, None).suspended, None);
 }
+
+/// Conferma della prima accensione: una config senza il campo non è confermata, una con il
+/// motore acceso sì; una volta vera resta vera (spegnendo, con un client che non la conosce,
+/// cambiando mappa).
+#[test]
+fn first_enable_confirmation_is_sticky() {
+    use crate::config::AppConfig;
+    let fresh: EngineRules = serde_json::from_str(r#"{"order":[1,2]}"#).unwrap();
+    assert!(!fresh.first_enable_confirmed && !fresh.enable_confirmed());
+    let old_on: EngineRules = serde_json::from_str(r#"{"enabled":true,"order":[1,2]}"#).unwrap();
+    assert!(!old_on.first_enable_confirmed && old_on.enable_confirmed());
+    let observe: EngineRules = serde_json::from_str(r#"{"dryRun":true}"#).unwrap();
+    assert!(observe.enable_confirmed());
+
+    let mut c = AppConfig::default();
+    assert!(!c.engine.enable_confirmed());
+    c.set_engine_rules(fresh.clone()).unwrap();
+    assert!(
+        !c.engine.first_enable_confirmed,
+        "salvare da spento non conferma"
+    );
+    c.set_engine_rules(old_on.clone()).unwrap();
+    c.set_engine_rules(EngineRules {
+        enabled: false,
+        ..old_on.clone()
+    })
+    .unwrap();
+    assert!(
+        c.engine.first_enable_confirmed && !c.engine.enabled,
+        "resta dopo lo spegnimento"
+    );
+    let mut without = serde_json::to_value(&c.engine).unwrap();
+    without
+        .as_object_mut()
+        .unwrap()
+        .remove("firstEnableConfirmed");
+    c.set_engine_rules(serde_json::from_value(without).unwrap())
+        .unwrap();
+    assert!(
+        c.engine.first_enable_confirmed,
+        "un client che non conosce il campo non lo azzera"
+    );
+    c.apply_profile_command(&ProfileCommand::Select { id: "eco".into() })
+        .unwrap();
+    assert!(c.engine.first_enable_confirmed, "vale per tutte le mappe");
+    let json = serde_json::to_string(&c.engine).unwrap();
+    assert!(json.contains(r#""firstEnableConfirmed":true"#));
+}

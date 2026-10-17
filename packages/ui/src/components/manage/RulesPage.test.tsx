@@ -389,11 +389,27 @@ describe('RulesPage: stato sospeso e conflitti', () => {
     expect(within(row).getByRole('button', { name: 'Accendi' })).toBeEnabled();
   });
 
-  it('«Accendi» salva le regole con il motore acceso', async () => {
+  it('«Accendi» la prima volta chiede conferma, poi salva le regole con il motore acceso', async () => {
     const { save, user } = await setup({ rules: { enabled: false, primary: 6, reserves: [1, 3] } });
     await user.click(screen.getByRole('button', { name: 'Accendi' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Accendere il motore?' });
+    expect(dialog).toHaveTextContent(
+      'Il motore cambierà account da solo, per tutte le sessioni aperte. Vuoi prima provarlo in Solo osservazione?',
+    );
+    expect(
+      within(dialog)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Annulla', 'Solo osservazione', 'Accendi']);
+    expect(save).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Accendi' }));
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(save.mock.calls[0]![0].enabled).toBe(true);
+    expect(save.mock.calls[0]![0]).toMatchObject({
+      enabled: true,
+      dryRun: false,
+      firstEnableConfirmed: true,
+    });
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     await waitFor(() =>
       expect(screen.getByRole('status', { name: 'Stato del motore' })).toHaveTextContent(
         'Motore acceso',
@@ -402,6 +418,61 @@ describe('RulesPage: stato sospeso e conflitti', () => {
     expect(screen.queryByRole('button', { name: 'Accendi' })).toBeNull();
     expect(screen.getByLabelText('Motore acceso')).toBeChecked();
     expect(screen.getByText('Motore acceso.', { exact: true })).toBeInTheDocument();
+  });
+
+  it('prima accensione: «Annulla» non salva nulla', async () => {
+    const { save, user } = await setup({ rules: { primary: 6, reserves: [1, 3] } });
+    await user.click(screen.getByRole('button', { name: 'Accendi' }));
+    await user.click(screen.getByRole('button', { name: 'Annulla' }));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Accendi' })).toBeEnabled();
+  });
+
+  it('prima accensione: «Solo osservazione» accende in osservazione e non chiede più', async () => {
+    const { backend, save, user } = await setup({ rules: { primary: 6, reserves: [1, 3] } });
+    await user.click(screen.getByRole('button', { name: 'Accendi' }));
+    const dialog = screen.getByRole('alertdialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Solo osservazione' }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0]![0]).toMatchObject({
+      enabled: true,
+      dryRun: true,
+      firstEnableConfirmed: true,
+    });
+    expect(await screen.findByText('Motore acceso in sola osservazione.')).toBeInTheDocument();
+    expect(screen.getByTestId('engine-observe')).toBeInTheDocument();
+    // Spento e riacceso: la conferma resta (anche se chi salva non la manda).
+    const rules = (await backend.getEngineState()).rules;
+    await backend.setEngineRules({
+      ...rules,
+      enabled: false,
+      dryRun: false,
+      firstEnableConfirmed: false,
+    });
+    expect((await backend.getEngineState()).rules.firstEnableConfirmed).toBe(true);
+  });
+
+  it('dopo la prima conferma «Accendi» parte subito', async () => {
+    const { save, user } = await setup({
+      rules: { primary: 6, reserves: [1, 3], firstEnableConfirmed: true },
+    });
+    await user.click(screen.getByRole('button', { name: 'Accendi' }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(save.mock.calls[0]![0].enabled).toBe(true);
+  });
+
+  it('prima accensione dall’interruttore «Motore acceso» e «Salva»: stessa conferma', async () => {
+    const { save, user } = await setup({ rules: { primary: 6, reserves: [1, 3] } });
+    await user.click(screen.getByLabelText('Motore acceso'));
+    await user.click(screen.getByRole('button', { name: 'Salva' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Accendere il motore?' });
+    expect(save).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Accendi' }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0]![0]).toMatchObject({ enabled: true, firstEnableConfirmed: true });
+    expect(await screen.findByText('Regole salvate.')).toBeInTheDocument();
   });
 
   it('acceso: nessuna riga di osservazione né rossa', async () => {

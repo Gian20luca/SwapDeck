@@ -324,7 +324,7 @@ function ConfigRow({
 }) {
   const { t } = useI18n();
   const keyInfo = CONFIG_KEYS[setting.key];
-  const info = keyInfo ? t(keyInfo.info) : undefined;
+  const info = keyInfo?.info ? t(keyInfo.info) : undefined;
   const initial = configValueText(setting.value);
   const [text, setText] = useState(initial);
   const error = validateConfigValue(setting.key, text);

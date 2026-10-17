@@ -2,6 +2,7 @@ import type { EngineProfiles, ProfileCommand, RulesProfile } from '@swapdeck/typ
 import { useId, useState } from 'react';
 import { useI18n, type MessageKey } from '../../i18n/index.js';
 import { ConfirmDialog } from '../ConfirmDialog.js';
+import { WithInfo } from '../InfoTip.js';
 import { Tooltip } from '../Tooltip.js';
 
 export interface MapSelectorProps {
@@ -213,7 +214,9 @@ export function MapSelector({ profiles, busy, dirty, onCommand }: MapSelectorPro
   return (
     <section className="sd-section sd-maps">
       <div className="sd-form__field">
-        <label htmlFor={selectId}>{t('maps.title')}</label>
+        <WithInfo info={t('info.maps.map')} name={t('maps.title')}>
+          <label htmlFor={selectId}>{t('maps.title')}</label>
+        </WithInfo>
         <Tooltip text={t('maps.select.tip')} block>
           <select
             id={selectId}

@@ -81,6 +81,7 @@ export const itFlow = {
   'flow.removeMissing': 'Togli dalla lista',
   'flow.removeMissing.tip': 'Toglie dalla lista le utenze che non esistono più in cswap.',
   'flow.next': 'Adesso andrebbe a: {name}',
+  'flow.next.label': 'Adesso andrebbe a',
   'flow.next.fallback': 'nessuna riserva libera, ripiego',
   'flow.next.none': 'Adesso non ci sono utenze libere a cui passare.',
   'flow.criterion.hint.lowest-weekly': 'Sceglie l’utenza con il consumo settimanale più basso.',

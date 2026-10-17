@@ -269,6 +269,8 @@ impl AppConfig {
     pub fn set_engine_rules(&mut self, rules: EngineRules) -> Result<(), ConfigError> {
         let mut rules = rules;
         rules.sync_order();
+        // La conferma della prima accensione resta anche se chi scrive non la conosce.
+        rules.first_enable_confirmed |= self.engine.enable_confirmed();
         let mut profiles = self.engine_profiles.clone();
         profiles.normalize(&self.engine);
         profiles

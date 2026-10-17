@@ -184,6 +184,9 @@ describe('UsagePage', () => {
     const progress = screen.getByRole('progressbar');
     expect(Number(progress.getAttribute('value'))).toBeCloseTo(33.33, 1);
     expect(progress).toHaveAttribute('max', '100');
+    expect(
+      screen.getByRole('button', { name: 'Informazioni su Prima analisi' }),
+    ).toBeInTheDocument();
     await next(2);
     expect(await screen.findByText('Letto il 66% delle sessioni')).toBeInTheDocument();
     await next(3);

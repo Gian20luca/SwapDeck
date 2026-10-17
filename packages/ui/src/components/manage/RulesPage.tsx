@@ -15,6 +15,7 @@ import { useI18n, type MessageKey } from '../../i18n/index.js';
 import {
   CRITERIA,
   configuredOrder,
+  enableConfirmed,
   flowRows,
   fromDraft,
   materialize,
@@ -28,6 +29,8 @@ import {
 } from '../../lib/engineRules.js';
 import { shortEmail } from '../../lib/format.js';
 import { useLoad } from '../../lib/useLoad.js';
+import { ConfirmDialog } from '../ConfirmDialog.js';
+import { InfoTip, WithInfo } from '../InfoTip.js';
 import { Tooltip } from '../Tooltip.js';
 import { FlowList } from './FlowList.js';
 import { MapNameForm, MapSelector, profileLabel } from './MapSelector.js';
@@ -134,7 +137,10 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(initialNotice);
   const [cloning, setCloning] = useState(false);
+  /** Prima accensione da confermare: da «Accendi» o dal salvataggio con «Motore acceso». */
+  const [firstOn, setFirstOn] = useState<'turnOn' | 'save' | null>(null);
   const boxId = useId();
+  const weightsId = useId();
   const activeProfile = data.profiles?.profiles.find((p) => p.id === data.profiles?.activeId);
   /** Preset attivo: lista, criterio e soglie in sola lettura. */
   const locked = Boolean(activeProfile?.preset);
@@ -285,15 +291,48 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
     );
   }
 
-  /** Accende il motore con le regole salvate (stesso comando del salvataggio); della bozza cambia solo l'interruttore. */
-  async function turnOn() {
+  /**
+   * Accende il motore con le regole salvate (stesso comando del salvataggio); della bozza cambiano
+   * solo gli interruttori. La prima volta chiede conferma (`firstOn`); `observe` accende in sola
+   * osservazione.
+   */
+  async function turnOn(confirmed = false, observe = false) {
     if (noList) {
       setNotice({ tone: 'danger', text: t('maps.noList') });
       return;
     }
-    await persist({ ...rulesNow, enabled: true }, t('rules.turnedOn'), true);
-    setBase((b) => ({ ...b, enabled: true }));
-    patch({ enabled: true });
+    if (!confirmed && !enableConfirmed(rulesNow)) {
+      setFirstOn('turnOn');
+      return;
+    }
+    const dryRun = observe || rulesNow.dryRun;
+    await persist(
+      { ...rulesNow, enabled: true, dryRun, firstEnableConfirmed: true },
+      t(dryRun ? 'rules.observeOn' : 'rules.turnedOn'),
+      true,
+    );
+    setBase((b) => ({ ...b, enabled: true, dryRun }));
+    patch({ enabled: true, dryRun });
+  }
+
+  /** Salva la bozza; se accende il motore per la prima volta (e non in osservazione) chiede conferma. */
+  async function save(confirmed = false, observe = false) {
+    if (!confirmed && rules.enabled && !rules.dryRun && !enableConfirmed(rulesNow)) {
+      setFirstOn('save');
+      return;
+    }
+    const next = confirmed
+      ? { ...rules, dryRun: rules.dryRun || observe, firstEnableConfirmed: true }
+      : rules;
+    await persist(next, t('rules.saved'));
+  }
+
+  /** Risposta al dialogo della prima accensione: «Accendi» o «Solo osservazione». */
+  async function answerFirstOn(observe: boolean) {
+    const from = firstOn;
+    if (from === 'turnOn') await turnOn(true, observe);
+    else if (from === 'save') await save(true, observe);
+    setFirstOn(null);
   }
 
   const view = data.engine.view;
@@ -302,6 +341,7 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
   const ignored = rulesNow.ignoredConflicts.map((c) => c.toLowerCase());
   const conflictById = new Map(data.engine.conflicts.map((c) => [c.id.toLowerCase(), c]));
   const candidate = view?.candidate;
+  const stateInfo = <InfoTip name={t('rules.status')} text={t('info.rules.state')} />;
 
   return (
     <div className="sd-page">
@@ -317,7 +357,7 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
               role="alert"
               aria-label={t('rules.status')}
             >
-              <strong>{t('rules.suspended')}</strong> {t(SUSPEND_KEYS[suspended])}
+              <strong>{t('rules.suspended')}</strong> {t(SUSPEND_KEYS[suspended])} {stateInfo}
               {suspended === 'invalidRules' && view.detail.length > 0 && (
                 <ul>
                   {view.detail.map((d) => (
@@ -340,7 +380,9 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
               role="status"
               aria-label={t('rules.status')}
             >
-              <span>{t('rules.off')}</span>
+              <WithInfo info={t('info.rules.state')} name={t('rules.status')}>
+                <span>{t('rules.off')}</span>
+              </WithInfo>
               <Tooltip text={t('rules.turnOn.tip')}>
                 <button
                   type="button"
@@ -356,7 +398,7 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
             <>
               <div className="sd-notice" role="status" aria-label={t('rules.status')}>
                 {t('rules.active')}
-                {!view.holder && ` · ${t('rules.observer')}`}
+                {!view.holder && ` · ${t('rules.observer')}`} {stateInfo}
               </div>
               {view.dryRun && (
                 <div className="sd-notice" data-testid="engine-observe" role="status">
@@ -373,7 +415,7 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
           <strong>{t('flow.next', { name: nameOf(candidate.number) })}</strong>
           {' — '}
           {candidate.fallback ? `${t('flow.next.fallback')}: ` : ''}
-          {candidate.why}
+          {candidate.why} <InfoTip name={t('flow.next.label')} text={t('info.rules.next')} />
         </p>
       )}
 
@@ -390,7 +432,7 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
         className="sd-form"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!hasErrors && dirty) void persist(rules, t('rules.saved'));
+          if (!hasErrors && dirty) void save();
         }}
       >
         <section
@@ -399,11 +441,18 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
           {...(activeProfile ? { 'aria-labelledby': boxId } : {})}
         >
           {activeProfile && (
-            <h3 id={boxId}>{t('maps.box.title', { name: profileLabel(activeProfile, t) })}</h3>
+            <WithInfo
+              info={t('info.maps.box')}
+              name={t('maps.box.title', { name: profileLabel(activeProfile, t) })}
+            >
+              <h3 id={boxId}>{t('maps.box.title', { name: profileLabel(activeProfile, t) })}</h3>
+            </WithInfo>
           )}
           {locked && (
             <div className="sd-notice sd-mapbox__locked" data-testid="map-readonly">
-              <span>{t(noList ? 'maps.noList' : 'maps.readOnly')}</span>
+              <WithInfo info={t('info.maps.preset')} name={t('maps.preset')}>
+                <span>{t(noList ? 'maps.noList' : 'maps.readOnly')}</span>
+              </WithInfo>
               <Tooltip text={t('maps.clone.tip')}>
                 <button
                   type="button"
@@ -424,7 +473,12 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
               onSubmit={(name) => profileCommand({ op: 'clone', id: activeProfile.id, name })}
             />
           )}
-          <Section title={t('flow.title')} hint={t('flow.hint')} level={4}>
+          <Section
+            title={t('flow.title')}
+            hint={t('flow.hint')}
+            info={t('info.rules.list')}
+            level={4}
+          >
             {missing.length > 0 && (
               <div className="sd-notice" data-tone="warn" role="status">
                 {t('flow.missingWarn', { list: missing.map((n) => `#${n}`).join(', ') })}{' '}
@@ -468,10 +522,11 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
             )}
           </Section>
 
-          <Section title={t('rules.thresholds')} level={4}>
+          <Section title={t('rules.thresholds')} info={t('info.rules.thresholds')} level={4}>
             <SelectField
               label={t('rules.criterion')}
               tip={t('flow.criterion.tip')}
+              info={t('info.rules.criterion')}
               hint={t(`flow.criterion.hint.${draft.reserveCriterion}`)}
               value={draft.reserveCriterion}
               onChange={(value) => patch({ reserveCriterion: value as ReserveCriterion })}
@@ -479,8 +534,12 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
               options={CRITERIA.map((c) => ({ value: c, label: t(`rules.criterion.${c}`) }))}
             />
             {draft.reserveCriterion === 'balanced-score' && (
-              <fieldset className="sd-fieldset">
-                <legend>{t('flow.weights')}</legend>
+              <fieldset className="sd-fieldset" aria-labelledby={weightsId}>
+                <legend>
+                  <WithInfo info={t('info.rules.weights')} name={t('flow.weights')}>
+                    <span id={weightsId}>{t('flow.weights')}</span>
+                  </WithInfo>
+                </legend>
                 <span className="sd-hint">{t('flow.weights.hint')}</span>
                 <div className="sd-weights">
                   {WEIGHTS.map((w) => (
@@ -511,6 +570,7 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
                 label={t('flow.model')}
                 hint={t('flow.model.hint')}
                 tip={t('flow.model.tip')}
+                info={t('info.rules.model')}
                 value={draft.headroomModel}
                 onChange={(headroomModel) => patch({ headroomModel })}
                 error={errors.model ? t(errors.model) : null}
@@ -620,7 +680,11 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
       </form>
 
       {data.engine.conflicts.length > 0 && (
-        <Section title={t('rules.conflicts')} hint={t('rules.conflicts.hint')}>
+        <Section
+          title={t('rules.conflicts')}
+          hint={t('rules.conflicts.hint')}
+          info={t('info.rules.conflicts')}
+        >
           <ul className="sd-list" aria-label={t('rules.conflicts')}>
             {data.engine.conflicts.map((c) => {
               const isIgnored = ignored.includes(c.id.toLowerCase());
@@ -657,6 +721,16 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
           </ul>
         </Section>
       )}
+
+      <ConfirmDialog
+        open={firstOn !== null}
+        title={t('rules.firstOn.title')}
+        message={t('rules.firstOn.message')}
+        confirmLabel={t('rules.turnOn')}
+        alt={{ label: t('rules.dryRun'), onSelect: () => answerFirstOn(true) }}
+        onConfirm={() => answerFirstOn(false)}
+        onCancel={() => setFirstOn(null)}
+      />
     </div>
   );
 }

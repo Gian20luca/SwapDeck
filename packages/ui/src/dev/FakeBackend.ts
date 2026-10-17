@@ -40,7 +40,7 @@ import {
   type Unsubscribe,
 } from '../backend/types.js';
 import { CONFIG_KEYS } from '../lib/cswapConfig.js';
-import { validateRules } from '../lib/engineRules.js';
+import { enableConfirmed, validateRules } from '../lib/engineRules.js';
 import configList from '../../../../fixtures/cswap/config-list.json';
 import { loadScenario, type ScenarioName } from './fixtures.js';
 import { generateEvents, generateHistory } from './history.js';
@@ -90,6 +90,7 @@ const FAKE_SCAN_TOTAL_BYTES = 2_000_000_000;
 export const DEFAULT_RULES: EngineRules = {
   enabled: false,
   dryRun: false,
+  firstEnableConfirmed: false,
   primary: null,
   reserves: [],
   excluded: [],
@@ -345,7 +346,9 @@ export class FakeBackend implements Backend, SetupBackend {
     }
     const problems = Object.keys(validateRules(rules));
     if (problems.length > 0) fail(`Regole non valide: ${problems.join(', ')}`, 'ConfigError');
-    this.rules = structuredClone(rules);
+    // La conferma della prima accensione non torna falsa (come `set_engine_rules`).
+    const firstEnableConfirmed = Boolean(rules.firstEnableConfirmed) || enableConfirmed(this.rules);
+    this.rules = { ...structuredClone(rules), firstEnableConfirmed };
     return this.engineState();
   }
 
