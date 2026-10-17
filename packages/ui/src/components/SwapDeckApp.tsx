@@ -35,6 +35,8 @@ const TABS: readonly { id: TabId; label: MessageKey }[] = [
 
 export interface SwapDeckAppProps {
   initialTab?: TabId;
+  /** A ogni cambio di scheda (per esempio per ricordarla nello stato del webview di VS Code). */
+  onTabChange?: (tab: TabId) => void;
   /** Contenuto extra nella barra della dashboard (per esempio le preferenze dell'anteprima). */
   toolbarExtra?: ReactNode;
   /** Sopra le schede (per esempio le righe di stato del motore dell'app desktop). */
@@ -91,9 +93,13 @@ function Tabs({
   toolbarExtra,
   header,
   notice,
+  onTabChange,
 }: SwapDeckAppProps & { notice: ReactNode }) {
   const { t } = useI18n();
   const [tab, setTab] = useState<TabId>(initialTab);
+  const tabChanged = useRef(onTabChange);
+  tabChanged.current = onTabChange;
+  useEffect(() => tabChanged.current?.(tab), [tab]);
   /** Account da aprire nella scheda Storico; `key` cambia a ogni richiesta, anche per lo stesso account. */
   const [historyTarget, setHistoryTarget] = useState<{ account: number; key: number } | null>(null);
   const navigate = useCallback((target: NavTarget) => {

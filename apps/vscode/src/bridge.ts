@@ -40,6 +40,8 @@ export interface BridgeDeps {
    * file) e restituisce la funzione che lo riavvia alla fine, riuscita o no.
    */
   pauseEngine?: () => Promise<() => void>;
+  /** Dopo un'operazione che cambia cswap fuori dalla config (installazione, aggiornamento). */
+  onChanged?: () => void;
   now?: () => number;
 }
 
@@ -206,6 +208,7 @@ export function createRequestHandler(deps: BridgeDeps) {
       });
     } finally {
       resume?.();
+      deps.onChanged?.();
       void deps.refresh().catch(() => undefined);
     }
   }

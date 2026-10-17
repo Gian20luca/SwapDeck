@@ -38,6 +38,17 @@ describe('SwapDeckApp', () => {
     );
   });
 
+  it('segnala la scheda aperta (stato ricordato dal webview di VS Code)', async () => {
+    const onTabChange = vi.fn();
+    renderWith(
+      <SwapDeckApp initialTab="tools" onTabChange={onTabChange} />,
+      new FakeBackend({ mappings: [] }),
+    );
+    expect(onTabChange).toHaveBeenLastCalledWith('tools');
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Cartelle' }));
+    expect(onTabChange).toHaveBeenLastCalledWith('folders');
+  });
+
   it('naviga fra le schede con il clic', async () => {
     const user = setup();
     await user.click(screen.getByRole('tab', { name: 'Cartelle' }));

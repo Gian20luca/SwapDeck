@@ -1,9 +1,13 @@
-/** Estensione SwapDeck: barra di stato, cambio rapido, pannello, notifiche e motore opzionale. */
+/**
+ * Estensione SwapDeck: vista nella barra delle attività con l'app completa (anche in una scheda),
+ * barra di stato, cambio rapido, notifiche, motore e sincronia fra le finestre di VS Code.
+ */
 import type {
   ActionOutcome,
   Confirmation,
   CswapAction,
   EngineProfiles,
+  EngineState,
   ListResponse,
   Notification,
   NotifyPoll,
@@ -12,6 +16,8 @@ import type {
 } from '@swapdeck/types';
 import { displayUsage } from '@swapdeck/ui/account';
 import { displayPct, shortEmail } from '@swapdeck/ui/format';
+import { mkdir } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import * as vscode from 'vscode';
 import { createRequestHandler, describeAction } from './bridge.js';
 import {
@@ -26,9 +32,10 @@ import {
 import { DEACTIVATE_GRACE_MS, EngineProcess, shouldRetryEngine } from './engine.js';
 import type { CliState } from './generated/index.js';
 import { fromPoll, langOf, messageOf, parseEngineEvent, shouldPoll } from './notifications.js';
-import { DashboardPanel } from './panel.js';
+import { DashboardPanel, SIDEBAR_VIEW_ID, SidebarView, WebviewHub } from './panel.js';
 import type { PickParams } from './protocol.js';
 import { Refresher } from './refresher.js';
+import { SyncWatcher } from './sync.js';
 import {
   accountLabel,
   colorThresholds,
@@ -39,6 +46,8 @@ import {
 
 const SECTION = 'swapdeck';
 const MIN_INTERVAL_SECONDS = 15;
+/** Al ritorno del focus sulla finestra si rilegge solo se l'ultima lettura è più vecchia. */
+const FOCUS_REFRESH_AFTER_MS = 10_000;
 
 /** API restituita da `activate`, usata solo dai test dell'estensione. */
 export interface SwapDeckApi {
@@ -48,8 +57,16 @@ export interface SwapDeckApi {
   switchTo(target: number | SwitchStrategy): Promise<ActionOutcome | undefined>;
   engineRunning(): boolean;
   panelOpen(): boolean;
-  /** Il webview ha caricato lo script (CSP e nonce corretti) e ha chiesto lo stato. */
+  /** Un webview (vista o scheda) ha caricato lo script (CSP e nonce corretti) e chiesto lo stato. */
   panelReady(): boolean;
+  /** La vista della barra laterale è stata creata da VS Code. */
+  viewResolved(): boolean;
+  /** Comando del clic sulla barra di stato. */
+  statusCommand(): string | undefined;
+  /** La finestra osserva la cartella della config (sincronia con le altre finestre). */
+  syncWatching(): boolean;
+  /** Avvisa le altre finestre come dopo un'azione (test della sincronia). */
+  signalSync(): Promise<void>;
   cliPath(): string;
 }
 
@@ -61,7 +78,7 @@ function settings() {
   return {
     intervalMs: interval * 1000,
     cliPath: c.get<string>('cliPath', ''),
-    engineEnabled: c.get<boolean>('engine.enabled', false),
+    engineEnabled: c.get<boolean>('engine.enabled', true),
     thresholds: c.get<number[]>('notifications.thresholds', [80, 95]),
   };
 }
@@ -79,7 +96,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
   let engineWarned = false;
   /** Il lock è di un'altra finestra o dell'app desktop: si ritenta quando si libera. */
   let waitingLock = false;
-  let panelReady = false;
+  /** Osserva la cartella della config; nasce dopo `config get` (percorso deciso dalla CLI). */
+  let sync: SyncWatcher | undefined;
+  let syncStarting = false;
+  const signalSync = () => sync?.signal() ?? Promise.resolve();
 
   const status = vscode.window.createStatusBarItem(
     'swapdeck.status',
@@ -87,13 +107,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     100,
   );
   status.name = 'SwapDeck';
-  status.command = 'swapdeck.switchAccount';
+  // Un clic apre la vista (mai un cambio di account: lo switch è globale per l'utente).
+  status.command = 'swapdeck.showView';
 
   const engine = new EngineProcess({
     onLine: (line) => {
       const note = parseEngineEvent(line);
-      if (note) show(note);
-      else output.info(`[motore] ${line}`);
+      if (note) {
+        // Solo il titolare del lock manda eventi: una notifica per evento, non una per finestra.
+        show(note);
+        void signalSync();
+      } else output.info(`[motore] ${line}`);
     },
     onUnexpectedExit: (code) => {
       output.warn(`[motore] uscito con codice ${code ?? 'segnale'}`);
@@ -120,7 +144,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     const model = statusModel(
       state,
       colorThresholds(s.thresholds),
-      engineView(state, engine.running),
+      engineView(state, engine.pid),
       t,
       (ms) => new Date(ms).toLocaleTimeString(),
     );
@@ -180,7 +204,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     return picked?.[0]?.fsPath ?? null;
   }
 
-  const panel = new DashboardPanel(
+  const hub = new WebviewHub(
     context.extensionUri,
     createRequestHandler({
       cli,
@@ -204,12 +228,39 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
         await engine.stop();
         return () => syncEngine();
       },
+      onChanged: () => void signalSync(),
     }),
-    () => {
-      panelReady = true;
-      if (state?.list) panel.post({ type: 'state', list: state.list });
+    (post) => {
+      if (state?.list) post({ type: 'state', list: state.list });
     },
   );
+  const panel = new DashboardPanel(hub);
+  const sidebar = new SidebarView(hub);
+
+  /** Cartella della config dalla CLI (anche con `SWAPDECK_HOME`), poi osservazione. */
+  async function startSync(): Promise<void> {
+    if (sync?.watching || syncStarting) return;
+    syncStarting = true;
+    try {
+      if (!sync) {
+        const view = await cli<{ path: string }>(['config', 'get']);
+        const dir = dirname(view.path);
+        // Su Linux la cartella della config nasce al primo salvataggio: si crea privata (0700),
+        // così anche il segnale dei cambi di account funziona da subito.
+        await mkdir(dir, { recursive: true, mode: 0o700 });
+        sync = new SyncWatcher({
+          dir,
+          onChange: () => void refresh(),
+          log: (message) => output.info(message),
+        });
+      }
+      if (sync.start()) output.info('sync: osservo la cartella della config di SwapDeck');
+    } catch (error) {
+      output.warn(`sync: ${toCswapError(error).message}`);
+    } finally {
+      syncStarting = false;
+    }
+  }
 
   /** Lettura di `state`: non rifiuta, un errore della CLI diventa uno stato con `error`. */
   async function readState(): Promise<CliState> {
@@ -239,8 +290,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     if (next.error) output.warn(`state: ${next.error.kind}: ${next.error.message}`);
     if (next.list) {
       void pollNotifications(next.list);
-      panel.post({ type: 'state', list: next.list });
+      hub.post({ type: 'state', list: next.list });
     }
+    // La cartella della config può nascere dopo (primo salvataggio): si ritenta a ogni lettura.
+    if (!sync?.watching) void startSync();
     if (
       shouldRetryEngine({
         enabled: settings().engineEnabled,
@@ -266,6 +319,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
 
   async function afterAction(outcome: ActionOutcome): Promise<void> {
     refresher.invalidate();
+    // Cambio di account o altra azione di cswap: le altre finestre rileggono subito.
+    void signalSync();
     if (outcome.command) {
       const term = vscode.window.createTerminal({
         name: 'cswap run',
@@ -286,7 +341,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
         updatedAtMs: Date.now(),
       };
       void pollNotifications(outcome.list);
-      panel.post({ type: 'state', list: outcome.list });
+      hub.post({ type: 'state', list: outcome.list });
       render();
     } else {
       await refresh();
@@ -441,17 +496,51 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     render();
   };
 
+  /**
+   * «Avvia/Ferma motore» come «Accendi» e «Motore acceso» della scheda Regole: `engine.enabled`
+   * delle regole (condivise con le altre finestre e con l'app), riletto subito prima di scriverlo.
+   * Il processo del motore resta acceso (storico e notifiche); avviando, lo si accende se era spento.
+   */
   const setEngine = async (enabled: boolean) => {
-    await vscode.workspace
-      .getConfiguration(SECTION)
-      .update('engine.enabled', enabled, vscode.ConfigurationTarget.Global);
+    if (enabled && !settings().engineEnabled) {
+      await vscode.workspace
+        .getConfiguration(SECTION)
+        .update('engine.enabled', true, vscode.ConfigurationTarget.Global);
+    }
+    try {
+      const current = await cli<EngineState>(['engine', 'state']);
+      if (current.rules.enabled !== enabled) {
+        await cli(['engine', 'rules', 'set', '-'], {
+          stdin: JSON.stringify({ ...current.rules, enabled }),
+        });
+      }
+    } catch (error) {
+      const info = toCswapError(error);
+      output.error(`motore: ${info.kind}: ${info.message}`);
+      void vscode.window.showErrorMessage(t('SwapDeck: engine change failed: {0}', info.message));
+      if (!(error instanceof CliError)) throw error;
+      return;
+    }
     syncEngine();
+    void vscode.window.showInformationMessage(
+      enabled
+        ? t('SwapDeck: engine on, it switches accounts by the rules')
+        : t('SwapDeck: engine off, no automatic switches'),
+    );
+    await refresh();
   };
+
+  /** Apre (o porta in primo piano) la vista SwapDeck della barra delle attività. */
+  const showView = () => vscode.commands.executeCommand(`${SIDEBAR_VIEW_ID}.focus`);
 
   context.subscriptions.push(
     output,
     status,
+    hub,
     panel,
+    sidebar,
+    vscode.window.registerWebviewViewProvider(SIDEBAR_VIEW_ID, sidebar),
+    vscode.commands.registerCommand('swapdeck.showView', showView),
     vscode.commands.registerCommand('swapdeck.openPanel', () => panel.show()),
     vscode.commands.registerCommand('swapdeck.refresh', () => refresh()),
     vscode.commands.registerCommand('swapdeck.switchAccount', () => pickAccount()),
@@ -473,7 +562,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
       schedule();
       render();
     }),
+    // Tornando su questa finestra si rilegge (rete di sicurezza oltre al watcher e al polling).
+    vscode.window.onDidChangeWindowState((w) => {
+      if (w.focused && Date.now() - (state?.updatedAtMs ?? 0) > FOCUS_REFRESH_AFTER_MS) {
+        void refresh();
+      }
+    }),
     { dispose: () => clearTimeout(timer) },
+    { dispose: () => sync?.dispose() },
   );
   deactivateEngine = () => engine.stop(DEACTIVATE_GRACE_MS);
 
@@ -488,7 +584,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     switchTo: runSwitch,
     engineRunning: () => engine.running,
     panelOpen: () => panel.isOpen,
-    panelReady: () => panelReady,
+    panelReady: () => hub.readyWebviews > 0,
+    viewResolved: () => sidebar.isResolved,
+    statusCommand: () =>
+      typeof status.command === 'string' ? status.command : status.command?.command,
+    syncWatching: () => sync?.watching ?? false,
+    signalSync,
     cliPath,
   };
 }

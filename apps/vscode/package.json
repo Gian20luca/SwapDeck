@@ -30,14 +30,21 @@
   "contributes": {
     "commands": [
       {
+        "command": "swapdeck.showView",
+        "title": "%command.showView%",
+        "category": "SwapDeck"
+      },
+      {
         "command": "swapdeck.openPanel",
         "title": "%command.openPanel%",
-        "category": "SwapDeck"
+        "category": "SwapDeck",
+        "icon": "$(link-external)"
       },
       {
         "command": "swapdeck.refresh",
         "title": "%command.refresh%",
-        "category": "SwapDeck"
+        "category": "SwapDeck",
+        "icon": "$(refresh)"
       },
       {
         "command": "swapdeck.switchAccount",
@@ -79,7 +86,7 @@
         },
         "swapdeck.engine.enabled": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "scope": "application",
           "markdownDescription": "%config.engine.enabled%"
         },
@@ -99,6 +106,39 @@
           "markdownDescription": "%config.notifications.thresholds%"
         }
       }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "swapdeck",
+          "title": "SwapDeck",
+          "icon": "media/swapdeck.svg"
+        }
+      ]
+    },
+    "views": {
+      "swapdeck": [
+        {
+          "type": "webview",
+          "id": "swapdeck.view",
+          "name": "SwapDeck",
+          "icon": "media/swapdeck.svg"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "swapdeck.refresh",
+          "when": "view == swapdeck.view",
+          "group": "navigation@1"
+        },
+        {
+          "command": "swapdeck.openPanel",
+          "when": "view == swapdeck.view",
+          "group": "navigation@2"
+        }
+      ]
     }
   },
   "scripts": {

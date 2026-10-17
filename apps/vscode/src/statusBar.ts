@@ -14,8 +14,12 @@ export interface StatusModel {
   level: Level | 'error';
 }
 
-/** Engine di questa finestra (processo figlio) o di un'altra istanza (lock). */
-export type EngineView = 'child' | 'other' | 'off';
+/**
+ * Chi tiene il lock del motore: il processo figlio di questa finestra, un'altra istanza (altra
+ * finestra di VS Code o app), nessuno. Il testo della barra è uguale in tutte le finestre; cambia
+ * solo questa riga del tooltip.
+ */
+export type EngineView = { kind: 'here' } | { kind: 'other'; pid: number | null } | { kind: 'off' };
 
 /** Soglie dei colori dalle soglie delle notifiche: la più bassa avvisa, la più alta è critica. */
 export function colorThresholds(values: readonly number[] | undefined): Thresholds {
@@ -37,9 +41,12 @@ function pctText(pct: number | undefined): string {
   return pct === undefined ? '—' : `${displayPct(pct)}%`;
 }
 
-export function engineView(state: CliState | undefined, childRunning: boolean): EngineView {
-  if (childRunning) return 'child';
-  return state?.engine.running ? 'other' : 'off';
+/** Dal lock letto nello stato: il titolare è il motore di questa finestra se il PID è il suo. */
+export function engineView(state: CliState | undefined, childPid: number | undefined): EngineView {
+  if (!state?.engine.running) return { kind: 'off' };
+  const pid = state.engine.lock?.pid ?? null;
+  if (childPid !== undefined && pid === childPid) return { kind: 'here' };
+  return { kind: 'other', pid };
 }
 
 export function statusModel(
@@ -49,12 +56,18 @@ export function statusModel(
   t: Translate,
   formatTime: (ms: number) => string,
 ): StatusModel {
-  const engineLine =
-    engine === 'child'
+  const holder =
+    engine.kind === 'here'
       ? t('Engine: running in this window')
-      : engine === 'other'
-        ? t('Engine: running in another instance')
+      : engine.kind === 'other'
+        ? engine.pid === null
+          ? t('Engine: running in another window or instance')
+          : t('Engine: running in another window or instance (PID {0})', engine.pid)
         : t('Engine: stopped');
+  const switching = state?.engine.enabled
+    ? t('automatic switching on')
+    : t('automatic switching off');
+  const engineLine = `${holder} · ${switching}`;
   if (!state) {
     return { text: '$(sync~spin) SwapDeck', tooltip: t('SwapDeck: loading…'), level: 'unknown' };
   }

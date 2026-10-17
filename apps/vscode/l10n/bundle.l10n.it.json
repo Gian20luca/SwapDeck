@@ -9,7 +9,6 @@
   "Best account": "Account migliore",
   "Confirm": "Conferma",
   "disabled": "disattivato",
-  "Engine: running in another instance": "Motore: attivo in un'altra istanza",
   "Engine: running in this window": "Motore: attivo in questa finestra",
   "Engine: stopped": "Motore: fermo",
   "Last known data (current usage unavailable)": "Ultimo dato noto (consumi attuali non disponibili)",
@@ -32,5 +31,12 @@
   "SwapDeck: map change failed: {0}": "SwapDeck: cambio di mappa non riuscito: {0}",
   "Choose the SwapDeck map": "Scegli la mappa di SwapDeck",
   "SwapDeck: active map is now {0}": "SwapDeck: ora la mappa attiva è {0}",
-  "Map: {0}": "Mappa: {0}"
+  "Map: {0}": "Mappa: {0}",
+  "Engine: running in another window or instance": "Motore: attivo in un'altra finestra o istanza",
+  "Engine: running in another window or instance (PID {0})": "Motore: attivo in un'altra finestra o istanza (PID {0})",
+  "automatic switching on": "cambio automatico acceso",
+  "automatic switching off": "cambio automatico spento",
+  "SwapDeck: engine change failed: {0}": "SwapDeck: cambio del motore non riuscito: {0}",
+  "SwapDeck: engine on, it switches accounts by the rules": "SwapDeck: motore acceso, cambia account secondo le regole",
+  "SwapDeck: engine off, no automatic switches": "SwapDeck: motore spento, nessun cambio automatico"
 }

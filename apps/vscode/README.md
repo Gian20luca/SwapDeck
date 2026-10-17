@@ -1,10 +1,10 @@
 # SwapDeck per VS Code
 
-Monitor e cambio degli account di `cswap` dentro VS Code.
+Monitor e gestione degli account di `cswap` tutto dentro VS Code: non serve l'app desktop. Il `swapdeck-cli` incluso nel .vsix fa motore, storico, notifiche e installazione di cswap.
 
 ## Installazione
 
-1. Serve `cswap` installato per l'utente (lo stesso usato dal terminale).
+1. Serve `cswap` installato per l'utente (lo stesso usato dal terminale); se manca, la procedura guidata della vista lo installa.
 2. Da terminale: `code --install-extension swapdeck-vscode-<piattaforma>-<versione>.vsix`, oppure in VS Code «Estensioni» → «...» → «Installa da VSIX...».
 3. Le finestre già aperte attivano l'estensione al prossimo «Ricarica finestra» (o alla riapertura); quelle nuove subito.
 
@@ -12,18 +12,30 @@ Il .vsix è per piattaforma (contiene `bin/swapdeck-cli`) e non richiede privile
 
 ## Funzioni
 
-- **Barra di stato:** alias e consumi 5h/7d dell'account attivo, colore alle soglie, dettagli nel tooltip. Un clic apre il cambio rapido.
-- **Cambio rapido:** account migliore (`best`), prossimo disponibile (`next-available`) o un account preciso.
-- **Comandi:** `SwapDeck: Apri pannello`, `Aggiorna`, `Cambia account`, `Avvia motore`, `Ferma motore`.
-- **Pannello:** l'app completa di SwapDeck a schede, come nel desktop: Account (azioni su ogni account), Cartelle (`map`/`unmap` con selettore di cartella), Regole del motore (preset «Principale con riserve», Eco, Sport e Sicura), Storico (grafici, cambi e decisioni), Strumenti (export, import, `unclaimed`, `purge`) e Impostazioni (intervallo, soglie, `config set`). Lingua e tema seguono VS Code; quelli salvati in Impostazioni valgono per l'app desktop.
+- **Vista SwapDeck:** icona ad anello nella barra delle attività. Contiene l'app completa a schede, adattata alla larghezza della barra laterale (le schede vanno a capo, niente scroll orizzontale); la scheda aperta si ricorda quando la vista si nasconde. Nel titolo della vista: «Aggiorna» e «Apri in una scheda» (la stessa app in una scheda dell'editor).
+- **Schede:** Account (azioni su ogni account), Cartelle (`map`/`unmap` con selettore di cartella), Regole del motore (mappe e preset), Storico (grafici, cambi e decisioni), Strumenti (export, import, `unclaimed`, `purge`), Impostazioni (intervallo, soglie, `config set`, pagina Notifiche). Al primo avvio, se cswap manca, la procedura guidata lo installa (uv e claude-swap per l'utente); le nuove versioni di cswap si segnalano sopra le schede. Lingua e tema seguono VS Code.
+- **Barra di stato:** alias e consumi 5h/7d dell'account attivo, colore alle soglie, dettagli nel tooltip (motore in questa finestra, in un'altra finestra o istanza, fermo; cambio automatico acceso o spento; mappa attiva). Un clic apre la vista SwapDeck: il cambio di account resta nel comando «Cambia account» e dentro la vista.
+- **Cambio rapido** (`SwapDeck: Cambia account`): account migliore (`best`), prossimo disponibile (`next-available`) o un account preciso.
+- **Comandi:** `SwapDeck: Mostra SwapDeck`, `Apri in una scheda`, `Aggiorna`, `Cambia account`, `Cambia mappa`, `Avvia motore`, `Ferma motore`.
 - **Conferme:** le azioni che lo richiedono (rimozione, import/export, swap/move, unmap, disattivazione dell'account attivo...) chiedono conferma con un dialogo modale di VS Code; `purge` chiede anche di digitare la parola. Il cambio di account non chiede conferma.
-- **Notifiche:** al superamento delle soglie dell'account attivo e quando l'account attivo cambia.
+- **Notifiche:** quelle scelte nella pagina Notifiche, come notifiche di VS Code. Le manda solo la finestra che tiene il motore: una per evento, non una per finestra.
+- **Avvio:** insieme a VS Code (`onStartupFinished`), senza altro da configurare.
 
 ## Motore
 
-Facoltativo e **spento di default**. Con `swapdeck.engine.enabled` (o `SwapDeck: Avvia motore`) la finestra avvia `swapdeck-cli headless` come processo figlio, che applica le regole della config di SwapDeck e cambia account da solo (le regole salvate dal pannello valgono dal giro successivo, senza riavvio); si ferma con `Ferma motore` o alla chiusura della finestra.
+Ogni finestra avvia `swapdeck-cli headless` come processo figlio (`swapdeck.engine.enabled`, acceso di default): registra lo storico, manda le notifiche e, se il motore è acceso nella scheda Regole («Accendi»), cambia account secondo le regole salvate (valgono dal giro successivo, senza riavvio). `SwapDeck: Avvia motore` e `Ferma motore` fanno lo stesso di «Accendi» e «Motore acceso» in Regole: cambiano `engine.enabled` delle regole, condiviso da tutte le finestre.
 
-Un solo motore alla volta per utente, grazie al lock: se gira già nell'app desktop o in un'altra finestra, questa resta in attesa senza avvisi (barra: «motore attivo in un'altra istanza») e lo riavvia da sé quando il lock si libera. Le righe del motore sono nel canale di output «SwapDeck».
+Un solo motore attivo per utente, grazie al lock: le altre finestre osservano (tooltip: «attivo in un'altra finestra o istanza», con il PID) e, quando la finestra titolare si chiude, una di loro lo prende entro un giro (`pollIntervalSeconds`). Le righe del motore sono nel canale di output «SwapDeck».
+
+## Più finestre
+
+Tutte le finestre aperte, anche di istanze diverse di VS Code, mostrano gli stessi dati entro pochi secondi senza ricaricare:
+
+- ogni finestra osserva la cartella della config di SwapDeck: una modifica di `config.json` (regole, mappe, preferenze, notifiche) le fa rileggere tutte;
+- dopo un cambio di account o un'altra azione di cswap, la finestra che l'ha fatta riscrive il segnale `vscode-sync.json` (solo `source` e `at`, in modo atomico) e le altre rileggono; lo stesso fa la finestra titolare a ogni notifica del motore;
+- il polling (`refreshIntervalSeconds`) e la rilettura al ritorno del focus restano come rete di sicurezza;
+- le scritture passano dalla CLI, che rilegge la config subito prima di scrivere e cambia solo la parte toccata: le modifiche delle altre finestre restano;
+- la barra di stato ha lo stesso testo e colore in tutte le finestre; cambia solo la riga del motore nel tooltip.
 
 ## Impostazioni
 
@@ -31,10 +43,10 @@ Un solo motore alla volta per utente, grazie al lock: se gira già nell'app desk
 | ----------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------- |
 | `swapdeck.refreshIntervalSeconds`   | 60         | lettura di `cswap list` ogni N secondi (minimo 15)                                                       |
 | `swapdeck.cliPath`                  | vuoto      | percorso assoluto di `swapdeck-cli`; vuoto = quello incluso (impostabile solo a livello utente/macchina) |
-| `swapdeck.engine.enabled`           | `false`    | avvia il motore mentre VS Code è aperto                                                                  |
-| `swapdeck.notifications.thresholds` | `[80, 95]` | soglie delle notifiche; la più bassa colora la barra come avviso, la più alta come critica               |
+| `swapdeck.engine.enabled`           | `true`     | esegue il motore (storico, notifiche, cambi se acceso in Regole) mentre VS Code è aperto                 |
+| `swapdeck.notifications.thresholds` | `[80, 95]` | soglie dei colori della barra di stato; la più bassa avvisa, la più alta è critica                       |
 
-Le regole del motore stanno nella config di SwapDeck (`swapdeck-cli config get|set`).
+Regole, mappe, preferenze e notifiche stanno nella config di SwapDeck (`swapdeck-cli config get|set`), condivisa con l'app desktop se c'è.
 
 ## Sviluppo
 
