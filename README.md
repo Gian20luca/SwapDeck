@@ -40,6 +40,8 @@ Avvisi attesi, perché i pacchetti non sono firmati con certificati dei produtto
 
 Aggiornamenti automatici: spenti di default finché il repo è privato; si scarica a mano la nuova release. Su Linux il `.deb` si aggiorna comunque a mano.
 
+Per provare l'installazione su una macchina pulita (Windows, Linux, macOS), il motore con cambi veri e l'estensione: [guida alle prove reali](docs/PROVE-REALI.md).
+
 ## Primo avvio
 
 1. SwapDeck cerca `cswap`. Se non lo trova propone di installare `uv` e `claude-swap` **per utente** (con conferma): nessun admin, nessun file di sistema.
