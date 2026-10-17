@@ -183,7 +183,9 @@ export const itManage = {
   'config.key.includeApiKeyAccounts': 'Includi gli account con chiave API',
   'config.key.unhealthyTicks': 'Giri prima di mettere in quarantena',
   'config.key.model': 'Modelli (separati da virgola o «all»)',
-  'config.key.theme': 'Tema di cswap',
+  'config.key.theme': 'Tema di cswap nel terminale',
+  'config.key.theme.hint':
+    'Colori dell’interfaccia di cswap nel terminale (comando cswap senza argomenti). Non cambia SwapDeck: il suo tema è in App.',
   'config.err.number': 'Scrivi un numero.',
   'config.err.integer': 'Scrivi un numero intero.',
   'config.err.range': 'Valore fuori dall’intervallo ammesso.',

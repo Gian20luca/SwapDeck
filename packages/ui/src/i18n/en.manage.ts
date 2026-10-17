@@ -185,7 +185,9 @@ export const enManage: Record<keyof typeof itManage, string> = {
   'config.key.includeApiKeyAccounts': 'Include API-key accounts',
   'config.key.unhealthyTicks': 'Rounds before quarantine',
   'config.key.model': 'Models (comma-separated or “all”)',
-  'config.key.theme': 'cswap theme',
+  'config.key.theme': 'cswap terminal theme',
+  'config.key.theme.hint':
+    'Colors of the cswap terminal interface (cswap with no arguments). It does not change SwapDeck: its theme is under App.',
   'config.err.number': 'Enter a number.',
   'config.err.integer': 'Enter a whole number.',
   'config.err.range': 'Value outside the allowed range.',

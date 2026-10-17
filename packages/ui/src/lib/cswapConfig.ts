@@ -10,6 +10,8 @@ export type ConfigKind =
 export interface ConfigKeyInfo {
   kind: ConfigKind;
   label: MessageKey;
+  /** Spiegazione mostrata sotto il campo. */
+  hint?: MessageKey;
   /** Valore di default di cswap, come testo. */
   default: string;
 }
@@ -54,6 +56,7 @@ export const CONFIG_KEYS: Record<string, ConfigKeyInfo> = {
   'ui.theme': {
     kind: { type: 'choice', choices: ['dark', 'light', 'auto'] },
     label: 'config.key.theme',
+    hint: 'config.key.theme.hint',
     default: 'auto',
   },
 };

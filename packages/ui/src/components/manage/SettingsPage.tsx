@@ -344,6 +344,7 @@ function ConfigRow({
           onChange={setText}
           disabled={busy}
           options={kind.choices.map((c) => ({ value: c, label: choiceLabel(c) }))}
+          {...(info?.hint ? { hint: t(info.hint) } : {})}
         />
       )}
       {kind.type === 'bool' && (
