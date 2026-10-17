@@ -4,10 +4,10 @@ Interfaccia grafica per [`cswap`](https://pypi.org/project/claude-swap/) (claude
 
 Si installa in **una** di queste forme (a scelta):
 
-| Forma                     | Per chi                               | Cosa dà                                                                                      |
-| ------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------- |
-| App nell'area di notifica | chi vuole un widget sempre visibile   | icona con anello dei consumi, dashboard, mini-widget flottante, notifiche, avvio al login    |
-| Estensione VS Code        | chi lavora tutto il giorno in VS Code | consumi nella barra di stato, cambio rapido, pannello con la stessa app a schede del desktop |
+| Forma                     | Per chi                               | Cosa dà                                                                                                                                                   |
+| ------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App nell'area di notifica | chi vuole un widget sempre visibile   | icona con anello dei consumi, dashboard, mini-widget flottante, notifiche, avvio al login                                                                 |
+| Estensione VS Code        | chi lavora tutto il giorno in VS Code | tutto dentro VS Code, senza l'app: vista SwapDeck nella barra delle attività con la stessa app a schede, barra di stato, cambio rapido, notifiche, motore |
 
 Entrambe usano lo stesso motore (Rust) e la stessa config, e coprono i comandi di `cswap` (list, switch, add, remove, alias, swap, map, export/import, run...). Interfaccia in italiano e inglese.
 
@@ -30,7 +30,7 @@ Scarica gli asset dalla pagina Releases del repo (serve essere loggati con un ac
 
 L'installazione contiene `swapdeck` e `swapdeck-cli` (su macOS in `SwapDeck.app/Contents/MacOS/`). `swapdeck-cli` c'è anche come file a sé nelle release, con il target nel nome (per esempio `swapdeck-cli-x86_64-pc-windows-msvc.exe`, `swapdeck-cli-x86_64-unknown-linux-gnu`, `swapdeck-cli-aarch64-apple-darwin`).
 
-Estensione: `code --install-extension swapdeck-vscode-<piattaforma>-<versione>.vsix`, oppure «Estensioni» → «...» → «Installa da VSIX...». Poi «Ricarica finestra».
+Estensione: `code --install-extension swapdeck-vscode-<piattaforma>-<versione>.vsix`, oppure «Estensioni» → «...» → «Installa da VSIX...». Poi «Ricarica finestra». Basta da sola: contiene `swapdeck-cli` (motore, storico, notifiche, installazione di cswap) e non richiede l'app; l'icona SwapDeck nella barra delle attività apre l'app completa, e con più finestre aperte resta tutto sincronizzato (vedi [apps/vscode/README.md](apps/vscode/README.md)).
 
 Avvisi attesi, perché i pacchetti non sono firmati con certificati dei produttori dei sistemi:
 
@@ -115,7 +115,7 @@ In tutti il ritorno alla principale è acceso, la pausa tra due cambi è di 300 
 
 Se la riserva scelta è al limite si passa alla successiva. L'isteresi vale solo sulle finestre che hanno fatto lasciare il principale (5 ore, 7 giorni o entrambe). Le regole stanno nella sezione `engine` di `config.json`, l'app e il processo headless le rileggono a ogni giro, e si leggono/scrivono anche dalla scheda «Regole» o con `swapdeck-cli config get|set`.
 
-**Un solo motore per utente.** Un lock impedisce che app, finestra VS Code o processo headless cambino account insieme: chi non ha il lock resta in osservazione.
+**Un solo motore per utente.** Un lock impedisce che app, finestra VS Code o processo headless cambino account insieme: chi non ha il lock resta in osservazione e lo prende entro un giro quando il titolare si chiude.
 
 **Stato «sospeso» e conflitti.** Se rileva `cswap auto` in esecuzione o un'attività, timer, cron o LaunchAgent che richiama `cswap` (per esempio lo script pianificato di un altro motore che usa `cswap`), il motore si **sospende** da solo: icona «sospeso», riga nel tooltip e avviso sopra la dashboard. Non è un errore: evita due automatismi che si contraddicono. Per riattivarlo ferma l'altro automatismo (vedi la [guida alla migrazione](docs/GUIDA-MIGRAZIONE.md)). Conta un'attività o un timer che cita `cswap` o `claude-swap` nel nome o nel comando; un'attività disabilitata dà solo un avviso. Per ignorare un conflitto noto si mette il suo id (per esempio `task:nome-attività`) in `ignoredConflicts`. Provare prima in sola osservazione (`dryRun`) è sempre sicuro.
 

@@ -22,6 +22,28 @@ export function NoticeView({ notice }: { notice: Notice | null }) {
   );
 }
 
+/** Dati cambiati altrove mentre il form ha modifiche non salvate (`useSyncedForm`). */
+export function ExternalChangeNotice({
+  stale,
+  onReload,
+}: {
+  stale: boolean;
+  onReload: () => void;
+}) {
+  const { t } = useI18n();
+  if (!stale) return null;
+  return (
+    <div className="sd-notice" data-tone="warn" role="status">
+      {t('sync.changedElsewhere')}{' '}
+      <Tooltip text={t('sync.reload.tip')}>
+        <button type="button" className="sd-btn sd-btn--small" onClick={onReload}>
+          {t('sync.reload')}
+        </button>
+      </Tooltip>
+    </div>
+  );
+}
+
 export function Section({
   title,
   hint,

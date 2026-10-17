@@ -8,3 +8,4 @@
 !out/webview/main.js
 !out/webview/main.css
 !bin/**
+!media/swapdeck.svg

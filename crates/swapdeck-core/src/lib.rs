@@ -7,6 +7,7 @@ pub mod conflicts;
 pub mod cswap;
 pub mod diagnostics;
 pub mod engine;
+pub mod filelock;
 pub mod headless;
 pub mod history;
 pub mod lock;

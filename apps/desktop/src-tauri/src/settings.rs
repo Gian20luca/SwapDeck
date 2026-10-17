@@ -267,10 +267,13 @@ impl SettingsStore {
             return Ok(());
         };
         let _writing = lock(&self.writing);
-        let mut current = config::load(&path).map_err(|e| e.to_string())?.config;
-        settings.patch(&mut current);
         paths.ensure().map_err(|e| e.to_string())?;
-        config::save(&path, &current).map_err(|e| e.to_string())
+        config::update(&path, |current| {
+            settings.patch(current);
+            Ok(())
+        })
+        .map(drop)
+        .map_err(|e| e.to_string())
     }
 
     /// Cambia preferenze o regole: rilegge il file, applica `change` (che valida), lo riscrive

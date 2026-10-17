@@ -6,6 +6,7 @@ import { useActionRunner } from '../../backend/useActionRunner.js';
 import { useAccounts } from '../../backend/useAccounts.js';
 import { useI18n } from '../../i18n/index.js';
 import { accountName } from '../../lib/account.js';
+import { useConfigChanged } from '../../lib/useExternalChange.js';
 import { useLoad } from '../../lib/useLoad.js';
 import { LoadGate, NoticeView, PathField, SelectField, Section, Unavailable } from './common.js';
 import { Tooltip } from '../Tooltip.js';
@@ -19,6 +20,7 @@ export function FoldersPage() {
   const supported = typeof backend.listMappings === 'function';
   const load = useCallback(() => backend.listMappings?.() ?? Promise.resolve([]), [backend]);
   const { state, reload } = useLoad(load, [load]);
+  useConfigChanged(reload);
   const [path, setPath] = useState('');
   const [account, setAccount] = useState('');
 

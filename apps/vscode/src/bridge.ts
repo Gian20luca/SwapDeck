@@ -52,6 +52,8 @@ export interface BridgeDeps {
   openFolder?: (dir: string) => Promise<void>;
   /** Appunti dell'host; assente = `copyText` non disponibile. */
   copyText?: (text: string) => Promise<void>;
+  /** Dopo un'operazione che cambia cswap fuori dalla config (installazione, aggiornamento). */
+  onChanged?: () => void;
   now?: () => number;
 }
 
@@ -223,6 +225,7 @@ export function createRequestHandler(deps: BridgeDeps) {
       });
     } finally {
       resume?.();
+      deps.onChanged?.();
       void deps.refresh().catch(() => undefined);
     }
   }

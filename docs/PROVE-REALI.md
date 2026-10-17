@@ -89,12 +89,12 @@ Installa solo il `.vsix` (`code --install-extension swapdeck-vscode-<piattaforma
 |---|---|---|---|
 | 5.1 | Avvio | Nessun errore; barra di stato con i consumi; se manca `cswap` propone l'installazione o indica `swapdeck.cliPath` | [ ] |
 | 5.2 | Icona SwapDeck nella barra laterale | Apre l'app completa a schede, uguale al desktop | [ ] |
-| 5.3 | Clic sulla barra di stato | Apre il pannello / il cambio rapido | [ ] |
+| 5.3 | Clic sulla barra di stato | Apre la vista SwapDeck (il cambio di account resta in «SwapDeck: Cambia account» e nella vista) | [ ] |
 | 5.4 | «SwapDeck: Cambia mappa» | Elenco con preset marcati «preset»; la scelta vale per tutte le finestre | [ ] |
 | 5.5 | Apri **due o tre finestre** VS Code | Un solo motore (chi ha il lock); le altre in osservazione | [ ] |
 | 5.6 | Chiudi la finestra che tiene il motore | Il motore passa a un'altra finestra entro un giro; nessun doppio cambio | [ ] |
 | 5.7 | Notifiche con più finestre | Ogni avviso compare **una volta sola** (un solo mittente) | [ ] |
-| 5.8 | Modifica un'impostazione in una finestra (alias, mappa, acceso) | Si propaga alle altre senza ricaricare | [ ] |
+| 5.8 | Modifica un'impostazione in una finestra (alias, mappa, acceso) | Si propaga alle altre senza ricaricare, anche nella scheda aperta; se lì c'è un modulo in modifica compare «Modificato in un'altra finestra» con «Ricarica» | [ ] |
 | 5.9 | Scheda **Chi consuma** | Classifica per progetto, sessione, agente e modello su 5h e 7 giorni; avanzamento sulla prima lettura; nessun testo di messaggi mostrato | [ ] |
 | 5.10 | App desktop e VS Code insieme | Un solo motore; l'altro in osservazione, senza notifiche doppie | [ ] |
 
