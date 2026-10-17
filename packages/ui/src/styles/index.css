@@ -1,5 +1,6 @@
 /* SwapDeck UI — variabili e stili base. Tema: `data-theme="light|dark"` su <html> (vedi ThemeProvider). */
 @import './flow.css';
+@import './info.css';
 
 :root,
 :root[data-theme='light'] {

@@ -62,7 +62,7 @@ export function FoldersPage() {
       <p className="sd-hint">{t('folders.hint')}</p>
       <NoticeView notice={notice} />
 
-      <Section title={t('folders.list')}>
+      <Section title={t('folders.list')} info={t('info.folders.list')}>
         <LoadGate state={state} onRetry={() => void reload()}>
           {(mappings) =>
             mappings.length === 0 ? (
@@ -102,7 +102,7 @@ export function FoldersPage() {
         </LoadGate>
       </Section>
 
-      <Section title={t('folders.add')}>
+      <Section title={t('folders.add')} info={t('info.folders.add')}>
         <div className="sd-form">
           <SelectField
             label={t('folders.account')}
