@@ -62,11 +62,35 @@ test('cambio di mappa dal selettore', async ({ page }) => {
   await page.getByLabel('Mappa attiva').selectOption('eco');
   await expect(page.getByText('Mappa attiva: Eco.')).toBeVisible();
   await expect(page.getByLabel('Soglia sulle 5 ore (%)')).toHaveValue('90');
+  // Preset in sola lettura nel riquadro della mappa: si clona come mappa personale.
+  await expect(page.getByText('Preset in sola lettura: clonalo per modificarlo.')).toBeVisible();
+  await expect(page.getByLabel('Soglia sulle 5 ore (%)')).toBeDisabled();
+  await noHorizontalScroll(page);
+  await page.getByRole('button', { name: 'Clona come mappa personale' }).click();
+  await page.getByLabel('Nome della mappa').fill('Mia eco');
+  await page.getByRole('button', { name: 'Conferma', exact: true }).click();
+  await expect(page.getByText('Mappa personale «Mia eco» creata e aperta.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Regole della mappa «Mia eco»' })).toBeVisible();
+  await expect(page.getByLabel('Soglia sulle 5 ore (%)')).toBeEnabled();
   await page.getByRole('button', { name: 'Nuova' }).click();
   await page.getByLabel('Nome della mappa').fill('Notte');
   await page.getByRole('button', { name: 'Conferma', exact: true }).click();
   await expect(page.getByText('Mappa «Notte» creata.')).toBeVisible();
   await noHorizontalScroll(page);
+});
+
+test('preset attivo: si salva l’osservazione, il resto resta del preset', async ({ page }) => {
+  await open(page);
+  await rules(page);
+  await page.getByLabel('Mappa attiva').selectOption('sport');
+  await expect(page.getByText('Mappa attiva: Sport.')).toBeVisible();
+  await page.getByLabel('Solo osservazione').check();
+  await page.getByRole('button', { name: 'Salva' }).click();
+  await expect(page.getByText('Regole salvate.', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Solo osservazione')).toBeChecked();
+  await expect(page.getByLabel('Soglia sulle 5 ore (%)')).toHaveValue('98');
+  await noHorizontalScroll(page);
+  await page.screenshot({ path: `${SHOTS}/regole-preset-420x640.png`, fullPage: true });
 });
 
 test('dettaglio dell’utenza e ritorno all’elenco', async ({ page }) => {

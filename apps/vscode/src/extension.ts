@@ -463,11 +463,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
       return;
     }
     type Item = vscode.QuickPickItem & { id: string };
-    const items: Item[] = profiles.profiles.map((p) => ({
+    // Prima le mappe personali, poi i preset (in sola lettura) dopo un separatore.
+    const toItem = (p: EngineProfiles['profiles'][number]): Item => ({
       id: p.id,
       label: `${p.id === profiles.activeId ? '$(check) ' : ''}${p.name}`,
       ...(p.id === profiles.activeId ? { description: t('active') } : {}),
-    }));
+    });
+    const personal = profiles.profiles.filter((p) => !p.preset).map(toItem);
+    const presets = profiles.profiles.filter((p) => p.preset).map(toItem);
+    const items: Item[] = [
+      ...personal,
+      ...(presets.length > 0
+        ? [{ id: '', label: 'preset', kind: vscode.QuickPickItemKind.Separator }]
+        : []),
+      ...presets,
+    ];
     const picked = await vscode.window.showQuickPick(items, {
       placeHolder: t('Choose the SwapDeck map'),
     });

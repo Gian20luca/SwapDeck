@@ -57,14 +57,21 @@ pub struct MapEntry {
     pub checked: bool,
 }
 
-/// Voci delle mappe, nell'ordine salvato, con quella attiva spuntata.
+/// Voci delle mappe con quella attiva spuntata: prima le personali, poi i preset con
+/// l'etichetta «(preset)», ciascun gruppo nell'ordine salvato.
 pub fn map_entries(profiles: &EngineProfiles) -> Vec<MapEntry> {
-    profiles
-        .profiles
-        .iter()
+    let (presets, personal): (Vec<_>, Vec<_>) =
+        profiles.profiles.iter().partition(|p| p.preset.is_some());
+    personal
+        .into_iter()
+        .chain(presets)
         .map(|p| MapEntry {
             id: format!("{MAP_PREFIX}{}", p.id),
-            label: p.name.clone(),
+            label: if p.preset.is_some() {
+                format!("{} (preset)", p.name)
+            } else {
+                p.name.clone()
+            },
             checked: p.id == profiles.active_id,
         })
         .collect()
@@ -369,6 +376,8 @@ mod tests {
         assert_eq!(e.iter().filter(|m| m.checked).count(), 1);
         let active = e.iter().find(|m| m.checked).unwrap();
         assert_eq!(map_from_id(&active.id), Some("eco"));
+        assert_eq!(active.label, "Eco (preset)");
+        assert_eq!(e[0].label, "Personale", "prima le mappe personali");
         assert_eq!(map_from_id("map:"), None);
         assert_eq!(map_from_id("acct:1"), None);
     }

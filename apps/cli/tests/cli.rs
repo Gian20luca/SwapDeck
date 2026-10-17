@@ -414,6 +414,56 @@ fn management_commands_validate_and_save() {
     assert_eq!(code, 2);
 }
 
+/// Mappe: preset in sola lettura (errore di configurazione), clonazione con nome e selezione.
+#[test]
+fn engine_profiles_presets_are_read_only_and_clone() {
+    let env = Env::new();
+    let rules = r#"{"primary":6,"reserves":[1,3]}"#;
+    assert_eq!(env.run_stdin(&["engine", "rules", "set", "-"], rules).0, 0);
+    let (code, v) = env.run(&["engine", "profiles"]);
+    assert_eq!(code, 0, "{v}");
+    let presets: Vec<&str> = v["profiles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p.get("preset").is_some())
+        .map(|p| p["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(presets, ["priority-reserves", "eco", "sport", "safe"]);
+    for op in [
+        r#"{"op":"rename","id":"eco","name":"Mia"}"#,
+        r#"{"op":"delete","id":"eco"}"#,
+        r#"{"op":"delete","id":"personal"}"#,
+        r#"{"op":"restore","id":"eco"}"#,
+    ] {
+        let (code, v) = env.run_stdin(&["engine", "profiles", "-"], op);
+        assert_eq!(code, 2, "{op}: {v}");
+    }
+    let (code, v) = env.run(&["engine", "profiles", r#"{"op":"select","id":"eco"}"#]);
+    assert_eq!(code, 0, "{v}");
+    let (code, v) = env.run(&[
+        "engine",
+        "rules",
+        "set",
+        r#"{"primary":6,"fiveHourThreshold":50}"#,
+    ]);
+    assert_eq!(code, 2, "preset in sola lettura: {v}");
+    let clone = r#"{"op":"clone","id":"eco","name":"Mia eco"}"#;
+    let (code, v) = env.run_stdin(&["engine", "profiles", "-"], clone);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["rules"]["fiveHourThreshold"], 90.0);
+    let (_, v) = env.run(&["engine", "profiles"]);
+    let active = v["activeId"].as_str().unwrap();
+    let mine = v["profiles"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|p| p["id"] == active)
+        .unwrap();
+    assert_eq!(mine["name"], "Mia eco");
+    assert!(mine.get("preset").is_none());
+}
+
 /// Come l'app: candidato attuale, motivo e avvisi della lista anche senza motore in esecuzione.
 #[test]
 fn engine_state_explains_candidate_and_list_warnings() {

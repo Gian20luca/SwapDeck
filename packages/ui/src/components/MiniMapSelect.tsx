@@ -3,10 +3,12 @@ import { useEffect, useId, useState, type MouseEvent } from 'react';
 import { useBackend } from '../backend/context.js';
 import { errorMessage } from '../backend/useAccounts.js';
 import { useI18n } from '../i18n/index.js';
+import { MapOptions } from './manage/MapSelector.js';
 import { Tooltip } from './Tooltip.js';
 
 /**
- * Selettore della mappa attiva nel mini-widget: cambia mappa subito (come il menu dell'icona).
+ * Selettore della mappa attiva nel mini-widget: cambia mappa subito (come il menu dell'icona);
+ * mappe personali e preset in gruppi distinti.
  * Non c'è niente da perdere: il mini-widget non modifica le regole. Senza i comandi delle mappe
  * (host che non li offre) non mostra nulla.
  */
@@ -64,11 +66,7 @@ export function MiniMapSelect() {
           disabled={busy}
           onChange={(event) => void select(event.target.value)}
         >
-          {profiles.profiles.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
+          <MapOptions profiles={profiles} />
         </select>
       </Tooltip>
       {error && (

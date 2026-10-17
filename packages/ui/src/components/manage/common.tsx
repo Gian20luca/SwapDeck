@@ -49,18 +49,22 @@ export function Section({
   hint,
   info,
   children,
+  level = 3,
 }: {
   title: string;
   hint?: ReactNode;
   /** Spiegazione del concetto: mostra la «i» accanto al titolo. */
   info?: string;
   children: ReactNode;
+  /** Livello del titolo: 4 dentro un riquadro che ha già il suo. */
+  level?: 3 | 4;
 }) {
   const id = useId();
+  const Heading = level === 4 ? 'h4' : 'h3';
   return (
     <section className="sd-section" aria-labelledby={id}>
       <WithInfo info={info} name={title}>
-        <h3 id={id}>{title}</h3>
+        <Heading id={id}>{title}</Heading>
       </WithInfo>
       {hint && <p className="sd-hint">{hint}</p>}
       {children}

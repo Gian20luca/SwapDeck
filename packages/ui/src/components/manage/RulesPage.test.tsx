@@ -227,37 +227,53 @@ describe('RulesPage: mappe', () => {
     expect(screen.getByLabelText('Criterio di scelta della riserva')).toHaveValue('reset-soonest');
   });
 
-  it('con modifiche non salvate il cambio di mappa chiede conferma', async () => {
+  it('con modifiche non salvate il cambio di mappa chiede conferma con «Conferma»', async () => {
     const { user } = await setup({ rules: { primary: 6 } });
     await user.click(screen.getByLabelText('Solo osservazione'));
     await user.selectOptions(screen.getByLabelText('Mappa attiva'), 'sport');
     const dialog = await screen.findByRole('alertdialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Mappa' }));
+    expect(within(dialog).queryByRole('button', { name: 'Mappa' })).toBeNull();
+    await user.click(within(dialog).getByRole('button', { name: 'Conferma' }));
     expect(await screen.findByText('Mappa attiva: Sport.')).toBeInTheDocument();
   });
 
-  it('crea, rinomina, duplica ed elimina con conferma', async () => {
+  it('elenco a gruppi: mappe personali e preset', async () => {
+    await setup({ rules: { primary: 6 } });
+    const select = screen.getByLabelText('Mappa attiva');
+    const groups = within(select).getAllByRole('group');
+    expect(groups.map((g) => g.getAttribute('label'))).toEqual([
+      'Mappe personali',
+      'Preset (sola lettura)',
+    ]);
+    expect(within(groups[1]!).getAllByRole('option')).toHaveLength(4);
+    expect(screen.getByRole('heading', { name: 'Regole della mappa «Personale»' })).toBeVisible();
+  });
+
+  it('mappe personali: crea, rinomina, duplica con nome ed elimina con conferma', async () => {
     const { backend, user } = await setup({ rules: { primary: 6 } });
     await user.click(screen.getByRole('button', { name: 'Nuova' }));
     await user.type(screen.getByLabelText('Nome della mappa'), 'Notte{Enter}');
     expect(await screen.findByText('Mappa «Notte» creata.')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Rinomina' }));
+    await user.click(screen.getByRole('button', { name: /Mappe personali \(2\)/ }));
+    await user.click(screen.getByRole('button', { name: 'Rinomina «Notte»' }));
     const name = screen.getByLabelText('Nome della mappa');
     await user.clear(name);
     await user.type(name, 'Lavoro{Enter}');
     expect(await screen.findByText('Mappa rinominata in «Lavoro».')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Duplica' }));
+    await user.click(screen.getByRole('button', { name: 'Duplica «Lavoro»' }));
+    expect(screen.getByLabelText('Nome della mappa')).toHaveValue('Lavoro (copia)');
     await user.click(screen.getByRole('button', { name: 'Conferma' }));
     expect(await screen.findByText('Copia creata.')).toBeInTheDocument();
     let profiles = await backend.getEngineProfiles();
     expect(profiles.profiles.map((p) => p.name)).toContain('Lavoro (copia)');
     expect(profiles.profiles).toHaveLength(7);
-    await user.click(screen.getByRole('button', { name: 'Elimina' }));
+    await user.click(screen.getByRole('button', { name: 'Elimina «Lavoro (copia)»' }));
     const dialog = await screen.findByRole('alertdialog');
     await user.click(within(dialog).getByRole('button', { name: 'Elimina' }));
     expect(await screen.findByText('Mappa eliminata.')).toBeInTheDocument();
     profiles = await backend.getEngineProfiles();
     expect(profiles.profiles).toHaveLength(6);
+    expect(profiles.activeId).toBe('personal');
   });
 
   it('nome vuoto: errore e nessuna chiamata', async () => {
@@ -269,33 +285,96 @@ describe('RulesPage: mappe', () => {
     expect(apply).not.toHaveBeenCalled();
   });
 
-  it('ripristina il preset (solo per le mappe da preset), con conferma', async () => {
-    const { backend, user } = await setup();
-    expect(screen.queryByRole('button', { name: 'Ripristina preset' })).toBeNull();
+  it('la mappa attiva non si elimina; le personali sì, tutte, perché i preset restano', async () => {
+    const { backend, user } = await setup({ rules: { primary: 6 } });
+    await user.click(screen.getByRole('button', { name: /Mappe personali \(1\)/ }));
+    expect(screen.getByRole('button', { name: 'Elimina «Personale»' })).toBeDisabled();
     await user.selectOptions(screen.getByLabelText('Mappa attiva'), 'eco');
     await screen.findByText('Mappa attiva: Eco.');
-    const five = screen.getByLabelText('Soglia sulle 5 ore (%)');
-    await user.clear(five);
-    await user.type(five, '50');
-    await user.click(screen.getByRole('button', { name: 'Salva' }));
-    await screen.findByText('Regole salvate.');
-    await user.click(screen.getByRole('button', { name: 'Ripristina preset' }));
-    const dialog = await screen.findByRole('alertdialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Ripristina preset' }));
-    expect(await screen.findByText('Preset ripristinato.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Soglia sulle 5 ore (%)')).toHaveValue(90);
-    expect((await backend.getEngineState()).rules.fiveHourThreshold).toBe(90);
+    await user.click(screen.getByRole('button', { name: /Mappe personali \(1\)/ }));
+    await user.click(screen.getByRole('button', { name: 'Elimina «Personale»' }));
+    await user.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Elimina' }),
+    );
+    expect(await screen.findByText('Mappa eliminata.')).toBeInTheDocument();
+    expect((await backend.getEngineProfiles()).profiles).toHaveLength(4);
+    expect(
+      screen.getByText('Nessuna mappa personale: clona un preset o creane una nuova.'),
+    ).toBeVisible();
   });
 
-  it('l’ultima mappa non si elimina', async () => {
-    const backend = new FakeBackend();
-    const rules = (await backend.getEngineState()).rules;
-    vi.spyOn(backend, 'getEngineProfiles').mockResolvedValue({
-      activeId: 'personal',
-      profiles: [{ id: 'personal', name: 'Personale', rules }],
+  it('preset in sola lettura: controlli disabilitati, «Clona come mappa personale» la apre', async () => {
+    const { backend, user } = await setup({ rules: { primary: 6, reserves: [1, 3] } });
+    await user.selectOptions(screen.getByLabelText('Mappa attiva'), 'eco');
+    await screen.findByText('Mappa attiva: Eco.');
+    expect(screen.getByRole('heading', { name: 'Regole della mappa «Eco»' })).toBeVisible();
+    expect(screen.getByTestId('map-readonly')).toHaveTextContent(
+      'Preset in sola lettura: clonalo per modificarlo.',
+    );
+    expect(screen.getByLabelText('Soglia sulle 5 ore (%)')).toBeDisabled();
+    expect(screen.getByLabelText('Criterio di scelta della riserva')).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Ripristina preset' })).toBeNull();
+    // Le parti comuni a tutte le mappe restano modificabili.
+    expect(screen.getByLabelText('Solo osservazione')).toBeEnabled();
+
+    await user.click(screen.getByRole('button', { name: 'Clona come mappa personale' }));
+    await user.click(screen.getByRole('button', { name: 'Conferma' }));
+    expect(screen.getByText('Scrivi un nome da 1 a 60 caratteri.')).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Nome della mappa'), '  Mia eco {Enter}');
+    expect(
+      await screen.findByText('Mappa personale «Mia eco» creata e aperta.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Regole della mappa «Mia eco»' })).toBeVisible();
+    expect(screen.queryByTestId('map-readonly')).toBeNull();
+    const five = screen.getByLabelText('Soglia sulle 5 ore (%)');
+    expect(five).toBeEnabled();
+    expect(five).toHaveValue(90);
+    const profiles = await backend.getEngineProfiles();
+    const mine = profiles.profiles.find((p) => p.id === profiles.activeId)!;
+    expect([mine.name, mine.preset]).toEqual(['Mia eco', undefined]);
+    expect(profiles.profiles.find((p) => p.id === 'eco')?.preset).toBe('eco');
+  });
+
+  it('preset attivo: il salvataggio manda solo le parti comuni, lista com’è (esclusi compresi)', async () => {
+    const { backend, save, user } = await setup({
+      rules: { order: [6, 1, 3], primary: 6, reserves: [1, 3], excluded: [3] },
     });
-    renderWith(<RulesPage />, backend);
-    expect(await screen.findByRole('button', { name: 'Elimina' })).toBeDisabled();
+    await user.selectOptions(screen.getByLabelText('Mappa attiva'), 'eco');
+    await screen.findByText('Mappa attiva: Eco.');
+    const before = (await backend.getEngineState()).rules;
+    await user.click(screen.getByLabelText('Solo osservazione'));
+    await user.click(screen.getByRole('button', { name: 'Salva' }));
+    expect(await screen.findByText('Regole salvate.')).toBeInTheDocument();
+    // Le regole salvate così come sono (non la lista resa esplicita dalla bozza), più il cambio.
+    expect(save.mock.calls[0]![0]).toEqual({ ...before, dryRun: true });
+  });
+
+  it('preset attivo senza lista: niente motore, avviso che rimanda a «Clona»', async () => {
+    const { save, user } = await setup({ rules: { enabled: false } });
+    await user.selectOptions(screen.getByLabelText('Mappa attiva'), 'sport');
+    await screen.findByText('Mappa attiva: Sport.');
+    const noList =
+      'Questo preset non ha una lista di account: clonalo come mappa personale per sceglierla, poi accendi il motore.';
+    expect(screen.getByTestId('map-readonly')).toHaveTextContent(noList);
+    await user.click(screen.getByRole('button', { name: 'Accendi' }));
+    expect(save).not.toHaveBeenCalled();
+    expect(screen.getAllByText(noList).length).toBeGreaterThan(1);
+    await user.click(screen.getByLabelText('Motore acceso'));
+    expect(screen.getAllByRole('alert').some((a) => a.textContent === noList)).toBe(true);
+    expect(screen.getByRole('button', { name: 'Salva' })).toBeDisabled();
+  });
+
+  it('il backend rifiuta la modifica di un preset', async () => {
+    const backend = new FakeBackend({ rules: { primary: 6 } });
+    await backend.applyEngineProfile({ op: 'select', id: 'sport' });
+    const rules = (await backend.getEngineState()).rules;
+    await expect(backend.setEngineRules({ ...rules, fiveHourThreshold: 50 })).rejects.toThrow(
+      'sola lettura',
+    );
+    await expect(backend.setEngineRules({ ...rules, dryRun: true })).resolves.toBeDefined();
+    await expect(backend.applyEngineProfile({ op: 'delete', id: 'sport' })).rejects.toThrow(
+      'sola lettura',
+    );
   });
 });
 

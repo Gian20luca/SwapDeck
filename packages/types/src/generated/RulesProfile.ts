@@ -7,6 +7,6 @@ import type { PresetKind } from "./PresetKind.js";
  */
 export type RulesProfile = { id: string, name: string, 
 /**
- * Preset di origine: «Ripristina» torna alle sue regole.
+ * Presente = preset in sola lettura; assente = mappa personale.
  */
 preset?: PresetKind, rules: EngineRules, };
