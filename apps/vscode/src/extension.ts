@@ -7,6 +7,7 @@ import type {
   Confirmation,
   CswapAction,
   EngineProfiles,
+  EngineRules,
   EngineState,
   ListResponse,
   Notification,
@@ -30,6 +31,7 @@ import {
   toCswapError,
 } from './cli.js';
 import { DEACTIVATE_GRACE_MS, EngineProcess, shouldRetryEngine } from './engine.js';
+import { rulesToStart, type FirstEnableAnswer } from './firstEnable.js';
 import type { CliState } from './generated/index.js';
 import { fromPoll, langOf, messageOf, parseEngineEvent, shouldPoll } from './notifications.js';
 import { DashboardPanel, SIDEBAR_VIEW_ID, SidebarView, WebviewHub } from './panel.js';
@@ -520,19 +522,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
    * «Avvia/Ferma motore» come «Accendi» e «Motore acceso» della scheda Regole: `engine.enabled`
    * delle regole (condivise con le altre finestre e con l'app), riletto subito prima di scriverlo.
    * Il processo del motore resta acceso (storico e notifiche); avviando, lo si accende se era spento.
+   * La prima accensione chiede conferma con un dialogo modale (Accendi / Solo osservazione /
+   * Annulla), come la scheda Regole; annullando non cambia nulla.
    */
   const setEngine = async (enabled: boolean) => {
-    if (enabled && !settings().engineEnabled) {
-      await vscode.workspace
-        .getConfiguration(SECTION)
-        .update('engine.enabled', true, vscode.ConfigurationTarget.Global);
-    }
+    let last: EngineRules | undefined;
+    const readRules = async () => (last = (await cli<EngineState>(['engine', 'state'])).rules);
+    let next: EngineRules | null;
     try {
-      const current = await cli<EngineState>(['engine', 'state']);
-      if (current.rules.enabled !== enabled) {
-        await cli(['engine', 'rules', 'set', '-'], {
-          stdin: JSON.stringify({ ...current.rules, enabled }),
-        });
+      next = enabled
+        ? await rulesToStart(readRules, askFirstEnable)
+        : { ...(await readRules()), enabled: false };
+      if (!next) return;
+      if (enabled && !settings().engineEnabled) {
+        await vscode.workspace
+          .getConfiguration(SECTION)
+          .update('engine.enabled', true, vscode.ConfigurationTarget.Global);
+      }
+      if (JSON.stringify(next) !== JSON.stringify(last)) {
+        await cli(['engine', 'rules', 'set', '-'], { stdin: JSON.stringify(next) });
       }
     } catch (error) {
       const info = toCswapError(error);
@@ -543,11 +551,28 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     }
     syncEngine();
     void vscode.window.showInformationMessage(
-      enabled
-        ? t('SwapDeck: engine on, it switches accounts by the rules')
-        : t('SwapDeck: engine off, no automatic switches'),
+      !enabled
+        ? t('SwapDeck: engine off, no automatic switches')
+        : next.dryRun
+          ? t('SwapDeck: engine on in observe-only mode, it never switches')
+          : t('SwapDeck: engine on, it switches accounts by the rules'),
     );
     await refresh();
+  };
+
+  /** Dialogo modale della prima accensione; «Annulla» lo aggiunge VS Code. */
+  const askFirstEnable = async (): Promise<FirstEnableAnswer> => {
+    const on = t('Turn on');
+    const observe = t('Observe only');
+    const pick = await vscode.window.showWarningMessage(
+      t(
+        'The engine will switch accounts by itself, for every open session. Do you want to try it in Observe only first?',
+      ),
+      { modal: true },
+      on,
+      observe,
+    );
+    return pick === on ? 'on' : pick === observe ? 'observe' : undefined;
   };
 
   /** Apre (o porta in primo piano) la vista SwapDeck della barra delle attività. */

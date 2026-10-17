@@ -8,21 +8,27 @@ const OFF = {
   firstEnableConfirmed: false,
   order: [6, 1],
 } as unknown as EngineRules;
+const reads = (...list: EngineRules[]) => {
+  const read = vi.fn(async () => list.shift() ?? OFF);
+  return read;
+};
 
 describe('rulesToStart («Avvia motore»)', () => {
-  it('prima accensione: chiede; «Accendi» accende e ricorda la conferma', async () => {
+  it('prima accensione: chiede; «Accendi» accende e ricorda la conferma, su regole rilette', async () => {
     const ask = vi.fn(async () => 'on' as const);
-    expect(await rulesToStart(OFF, ask)).toMatchObject({
+    const read = reads(OFF, { ...OFF, order: [1, 6] } as EngineRules);
+    expect(await rulesToStart(read, ask)).toMatchObject({
       enabled: true,
       dryRun: false,
       firstEnableConfirmed: true,
-      order: [6, 1],
+      order: [1, 6],
     });
     expect(ask).toHaveBeenCalledTimes(1);
+    expect(read).toHaveBeenCalledTimes(2);
   });
 
   it('«Solo osservazione» accende in osservazione', async () => {
-    expect(await rulesToStart(OFF, async () => 'observe')).toMatchObject({
+    expect(await rulesToStart(reads(), async () => 'observe')).toMatchObject({
       enabled: true,
       dryRun: true,
       firstEnableConfirmed: true,
@@ -30,7 +36,7 @@ describe('rulesToStart («Avvia motore»)', () => {
   });
 
   it('annullato: nessuna regola da scrivere', async () => {
-    expect(await rulesToStart(OFF, async () => undefined)).toBeNull();
+    expect(await rulesToStart(reads(), async () => undefined)).toBeNull();
   });
 
   it('già confermata, accesa o in osservazione: parte subito senza chiedere', async () => {
@@ -40,7 +46,7 @@ describe('rulesToStart («Avvia motore»)', () => {
       { ...OFF, enabled: true },
       { ...OFF, dryRun: true },
     ]) {
-      expect((await rulesToStart(rules, ask))?.enabled).toBe(true);
+      expect((await rulesToStart(reads(rules), ask))?.enabled).toBe(true);
     }
     expect(ask).not.toHaveBeenCalled();
   });

@@ -23,7 +23,7 @@ Il .vsix è per piattaforma (contiene `bin/swapdeck-cli`) e non richiede privile
 
 ## Motore
 
-Ogni finestra avvia `swapdeck-cli headless` come processo figlio (`swapdeck.engine.enabled`, acceso di default): registra lo storico, manda le notifiche e, se il motore è acceso nella scheda Regole («Accendi»), cambia account secondo le regole salvate (valgono dal giro successivo, senza riavvio). `SwapDeck: Avvia motore` e `Ferma motore` fanno lo stesso di «Accendi» e «Motore acceso» in Regole: cambiano `engine.enabled` delle regole, condiviso da tutte le finestre.
+Ogni finestra avvia `swapdeck-cli headless` come processo figlio (`swapdeck.engine.enabled`, acceso di default): registra lo storico, manda le notifiche e, se il motore è acceso nella scheda Regole («Accendi»), cambia account secondo le regole salvate (valgono dal giro successivo, senza riavvio). `SwapDeck: Avvia motore` e `Ferma motore` fanno lo stesso di «Accendi» e «Motore acceso» in Regole: cambiano `engine.enabled` delle regole, condiviso da tutte le finestre. La prima accensione chiede conferma con un dialogo (Accendi / Solo osservazione / Annulla), una volta sola per l'app e tutte le finestre.
 
 Un solo motore attivo per utente, grazie al lock: le altre finestre osservano (tooltip: «attivo in un'altra finestra o istanza», con il PID) e, quando la finestra titolare si chiude, una di loro lo prende entro un giro (`pollIntervalSeconds`). Le righe del motore sono nel canale di output «SwapDeck».
 
