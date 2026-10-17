@@ -42,9 +42,9 @@ export const enInfo: Record<keyof typeof itInfo, string> = {
   'info.tools.import.force':
     'If an account already exists in the same slot, the file replaces it. Without this option it is skipped.',
   'info.tools.unclaimed':
-    'Credentials left in cswap without a linked account, usually after a removal. You can delete them to tidy up.',
+    'Credentials cswap has set aside without a linked account. You can delete them one by one to tidy up.',
   'info.tools.purge':
-    'Wipes everything cswap has saved. Use it to start from scratch or before uninstalling; it cannot be undone.',
+    'Deletes everything cswap has saved (accounts, credentials, session profiles). It does not touch the current Claude Code login and it cannot be undone.',
 
   'info.settings.app':
     'How SwapDeck looks and how often it reads usage. They apply to this app only, not to cswap.',
@@ -68,15 +68,15 @@ export const enInfo: Record<keyof typeof itInfo, string> = {
   'info.config.cooldownSeconds':
     'Minimum pause after a switch before another one is allowed. It avoids rapid-fire changes.',
   'info.config.hysteresisPct':
-    'Margin in percentage points that avoids switching back and forth: an account comes back into play only once it is far enough below the threshold.',
+    'Margin, in percentage points below the threshold, that avoids switching back and forth between accounts close to the threshold. Higher values make switching steadier.',
   'info.config.strategy':
     '“best” picks the account with the most free headroom. “consume-first” uses first the one whose limit resets soonest, so nothing goes to waste.',
   'info.config.includeApiKeyAccounts':
-    'API-key accounts are billed per use. By default automatic switching does not use them: turn this on only if you want it to.',
+    'API-key accounts are billed per use. By default automatic switching does not use them as a destination: turn this on only if you want it to.',
   'info.config.unhealthyTicks':
-    'How many checks in a row must fail before an account is set aside (quarantine). It avoids dropping an account for a passing error.',
+    'How many consecutive check rounds an account must fail before it is put in quarantine, that is left out of the choice. It avoids dropping an account for a passing error.',
   'info.config.model':
-    'Which per-model limits (for example Fable) count in the choice. Names separated by commas, or “all” for every one.',
+    'Which per-model limits (for example Fable) count in the choice. Names separated by commas, or “all” for every one; if empty, no model counts.',
   'info.config.theme':
     'The theme of cswap’s terminal interface. It does not change how SwapDeck looks.',
 

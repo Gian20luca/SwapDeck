@@ -40,9 +40,9 @@ export const itInfo = {
   'info.tools.import.force':
     'Se un’utenza è già presente nello stesso slot, il file la sostituisce. Senza questa scelta viene saltata.',
   'info.tools.unclaimed':
-    'Credenziali rimaste in cswap senza un’utenza collegata, di solito dopo una rimozione. Puoi eliminarle per fare pulizia.',
+    'Credenziali che cswap ha messo da parte senza un’utenza collegata. Puoi eliminarle una a una per fare pulizia.',
   'info.tools.purge':
-    'Azzera tutto ciò che cswap ha salvato. Si usa per ripartire da zero o prima di disinstallare, e non si può annullare.',
+    'Cancella tutto ciò che cswap ha salvato (utenze, credenziali, profili di sessione). Non tocca il login corrente di Claude Code e non si può annullare.',
 
   'info.settings.app':
     'Come si presenta SwapDeck e ogni quanto legge i consumi. Valgono solo per questa app, non per cswap.',
@@ -66,15 +66,15 @@ export const itInfo = {
   'info.config.cooldownSeconds':
     'Pausa minima dopo un cambio prima di poterne fare un altro. Evita passaggi a raffica.',
   'info.config.hysteresisPct':
-    'Margine in punti percentuali che evita i cambi avanti e indietro: un’utenza torna in gioco solo quando è scesa abbastanza sotto la soglia.',
+    'Margine, in punti percentuali sotto la soglia, che evita i cambi avanti e indietro tra utenze vicine alla soglia. Valori più alti rendono il cambio più stabile.',
   'info.config.strategy':
     '«best» sceglie l’utenza con più margine libero. «consume-first» consuma prima quella il cui limite si azzera per prima, così nulla va sprecato.',
   'info.config.includeApiKeyAccounts':
-    'Le utenze con chiave API si pagano a consumo. Per default il cambio automatico non le usa: attivalo solo se vuoi che lo faccia.',
+    'Le utenze con chiave API si pagano a consumo. Per default il cambio automatico non le usa come destinazione: attivalo solo se vuoi che lo faccia.',
   'info.config.unhealthyTicks':
-    'Quanti controlli di fila devono fallire prima che un’utenza venga messa da parte (quarantena). Evita di scartarla per un errore passeggero.',
+    'Quanti giri di controllo consecutivi un’utenza deve risultare in errore prima di essere messa in quarantena, cioè esclusa dalla scelta. Evita di scartarla per un errore passeggero.',
   'info.config.model':
-    'Quali limiti per modello (per esempio Fable) contano nella scelta. Nomi separati da virgola, oppure «all» per tutti.',
+    'Quali limiti per modello (per esempio Fable) contano nella scelta. Nomi separati da virgola, oppure «all» per tutti; se è vuoto non conta nessun modello.',
   'info.config.theme':
     'Il tema dell’interfaccia a terminale di cswap. Non cambia l’aspetto di SwapDeck.',
 
