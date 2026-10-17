@@ -34,7 +34,8 @@ Tutte le finestre aperte, anche di istanze diverse di VS Code, mostrano gli stes
 - ogni finestra osserva la cartella della config di SwapDeck: una modifica di `config.json` (regole, mappe, preferenze, notifiche) le fa rileggere tutte;
 - dopo un cambio di account o un'altra azione di cswap, la finestra che l'ha fatta riscrive il segnale `vscode-sync.json` (solo `source` e `at`, in modo atomico) e le altre rileggono; lo stesso fa la finestra titolare a ogni notifica del motore;
 - il polling (`refreshIntervalSeconds`) e la rilettura al ritorno del focus restano come rete di sicurezza;
-- le scritture passano dalla CLI, che rilegge la config subito prima di scrivere e cambia solo la parte toccata: le modifiche delle altre finestre restano;
+- le schede aperte (Cartelle, Regole, Impostazioni, configurazione di cswap, Notifiche) si aggiornano da sole; se stai modificando un modulo non salvato, resta com'è e compare «Modificato in un'altra finestra» con «Ricarica» (che scarta le tue modifiche);
+- le scritture passano dalla CLI, che sotto un lock di file per utente (`.config.json.lock`, attesa massima 5 s) rilegge la config, cambia solo la parte toccata e la riscrive in modo atomico: due salvataggi simultanei da finestre diverse, dall'app o dalla CLI non si perdono;
 - la barra di stato ha lo stesso testo e colore in tutte le finestre; cambia solo la riga del motore nel tooltip.
 
 ## Impostazioni
