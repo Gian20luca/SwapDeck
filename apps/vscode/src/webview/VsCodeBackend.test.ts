@@ -114,6 +114,16 @@ describe('VsCodeBackend', () => {
     expect(views).toEqual([{ locale: 'en', theme: 'dark' }]);
   });
 
+  it('config cambiata altrove: gli ascoltatori rileggono finché sono iscritti', () => {
+    const { backend, reply } = setup();
+    let calls = 0;
+    const off = backend.onConfigChanged(() => calls++);
+    reply({ type: 'configChanged' });
+    off();
+    reply({ type: 'configChanged' });
+    expect(calls).toBe(1);
+  });
+
   it('ready avvisa l’host; dispose rifiuta le richieste in sospeso', async () => {
     const { backend, sent, isUnsubscribed } = setup();
     backend.ready();

@@ -106,6 +106,7 @@ Gli agenti si scelgono secondo le regole globali. Step 2 e 3 possono andare in p
 - Nessuna firma del codice per ora (avviso di SmartScreen e Gatekeeper accettato).
 - Build Windows locale se i Build Tools MSVC si installano senza admin; in ogni caso c'è la CI.
 - L'estensione si distribuisce come .vsix, senza Marketplace.
+- L'estensione basta da sola (step `vsside`): vista SwapDeck nella barra delle attività con l'app completa, clic sulla barra di stato che apre la vista, motore acceso di default (`swapdeck.engine.enabled`), notifiche solo dalla finestra titolare del lock, finestre sincronizzate (watcher della config e segnale `vscode-sync.json`) e `config.json` scritto sotto un lock di file fra processi.
 - Il guard personale dell'utente (fuori dal progetto) resta finché non passa a SwapDeck, poi lo dismette lui. I file in `~/.claude` non si toccano senza il suo permesso.
 
 ## 5. Repo

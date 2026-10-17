@@ -1,6 +1,6 @@
 {
-  "description": "Monitor e cambio degli account di cswap: barra di stato, cambio rapido, pannello e motore opzionale.",
-  "command.openPanel": "Apri pannello",
+  "description": "Monitor e cambio degli account di cswap tutto dentro VS Code: vista SwapDeck nella barra delle attività, barra di stato, cambio rapido, notifiche e motore.",
+  "command.openPanel": "Apri in una scheda",
   "command.refresh": "Aggiorna",
   "command.switchAccount": "Cambia account",
   "command.switchMap": "Cambia mappa",
@@ -8,6 +8,7 @@
   "command.stopEngine": "Ferma motore",
   "config.refreshIntervalSeconds": "Ogni quanti secondi leggere `cswap list`.",
   "config.cliPath": "Percorso assoluto di `swapdeck-cli`. Vuoto: quello incluso nell'estensione.",
-  "config.engine.enabled": "Esegue il motore di SwapDeck (`swapdeck-cli headless`) mentre VS Code è aperto. Rispetta il lock di istanza unica e le regole della config di SwapDeck.",
-  "config.notifications.thresholds": "Soglie di consumo (%) per i colori della barra di stato: la più bassa come avviso, la più alta come critica. Le notifiche seguono le regole di SwapDeck (sezione notifications della config)."
+  "config.engine.enabled": "Esegue il motore di SwapDeck (`swapdeck-cli headless`) mentre VS Code è aperto: registra lo storico, manda le notifiche e, se il motore è acceso in Regole, cambia account. Un solo motore per utente fra tutte le finestre (lock): le altre osservano e lo prendono quando si chiude.",
+  "config.notifications.thresholds": "Soglie di consumo (%) per i colori della barra di stato: la più bassa come avviso, la più alta come critica. Le notifiche seguono le regole di SwapDeck (sezione notifications della config).",
+  "command.showView": "Mostra SwapDeck"
 }

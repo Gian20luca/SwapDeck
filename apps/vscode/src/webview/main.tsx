@@ -1,9 +1,16 @@
-import { BackendProvider, I18nProvider, SwapDeckApp, ThemeProvider } from '@swapdeck/ui';
+import {
+  BackendProvider,
+  I18nProvider,
+  SwapDeckApp,
+  ThemeProvider,
+  type TabId,
+} from '@swapdeck/ui';
 import '@swapdeck/ui/styles.css';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { HostMessage, ViewSettings } from '../protocol.js';
 import { VsCodeBackend } from './VsCodeBackend.js';
+import { readState } from './viewState.js';
 import './webview.css';
 
 const vscode = acquireVsCodeApi();
@@ -16,9 +23,18 @@ const backend = new VsCodeBackend(
   },
 );
 
+/** Scheda aperta: ricordata da VS Code quando la vista si nasconde o la scheda passa in secondo piano. */
+let saved = readState(vscode.getState());
+const rememberTab = (tab: TabId) => {
+  if (saved.tab === tab) return;
+  saved = { ...saved, tab };
+  vscode.setState(saved);
+};
+
 /**
- * App completa a schede. Lingua e tema seguono VS Code: a ogni cambio la UI si rimonta con i nuovi
- * valori. Le conferme le chiede l'host (`hostConfirms`).
+ * App completa a schede, nella vista della barra laterale e nella scheda dell'editor. Lingua e tema
+ * seguono VS Code: a ogni cambio la UI si rimonta con i nuovi valori, sulla scheda salvata. Le
+ * conferme le chiede l'host (`hostConfirms`).
  */
 function App() {
   const [view, setView] = useState<ViewSettings | null>(null);
@@ -32,7 +48,10 @@ function App() {
     <ThemeProvider key={`${view.locale}-${view.theme}`} initial={view.theme}>
       <I18nProvider initial={view.locale}>
         <BackendProvider backend={backend}>
-          <SwapDeckApp />
+          <SwapDeckApp
+            {...(saved.tab ? { initialTab: saved.tab } : {})}
+            onTabChange={rememberTab}
+          />
         </BackendProvider>
       </I18nProvider>
     </ThemeProvider>

@@ -3,6 +3,7 @@
  * finto cswap (`SWAPDECK_CSWAP`) e cartella dati temporanea (`SWAPDECK_HOME`).
  */
 import * as assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
@@ -21,7 +22,15 @@ const tests: Array<[string, (api: SwapDeckApi) => Promise<void>]> = [
     'comandi registrati',
     async () => {
       const all = await vscode.commands.getCommands(true);
-      for (const c of ['openPanel', 'refresh', 'switchAccount', 'startEngine', 'stopEngine']) {
+      for (const c of [
+        'showView',
+        'openPanel',
+        'refresh',
+        'switchAccount',
+        'switchMap',
+        'startEngine',
+        'stopEngine',
+      ]) {
         assert.ok(all.includes(`swapdeck.${c}`), c);
       }
     },
@@ -37,7 +46,17 @@ const tests: Array<[string, (api: SwapDeckApi) => Promise<void>]> = [
     },
   ],
   [
-    'pannello',
+    'vista nella barra delle attività: il clic sulla barra di stato la apre',
+    async (api) => {
+      // Mai il cambio di account con un clic: lo switch è globale.
+      assert.equal(api.statusCommand(), 'swapdeck.showView');
+      await vscode.commands.executeCommand('swapdeck.showView');
+      await waitFor('vista creata', () => api.viewResolved());
+      await waitFor('webview della vista pronto', () => api.panelReady());
+    },
+  ],
+  [
+    'apri in una scheda',
     async (api) => {
       await vscode.commands.executeCommand('swapdeck.openPanel');
       assert.ok(api.panelOpen());
@@ -62,12 +81,37 @@ const tests: Array<[string, (api: SwapDeckApi) => Promise<void>]> = [
     'motore avviato e fermato (lock preso e rilasciato)',
     async (api) => {
       const lock = path.join(process.env['SWAPDECK_HOME']!, 'data', 'engine.lock');
+      // Accendere vuole un principale: regole con l'account 6 e una riserva, come dalla scheda Regole.
+      const cli = process.env['SWAPDECK_TEST_CLI']!;
+      const state = JSON.parse(execFileSync(cli, ['engine', 'state'], { encoding: 'utf8' })) as {
+        rules: Record<string, unknown>;
+      };
+      execFileSync(cli, ['engine', 'rules', 'set', '-'], {
+        input: JSON.stringify({ ...state.rules, order: [6, 3], primary: 6, reserves: [3] }),
+      });
       await vscode.commands.executeCommand('swapdeck.startEngine');
       await waitFor('motore attivo', () => api.engineRunning());
       await waitFor('lock preso', () => existsSync(lock));
+      assert.equal((await api.refresh()).engine.enabled, true);
+      // «Ferma motore» spegne i cambi automatici (regole), il processo resta per storico e notifiche.
       await vscode.commands.executeCommand('swapdeck.stopEngine');
+      assert.equal((await api.refresh()).engine.enabled, false);
+      assert.ok(api.engineRunning());
+      await vscode.workspace
+        .getConfiguration('swapdeck')
+        .update('engine.enabled', false, vscode.ConfigurationTarget.Global);
       await waitFor('motore fermo', () => !api.engineRunning());
       await waitFor('lock rilasciato', () => !existsSync(lock), 10_000);
+    },
+  ],
+  [
+    'sincronia: la finestra osserva la cartella della config',
+    async (api) => {
+      await api.refresh();
+      await waitFor('watcher attivo', () => api.syncWatching());
+      await api.signalSync();
+      const signal = path.join(process.env['SWAPDECK_HOME']!, 'config', 'vscode-sync.json');
+      assert.ok(existsSync(signal));
     },
   ],
 ];

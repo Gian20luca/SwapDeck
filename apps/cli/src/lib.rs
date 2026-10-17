@@ -659,6 +659,8 @@ fn config_set(patch_text: &str) -> Res<ConfigView> {
         return Err(usage_error("config set vuole un oggetto JSON"));
     }
     let path = paths()?.config_file();
+    // Lettura, merge e scrittura sotto il lock della config fra processi.
+    let _lock = config::lock(&path).map_err(config_error)?;
     let current = config::load(&path).map_err(|e| failed(e.to_string()))?;
     let mut merged = to_value(&current.config)?;
     merge_patch(&mut merged, &patch);

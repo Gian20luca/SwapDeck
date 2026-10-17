@@ -21,6 +21,10 @@ export const en: Record<MessageKey, string> = {
   'common.back': 'Back',
   'common.close': 'Close',
   'common.retry': 'Retry',
+  'sync.changedElsewhere':
+    'Changed in another window. Your changes are not saved: Reload discards them and shows the new values.',
+  'sync.reload': 'Reload',
+  'sync.reload.tip': 'Discard unsaved changes and show the current values',
   'common.refresh': 'Refresh',
   'common.loading': 'Loading…',
   'common.working': 'Working…',

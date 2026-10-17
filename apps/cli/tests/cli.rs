@@ -195,6 +195,26 @@ fn config_get_and_set() {
 }
 
 #[test]
+fn concurrent_config_set_from_processes_loses_nothing() {
+    let env = Env::new();
+    let children: Vec<_> = (0..10)
+        .map(|i| {
+            env.command(&["config", "set", &format!(r#"{{"k{i}":{i}}}"#)])
+                .spawn()
+                .unwrap()
+        })
+        .collect();
+    for child in children {
+        let (code, v) = parse(child.wait_with_output().unwrap());
+        assert_eq!(code, 0, "{v}");
+    }
+    let (_, v) = env.run(&["config", "get"]);
+    for i in 0..10 {
+        assert_eq!(v["config"][format!("k{i}")], i, "{v}");
+    }
+}
+
+#[test]
 fn setup_commands() {
     let env = Env::new();
     let (code, d) = env.run(&["setup", "diagnose"]);

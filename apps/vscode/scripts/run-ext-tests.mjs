@@ -61,6 +61,9 @@ try {
       'telemetry.telemetryLevel': 'off',
     }),
   );
+  // Config di prova: niente avvio al login anche se l'app desktop leggesse questa cartella.
+  mkdirSync(join(root, 'home', 'config'), { recursive: true });
+  writeFileSync(join(root, 'home', 'config', 'config.json'), JSON.stringify({ autostart: false }));
   const workspace = join(root, 'workspace');
   mkdirSync(workspace);
   const env = {

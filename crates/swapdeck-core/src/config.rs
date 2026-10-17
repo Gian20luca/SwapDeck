@@ -117,6 +117,8 @@ pub enum ConfigError {
     Invalid(String),
     #[error("config scritta da una versione più recente (schemaVersion {0})")]
     UnsupportedVersion(u32),
+    #[error("config in uso da un altro processo di SwapDeck da oltre {0} s: riprova")]
+    Busy(u64),
 }
 
 impl AppConfig {
@@ -398,12 +400,43 @@ pub fn load(path: &Path) -> Result<Loaded, ConfigError> {
     })
 }
 
-/// Rilegge la config, applica `change` e la riscrive in modo atomico: le altre chiavi restano.
-/// Un file non valido dà errore e non viene mai sovrascritto.
+/// Attesa massima del lock della config (`lock`).
+pub const CONFIG_LOCK_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Lock fra processi (app, `swapdeck-cli`, finestre di VS Code) per leggere, modificare e
+/// riscrivere `path`: file `.<nome>.lock` nella stessa cartella. Chi fa lettura-modifica-scrittura
+/// lo tiene per tutto il giro (`update` lo fa da sé); `save` non lo prende.
+pub fn lock(path: &Path) -> Result<crate::filelock::FileLock, ConfigError> {
+    lock_for(path, CONFIG_LOCK_TIMEOUT)
+}
+
+fn lock_for(
+    path: &Path,
+    timeout: std::time::Duration,
+) -> Result<crate::filelock::FileLock, ConfigError> {
+    let (Some(dir), Some(name)) = (
+        path.parent().filter(|d| !d.as_os_str().is_empty()),
+        path.file_name(),
+    ) else {
+        return Err(ConfigError::Invalid("percorso senza cartella".into()));
+    };
+    create_private_dir(dir)?;
+    let mut lock_name = std::ffi::OsString::from(".");
+    lock_name.push(name);
+    lock_name.push(".lock");
+    crate::filelock::acquire(&dir.join(lock_name), timeout).map_err(|e| match e {
+        crate::filelock::LockError::Timeout => ConfigError::Busy(timeout.as_secs()),
+        crate::filelock::LockError::Io(e) => ConfigError::Io(e),
+    })
+}
+
+/// Sotto `lock`: rilegge la config, applica `change` e la riscrive in modo atomico; le altre
+/// chiavi restano. Un file non valido dà errore e non viene mai sovrascritto.
 pub fn update(
     path: &Path,
     change: impl FnOnce(&mut AppConfig) -> Result<(), ConfigError>,
 ) -> Result<AppConfig, ConfigError> {
+    let _lock = lock(path)?;
     let mut config = load(path)?.config;
     change(&mut config)?;
     save(path, &config)?;
@@ -469,6 +502,51 @@ pub(crate) fn open_no_follow(path: &Path) -> io::Result<File> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn concurrent_updates_lose_nothing() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = std::sync::Arc::new(tmp.path().join(CONFIG_FILE));
+        let threads: Vec<_> = (0..8)
+            .map(|i| {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    update(&path, |c| {
+                        // Allarga la finestra fra lettura e scrittura: senza lock si perderebbe.
+                        std::thread::sleep(std::time::Duration::from_millis(30));
+                        c.extra.insert(format!("k{i}"), serde_json::json!(i));
+                        Ok(())
+                    })
+                    .unwrap();
+                })
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap();
+        }
+        let c = load(&path).unwrap().config;
+        for i in 0..8 {
+            assert_eq!(c.extra.get(&format!("k{i}")), Some(&serde_json::json!(i)));
+        }
+    }
+
+    #[test]
+    fn busy_lock_gives_clear_error_and_leaves_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join(CONFIG_FILE);
+        update(&path, |c| {
+            c.poll_interval_seconds = 120;
+            Ok(())
+        })
+        .unwrap();
+        let held = lock(&path).unwrap();
+        let err = lock_for(&path, std::time::Duration::from_millis(100)).unwrap_err();
+        assert!(matches!(err, ConfigError::Busy(_)));
+        assert!(err.to_string().contains("in uso"), "{err}");
+        drop(held);
+        assert_eq!(load(&path).unwrap().config.poll_interval_seconds, 120);
+        assert!(tmp.path().join(".config.json.lock").is_file());
+    }
 
     #[test]
     fn defaults_are_valid() {

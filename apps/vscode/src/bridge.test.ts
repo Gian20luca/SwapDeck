@@ -334,6 +334,7 @@ describe('setup di cswap', () => {
       return engineRunning ? resume : () => undefined;
     });
     const refresh = vi.fn(async () => cliState(fixtureList()));
+    const onChanged = vi.fn(() => order.push('changed'));
     const handle = createRequestHandler({
       cli,
       lastState: () => undefined,
@@ -342,6 +343,7 @@ describe('setup di cswap', () => {
       confirm: vi.fn(async () => true),
       confirmSetup,
       pauseEngine,
+      onChanged,
     });
     return { handle, calls, confirmSetup, pauseEngine, resume, refresh, order };
   }
@@ -370,7 +372,8 @@ describe('setup di cswap', () => {
     const events: unknown[] = [];
     await handle('upgradeCswap', {}, (e) => events.push(e));
     expect(confirmSetup).toHaveBeenCalledWith('upgrade');
-    expect(order).toEqual(['pause', 'resume']);
+    // Dopo il riavvio del motore le altre finestre vengono avvisate (sincronia).
+    expect(order).toEqual(['pause', 'resume', 'changed']);
     expect(calls[0]!.args).toEqual(['setup', 'upgrade']);
     expect(events).toEqual([{ event: 'stepStarted', step: 'upgradeCswap' }]);
     expect(refresh).toHaveBeenCalled();

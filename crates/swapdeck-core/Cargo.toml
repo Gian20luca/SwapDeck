@@ -24,6 +24,8 @@ notify-rust = "4.17.0"
 ureq = { version = "3.4.2", default-features = false, features = ["rustls", "platform-verifier"] }
 memchr = "2.8.3"
 zeroize = "1.9.1"
+# Lock di config.json fra processi (flock / LockFileEx, senza unsafe nel progetto).
+fs4 = { version = "1.1.0", features = ["sync"] }
 
 [target."cfg(windows)".dependencies]
 # AUMID delle notifiche per utente (HKCU); già nel lockfile tramite gli strumenti di build.

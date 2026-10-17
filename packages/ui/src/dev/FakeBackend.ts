@@ -155,6 +155,7 @@ export class FakeBackend implements Backend, SetupBackend {
   private host: HostSettings = { autostart: true, autostartManaged: true, version: '0.0.0-fake' };
   private readonly picks: NonNullable<FakeBackendOptions['picks']>;
   private readonly listeners = new Set<(state: ListResponse) => void>();
+  private readonly configListeners = new Set<() => void>();
   private readonly latencyMs: number;
   /** Chiamate di «Chi consuma» ancora parziali e quante ne erano in tutto (`usageScanCalls`). */
   private usageScanLeft: number;
@@ -623,6 +624,31 @@ export class FakeBackend implements Backend, SetupBackend {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  onConfigChanged(listener: () => void): Unsubscribe {
+    this.configListeners.add(listener);
+    return () => {
+      this.configListeners.delete(listener);
+    };
+  }
+
+  /**
+   * Simula una modifica fatta in un'altra finestra (preferenze, notifiche, regole) e ne dà gli
+   * eventi come l'host di VS Code: stato riletto e config cambiata.
+   */
+  changeElsewhere(change: {
+    preferences?: Partial<AppPreferences>;
+    notifications?: NotificationPatch;
+    rules?: Partial<EngineRules>;
+  }): void {
+    if (change.rules) this.rules = { ...this.rules, ...structuredClone(change.rules) };
+    if (change.preferences) this.prefs = { ...this.prefs, ...change.preferences };
+    if (change.notifications) {
+      this.notifications = patchNotifications(this.notifications, change.notifications);
+    }
+    this.emit();
+    for (const listener of this.configListeners) listener();
   }
 
   /** Simula un aggiornamento del motore: l'account attivo consuma un po' e il dato diventa fresco. */
