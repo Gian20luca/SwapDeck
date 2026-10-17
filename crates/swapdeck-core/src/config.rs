@@ -581,6 +581,11 @@ mod tests {
         };
         let c = update(&path, |c| c.apply_profile_command(&clone)).unwrap();
         assert_eq!(c.engine_profiles.active().unwrap().name, "Mia sport");
+        // Config con il motore già acceso: la prima accensione conta come confermata.
+        let observe = EngineRules {
+            first_enable_confirmed: true,
+            ..observe
+        };
         assert_eq!(c.engine, observe);
         let edited = EngineRules {
             five_hour_threshold: 80.0,
@@ -818,6 +823,8 @@ mod preferences_tests {
         let c = update(&path, |c| c.set_engine_rules(rules.clone())).unwrap();
         let rules = EngineRules {
             order: Some(vec![3]),
+            // Il motore era acceso nel file: la conferma della prima accensione resta.
+            first_enable_confirmed: true,
             ..rules
         };
         assert_eq!(c.engine, rules, "lista allineata alla principale");
