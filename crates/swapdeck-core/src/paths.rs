@@ -77,6 +77,24 @@ pub fn create_private_dir(dir: &Path) -> io::Result<()> {
     builder.create(dir)
 }
 
+/// Rinomina il file temporaneo sopra `target` (scrittura atomica). Su Windows la rinomina
+/// fallisce per un attimo se un altro processo (antivirus, indicizzatore, un lettore) tiene
+/// aperto il file senza condivisione: pochi tentativi ravvicinati, poi l'errore.
+pub fn persist_retrying(mut tmp: tempfile::NamedTempFile, target: &Path) -> io::Result<()> {
+    let mut attempt = 0u32;
+    loop {
+        match tmp.persist(target) {
+            Ok(_) => return Ok(()),
+            Err(e) if attempt < 4 && e.error.kind() == io::ErrorKind::PermissionDenied => {
+                tmp = e.file;
+                attempt += 1;
+                std::thread::sleep(std::time::Duration::from_millis(25 << attempt));
+            }
+            Err(e) => return Err(e.error),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -114,5 +132,60 @@ mod tests {
                 .mode();
             assert_eq!(mode & 0o777, 0o700);
         }
+    }
+}
+
+/// Causa del test instabile `legacy_memory_is_absorbed_once_when_loaded`: su Windows un file
+/// appena scritto può essere tenuto aperto per un attimo (antivirus) senza condivisione della
+/// cancellazione, e la rinomina sopra di lui fallisce con «accesso negato».
+#[cfg(all(test, windows))]
+mod windows_persist_tests {
+    use super::*;
+    use std::io::Write as _;
+    use std::os::windows::fs::OpenOptionsExt as _;
+    use std::time::Duration;
+
+    /// Apre `path` come farebbe uno scanner: lettura, senza `FILE_SHARE_DELETE`.
+    fn hold(path: &Path) -> std::fs::File {
+        const FILE_SHARE_READ: u32 = 1;
+        std::fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ)
+            .open(path)
+            .unwrap()
+    }
+
+    fn tmp_with(dir: &Path, text: &str) -> tempfile::NamedTempFile {
+        let mut tmp = tempfile::NamedTempFile::new_in(dir).unwrap();
+        tmp.write_all(text.as_bytes()).unwrap();
+        tmp
+    }
+
+    #[test]
+    fn rename_over_a_briefly_held_file_is_retried() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("memoria.json");
+        std::fs::write(&target, "vecchio").unwrap();
+
+        // Senza tentativi la rinomina fallisce finché il file è tenuto aperto.
+        let held = hold(&target);
+        let err = tmp_with(dir.path(), "x").persist(&target).unwrap_err();
+        assert_eq!(err.error.kind(), io::ErrorKind::PermissionDenied);
+        drop(held);
+
+        // Con i tentativi passa appena il file viene rilasciato.
+        let held = hold(&target);
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(60));
+            drop(held);
+        });
+        persist_retrying(tmp_with(dir.path(), "nuovo"), &target).unwrap();
+        release.join().unwrap();
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "nuovo");
+
+        // Tenuto aperto troppo a lungo: l'errore arriva comunque, senza attese infinite.
+        let _held = hold(&target);
+        let err = persist_retrying(tmp_with(dir.path(), "z"), &target).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
     }
 }

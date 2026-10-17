@@ -98,6 +98,8 @@ Installa solo il `.vsix` (`code --install-extension swapdeck-vscode-<piattaforma
 | 5.8 | Modifica un'impostazione in una finestra (alias, mappa, acceso) | Si propaga alle altre senza ricaricare, anche nella scheda aperta; se lì c'è un modulo in modifica compare «Modificato in un'altra finestra» con «Ricarica» | [ ] |
 | 5.9 | Scheda **Chi consuma** | Classifica per progetto, sessione, agente e modello su 5h e 7 giorni; avanzamento sulla prima lettura; nessun testo di messaggi mostrato | [ ] |
 | 5.10 | App desktop e VS Code insieme | Un solo motore; l'altro in osservazione, senza notifiche doppie | [ ] |
+| 5.11 | App desktop aperta su Impostazioni (o Notifiche, Cartelle, configurazione di cswap); cambia lo stesso valore da VS Code o con `swapdeck-cli config set` | Entro un paio di secondi l'app mostra il nuovo valore; con un modulo in modifica compare «Modificato in un'altra finestra» con «Ricarica»; un salvataggio fatto dall'app non fa comparire l'avviso | [ ] |
+| 5.12 | Motore sospeso (per esempio con `cswap auto` avviato a mano) con VS Code come titolare | Sopra le schede della vista laterale e del pannello: «Motore sospeso: altro motore attivo (id)»; sparisce quando il conflitto finisce | [ ] |
 
 ## 6. Linux e macOS
 

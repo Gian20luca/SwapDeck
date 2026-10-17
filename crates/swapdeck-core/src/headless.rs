@@ -26,7 +26,7 @@ use crate::notify::{
     EngineContext, HeadlessEvent, Notification, NotificationConfig, Notifier, SwitchDone,
     SwitchPreview,
 };
-use crate::paths::{AppPaths, create_private_dir};
+use crate::paths::{AppPaths, create_private_dir, persist_retrying};
 use crate::timeutil::{format_iso, now_unix};
 
 pub mod os_notify;
@@ -207,8 +207,7 @@ fn save_memory(dir: &Path, mem: &EngineMemory) -> io::Result<()> {
         .tempfile_in(dir)?;
     tmp.write_all(&serde_json::to_vec(mem).map_err(io::Error::other)?)?;
     tmp.as_file().sync_all()?;
-    tmp.persist(dir.join(MEMORY_FILE)).map_err(|e| e.error)?;
-    Ok(())
+    persist_retrying(tmp, &dir.join(MEMORY_FILE))
 }
 
 struct Holder {

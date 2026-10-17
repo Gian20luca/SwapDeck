@@ -4,6 +4,7 @@
 use serde::Serialize;
 use swapdeck_core::config::AppConfig;
 use swapdeck_core::cswap::{CswapError, ListResponse};
+use swapdeck_core::engine::SuspendReason;
 use swapdeck_core::lock::LockInfo;
 use ts_rs::TS;
 
@@ -34,6 +35,15 @@ pub struct EngineStatus {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub active_map: Option<String>,
+    /// Motore in esecuzione sospeso per un motivo che chiede attenzione (mai `disabled`): dalla
+    /// decisione che il titolare del lock ha scritto nello storico, senza leggere cswap.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub suspended: Option<SuspendReason>,
+    /// Dettagli della sospensione (per esempio gli id dei conflitti).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<String>>", optional)]
+    pub suspend_detail: Vec<String>,
     /// Config o lock non leggibili (il resto vale come default).
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

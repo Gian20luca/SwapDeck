@@ -34,6 +34,7 @@ import {
   type Unsubscribe,
 } from '@swapdeck/ui';
 import type {
+  EngineSuspension,
   HistoryParams,
   HostMessage,
   PickParams,
@@ -61,6 +62,9 @@ export class VsCodeBackend implements Backend, SetupBackend {
   private readonly stateListeners = new Set<(state: ListResponse) => void>();
   private readonly viewListeners = new Set<(settings: ViewSettings) => void>();
   private readonly configListeners = new Set<() => void>();
+  private readonly engineListeners = new Set<(suspended: EngineSuspension | null) => void>();
+  /** Ultimo stato del motore ricevuto: chi si iscrive dopo lo riceve subito. */
+  private suspension: EngineSuspension | null = null;
   private readonly unsubscribe: Unsubscribe;
 
   constructor(
@@ -84,6 +88,7 @@ export class VsCodeBackend implements Backend, SetupBackend {
     this.stateListeners.clear();
     this.viewListeners.clear();
     this.configListeners.clear();
+    this.engineListeners.clear();
   }
 
   private receive(message: HostMessage): void {
@@ -104,6 +109,10 @@ export class VsCodeBackend implements Backend, SetupBackend {
         return;
       case 'view':
         for (const l of this.viewListeners) l(message.settings);
+        return;
+      case 'engine':
+        this.suspension = message.suspended;
+        for (const l of this.engineListeners) l(message.suspended);
         return;
       case 'configChanged':
         for (const l of this.configListeners) l();
@@ -261,6 +270,13 @@ export class VsCodeBackend implements Backend, SetupBackend {
   onConfigChanged(listener: () => void): Unsubscribe {
     this.configListeners.add(listener);
     return () => this.configListeners.delete(listener);
+  }
+
+  /** Motore sospeso (riga sopra le schede); chiamato subito con l'ultimo stato noto. */
+  onEngineSuspension(listener: (suspended: EngineSuspension | null) => void): Unsubscribe {
+    this.engineListeners.add(listener);
+    listener(this.suspension);
+    return () => this.engineListeners.delete(listener);
   }
 
   /** Lingua e tema di VS Code, inviati dall'host all'avvio e quando cambiano. */

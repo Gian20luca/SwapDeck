@@ -204,6 +204,14 @@ impl Settings {
     }
 }
 
+/// Config scritta dall'app e quella trovata nel file subito prima (letta sotto il lock della
+/// config): se la prima non è l'ultima nota, un altro processo l'aveva cambiata.
+#[derive(Debug, Clone)]
+pub struct Written {
+    pub before: AppConfig,
+    pub after: AppConfig,
+}
+
 /// Lettura e scrittura delle impostazioni. Senza percorso (home sconosciuta o config non valida)
 /// restano in memoria: un file illeggibile non viene mai sovrascritto.
 #[derive(Debug, Default)]
@@ -261,39 +269,59 @@ impl SettingsStore {
         }
     }
 
-    /// Rilegge il file, aggiorna le chiavi dell'app e lo riscrive in modo atomico.
-    pub fn save(&self, settings: &Settings) -> Result<(), String> {
+    /// Rilegge il file, aggiorna le chiavi dell'app e lo riscrive in modo atomico; restituisce
+    /// la config scritta (`None` se le impostazioni restano solo in memoria).
+    pub fn save(&self, settings: &Settings) -> Result<Option<Written>, String> {
         let (Some(paths), Some(path)) = (&self.paths, self.file()) else {
-            return Ok(());
+            return Ok(None);
         };
         let _writing = lock(&self.writing);
         paths.ensure().map_err(|e| e.to_string())?;
-        config::update(&path, |current| {
+        write(&path, |current| {
             settings.patch(current);
             Ok(())
         })
-        .map(drop)
+        .map(Some)
         .map_err(|e| e.to_string())
     }
 
     /// Cambia preferenze o regole: rilegge il file, applica `change` (che valida), lo riscrive
-    /// in modo atomico e restituisce la config salvata. Senza file (impostazioni solo in memoria)
-    /// la modifica vale per `current` e non si scrive nulla.
+    /// in modo atomico e restituisce la config salvata con quella trovata prima. Senza file
+    /// (impostazioni solo in memoria) la modifica vale per `current` e non si scrive nulla.
     pub fn update(
         &self,
         current: &Settings,
         change: impl FnOnce(&mut AppConfig) -> Result<(), ConfigError>,
-    ) -> Result<AppConfig, ConfigError> {
+    ) -> Result<Written, ConfigError> {
         let _writing = lock(&self.writing);
         let (Some(paths), Some(path)) = (&self.paths, self.file()) else {
             let mut c = current.to_config();
             change(&mut c)?;
             c.validate()?;
-            return Ok(c);
+            return Ok(Written {
+                before: c.clone(),
+                after: c,
+            });
         };
         paths.ensure()?;
-        config::update(&path, change)
+        write(&path, change)
     }
+}
+
+/// `config::update` che tiene anche la config letta prima della modifica.
+fn write(
+    path: &std::path::Path,
+    change: impl FnOnce(&mut AppConfig) -> Result<(), ConfigError>,
+) -> Result<Written, ConfigError> {
+    let mut before = None;
+    let after = config::update(path, |c| {
+        before = Some(c.clone());
+        change(c)
+    })?;
+    Ok(Written {
+        before: before.unwrap_or_else(|| after.clone()),
+        after,
+    })
 }
 
 #[cfg(test)]
@@ -475,7 +503,10 @@ mod tests {
             language: Some(Language::En),
             ..PreferencesPatch::default()
         };
-        let saved = store.update(&s, |c| c.apply_preferences(&patch)).unwrap();
+        let saved = store
+            .update(&s, |c| c.apply_preferences(&patch))
+            .unwrap()
+            .after;
         s.apply_config(&saved);
         assert_eq!(s.poll_interval, Duration::from_secs(300));
         assert_eq!((s.theme, s.lang), (Theme::Dark, Lang::En));
@@ -487,7 +518,8 @@ mod tests {
         };
         let saved = store
             .update(&s, |c| c.set_engine_rules(rules.clone()))
-            .unwrap();
+            .unwrap()
+            .after;
         s.apply_config(&saved);
         let mut rules = rules;
         rules.sync_order();
@@ -510,7 +542,8 @@ mod tests {
         // Solo in memoria: la modifica vale, niente file.
         let mem = SettingsStore::in_memory()
             .update(&s, |c| c.apply_preferences(&patch))
-            .unwrap();
+            .unwrap()
+            .after;
         assert_eq!(mem.preferences(), s.preferences());
         assert_eq!(mem.engine, rules);
     }

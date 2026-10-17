@@ -26,8 +26,8 @@ use swapdeck_core::cswap::{
     ActionOutcome, AutoMessage, CswapAction, CswapClient, CswapError, CswapErrorKind, ListResponse,
 };
 use swapdeck_core::engine::{
-    EngineMemory, EngineProfiles, EngineRules, EngineState, EngineView, Observation,
-    ProfileCommand, evaluate,
+    Decision, EngineMemory, EngineProfiles, EngineRules, EngineState, EngineView, Observation,
+    ProfileCommand, SuspendReason, evaluate,
 };
 use swapdeck_core::history::{History, HistoryEvents, HistoryQuery, HistoryRecord};
 use swapdeck_core::lock;
@@ -415,6 +415,22 @@ fn state() -> CliState {
     }
 }
 
+/// Sospensione del motore in esecuzione: l'ultima decisione scritta dal titolare del lock da
+/// quando l'ha preso (il primo giro la scrive sempre). Il motore spento non conta; storico
+/// illeggibile = nessuna sospensione nota.
+fn suspension(data_dir: &Path, since: i64) -> (Option<SuspendReason>, Vec<String>) {
+    let last = History::new(data_dir)
+        .last_decision(since, now_unix())
+        .ok()
+        .flatten();
+    match last.map(|d| d.decision) {
+        Some(Decision::Suspended { reason, detail }) if reason != SuspendReason::Disabled => {
+            (Some(reason), detail)
+        }
+        _ => (None, Vec::new()),
+    }
+}
+
 fn engine_default() -> EngineStatus {
     let config = AppConfig::default();
     EngineStatus {
@@ -424,6 +440,8 @@ fn engine_default() -> EngineStatus {
         running: false,
         lock: None,
         active_map: None,
+        suspended: None,
+        suspend_detail: Vec::new(),
         problem: None,
     }
 }
@@ -450,6 +468,11 @@ fn engine_status(paths: &AppPaths) -> EngineStatus {
             status.running = info
                 .as_ref()
                 .is_some_and(|i| !i.is_stale(now_unix(), &lock::host_name()));
+            if let Some(lock) = info.as_ref().filter(|_| status.running) {
+                let (reason, detail) = suspension(&paths.data_dir, lock.acquired_at);
+                status.suspended = reason;
+                status.suspend_detail = detail;
+            }
             status.lock = info;
         }
         Err(e) => problems.push(format!("lock non leggibile: {e}")),

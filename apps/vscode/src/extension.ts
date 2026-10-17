@@ -35,7 +35,7 @@ import { rulesToStart, type FirstEnableAnswer } from './firstEnable.js';
 import type { CliState } from './generated/index.js';
 import { fromPoll, langOf, messageOf, parseEngineEvent, shouldPoll } from './notifications.js';
 import { DashboardPanel, SIDEBAR_VIEW_ID, SidebarView, WebviewHub } from './panel.js';
-import type { PickParams } from './protocol.js';
+import { suspensionOf, type PickParams } from './protocol.js';
 import { Refresher } from './refresher.js';
 import { SyncWatcher } from './sync.js';
 import {
@@ -249,6 +249,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     }),
     (post) => {
       if (state?.list) post({ type: 'state', list: state.list });
+      if (state) post({ type: 'engine', suspended: suspensionOf(state.engine) });
     },
   );
   /** Le schede aperte nei webview di questa finestra rileggono i loro dati. */
@@ -314,6 +315,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
       void pollNotifications(next.list);
       hub.post({ type: 'state', list: next.list });
     }
+    hub.post({ type: 'engine', suspended: suspensionOf(next.engine) });
     // La cartella della config può nascere dopo (primo salvataggio): si ritenta a ogni lettura.
     if (!sync?.watching) void startSync();
     if (

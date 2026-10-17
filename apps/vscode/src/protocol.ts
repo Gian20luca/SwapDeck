@@ -10,8 +10,10 @@ import type {
   ListResponse,
   ProfileCommand,
   SetupProgress,
+  SuspendReason,
   UsageQuery,
 } from '@swapdeck/types';
+import type { EngineStatus } from './generated/index.js';
 
 /** Metodi del `Backend` inoltrati all'host. */
 export const REQUEST_METHODS = [
@@ -99,6 +101,18 @@ export interface ViewSettings {
   theme: 'light' | 'dark';
 }
 
+/** Motore in esecuzione sospeso (`swapdeck-cli state`): riga sopra le schede. */
+export interface EngineSuspension {
+  reason: SuspendReason;
+  detail: string[];
+}
+
+/** Sospensione da mostrare, decisa dal Rust (`engine.suspended` c'è solo se chiede attenzione). */
+export function suspensionOf(engine: EngineStatus | undefined): EngineSuspension | null {
+  if (!engine?.suspended) return null;
+  return { reason: engine.suspended, detail: engine.suspendDetail ?? [] };
+}
+
 /** Host → webview. */
 export type HostMessage =
   | { type: 'response'; id: number; ok: true; result: unknown }
@@ -107,6 +121,8 @@ export type HostMessage =
   /** Avanzamento di installazione o aggiornamento di cswap per la richiesta id. */
   | { type: 'progress'; id: number; event: SetupProgress }
   | { type: 'view'; settings: ViewSettings }
+  /** Stato del motore per la riga «motore sospeso» (`null` = niente da segnalare). */
+  | { type: 'engine'; suspended: EngineSuspension | null }
   /** Config di SwapDeck o di cswap cambiata (altra finestra, app, CLI, altra vista): le schede rileggono. */
   | { type: 'configChanged' };
 

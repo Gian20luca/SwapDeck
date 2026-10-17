@@ -1,5 +1,6 @@
 //! Stato condiviso dell'app: ultima lettura di cswap, impostazioni, notifiche.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
@@ -11,7 +12,7 @@ use swapdeck_core::cswap::{CswapError, CswapErrorKind, ListResponse};
 use crate::api::{CswapApi, Res};
 use crate::engine_loop::EngineView;
 use crate::notify::AppNotifier;
-use crate::settings::{Settings, SettingsStore};
+use crate::settings::{Settings, SettingsStore, Written};
 
 /// Evento con lo [`Snapshot`] aggiornato, verso tutte le finestre.
 pub const STATE_EVENT: &str = "state-changed";
@@ -91,6 +92,10 @@ pub struct Shared {
     pub mini_saved_at: Mutex<Option<Instant>>,
     /// Conflitti dell'ultima lettura del motore (vuoti a motore spento).
     pub conflicts: Mutex<Vec<Conflict>>,
+    /// Ultima config nota (letta o scritta dall'app), in JSON: una config letta uguale a questa
+    /// non è un cambio fatto da fuori (`config_watch`).
+    config_seen: Mutex<Option<serde_json::Value>>,
+    external_pending: AtomicBool,
 }
 
 impl Shared {
@@ -106,7 +111,49 @@ impl Shared {
             menu_signature: Mutex::new(String::new()),
             mini_saved_at: Mutex::new(None),
             conflicts: Mutex::new(Vec::new()),
+            config_seen: Mutex::new(None),
+            external_pending: AtomicBool::new(false),
         }
+    }
+
+    /// Config letta dall'app: rileggerla non conta come cambio esterno.
+    pub fn note_config(&self, config: &AppConfig) {
+        *lock(&self.config_seen) = serde_json::to_value(config).ok();
+    }
+
+    /// Config scritta dall'app. Se nel file, prima, c'era un cambio fatto da fuori e non ancora
+    /// visto, la scrittura lo conserva ma il controllo non lo vedrebbe più: si applica qui e si
+    /// segnala al prossimo controllo (`take_external`). `true` se c'era.
+    fn note_written(&self, written: &Written) -> bool {
+        let mut seen = lock(&self.config_seen);
+        let before = serde_json::to_value(&written.before).ok();
+        let external = seen.is_some() && *seen != before;
+        *seen = serde_json::to_value(&written.after).ok();
+        if external {
+            self.external_pending.store(true, Ordering::Relaxed);
+        }
+        external
+    }
+
+    /// Cambio esterno scoperto durante una scrittura dell'app, da segnalare alla UI.
+    pub fn take_external(&self) -> bool {
+        self.external_pending.swap(false, Ordering::Relaxed)
+    }
+
+    /// Config riletta dal file: se è diversa dall'ultima nota (cambiata da un altro processo)
+    /// ne applica preferenze e regole alle impostazioni in memoria e restituisce `true`.
+    pub fn absorb_config(&self, config: &AppConfig) -> bool {
+        let value = serde_json::to_value(config).ok();
+        {
+            let mut seen = lock(&self.config_seen);
+            if *seen == value {
+                return false;
+            }
+            *seen = value;
+        }
+        lock(&self.settings).apply_config(config);
+        lock(&self.saved).apply_config(config);
+        true
     }
 
     /// Cambia preferenze o regole nella config (scrittura atomica, altri campi conservati) e le
@@ -116,7 +163,9 @@ impl Shared {
         change: impl FnOnce(&mut AppConfig) -> Result<(), ConfigError>,
     ) -> Res<AppConfig> {
         let current = lock(&self.settings).clone();
-        let saved = self.store.update(&current, change).map_err(config_error)?;
+        let written = self.store.update(&current, change).map_err(config_error)?;
+        self.note_written(&written);
+        let saved = written.after;
         lock(&self.settings).apply_config(&saved);
         lock(&self.saved).apply_config(&saved);
         Ok(saved)
@@ -128,8 +177,13 @@ impl Shared {
         if *saved == settings {
             return Ok(());
         }
-        self.store.save(&settings)?;
+        let written = self.store.save(&settings)?;
         *saved = settings;
+        if let Some(w) = written.filter(|w| self.note_written(w)) {
+            saved.apply_config(&w.after);
+            drop(saved);
+            lock(&self.settings).apply_config(&w.after);
+        }
         Ok(())
     }
 }

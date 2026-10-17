@@ -15,6 +15,7 @@ mod app;
 mod auto_watch;
 mod autostart;
 mod commands;
+mod config_watch;
 mod engine_loop;
 mod notify;
 mod poller;

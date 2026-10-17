@@ -14,7 +14,7 @@ use crate::config::Language;
 use crate::cswap::ListResponse;
 use crate::history::History;
 use crate::lock;
-use crate::paths::create_private_dir;
+use crate::paths::{create_private_dir, persist_retrying};
 
 /// Memoria nella cartella dati.
 pub const MEMORY_FILE: &str = "notify-memory.json";
@@ -72,8 +72,7 @@ impl NotifyStore {
             .tempfile_in(dir)?;
         tmp.write_all(&serde_json::to_vec(mem).map_err(io::Error::other)?)?;
         tmp.as_file().sync_all()?;
-        tmp.persist(dir.join(MEMORY_FILE)).map_err(|e| e.error)?;
-        Ok(())
+        persist_retrying(tmp, &dir.join(MEMORY_FILE))
     }
 }
 

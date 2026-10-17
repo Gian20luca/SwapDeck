@@ -1,6 +1,6 @@
 import { BackendError } from '@swapdeck/ui';
 import { describe, expect, it } from 'vitest';
-import type { HostMessage, WebviewMessage } from '../protocol.js';
+import type { EngineSuspension, HostMessage, WebviewMessage } from '../protocol.js';
 import { VsCodeBackend } from './VsCodeBackend.js';
 
 function setup() {
@@ -122,6 +122,23 @@ describe('VsCodeBackend', () => {
     off();
     reply({ type: 'configChanged' });
     expect(calls).toBe(1);
+  });
+
+  it('motore sospeso: subito l’ultimo stato, poi i cambi finché si è iscritti', () => {
+    const { backend, reply } = setup();
+    const seen: unknown[] = [];
+    const first = backend.onEngineSuspension((s) => seen.push(s));
+    first();
+    expect(seen).toEqual([null]);
+    const suspended: EngineSuspension = { reason: 'conflict', detail: ['x'] };
+    reply({ type: 'engine', suspended });
+    const later: unknown[] = [];
+    const off = backend.onEngineSuspension((s) => later.push(s));
+    reply({ type: 'engine', suspended: null });
+    off();
+    reply({ type: 'engine', suspended });
+    expect(seen).toEqual([null]);
+    expect(later).toEqual([suspended, null]);
   });
 
   it('ready avvisa l’host; dispose rifiuta le richieste in sospeso', async () => {

@@ -9,6 +9,7 @@ import '@swapdeck/ui/styles.css';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import type { HostMessage, ViewSettings } from '../protocol.js';
+import { EngineBanner } from './EngineBanner.js';
 import { VsCodeBackend } from './VsCodeBackend.js';
 import { readState } from './viewState.js';
 import './webview.css';
@@ -49,6 +50,7 @@ function App() {
       <I18nProvider initial={view.locale}>
         <BackendProvider backend={backend}>
           <SwapDeckApp
+            header={<EngineBanner backend={backend} />}
             {...(saved.tab ? { initialTab: saved.tab } : {})}
             onTabChange={rememberTab}
           />

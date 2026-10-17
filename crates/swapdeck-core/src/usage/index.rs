@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use super::TokenCounts;
 use super::attribution::Timeline;
 use super::source::{self, AgentMeta, Parsed, SessionFile};
-use crate::paths::create_private_dir;
+use crate::paths::{create_private_dir, persist_retrying};
 
 pub const USAGE_DIR: &str = "usage";
 pub const INDEX_FILE: &str = "index.json";
@@ -357,20 +357,8 @@ pub fn save(data_dir: &Path, index: &UsageIndex) -> io::Result<u64> {
         .tempfile_in(&dir)?;
     tmp.write_all(&json)?;
     tmp.as_file().sync_all()?;
-    let target = dir.join(INDEX_FILE);
-    let mut attempt = 0u32;
-    loop {
-        match tmp.persist(&target) {
-            Ok(_) => return Ok(json.len() as u64),
-            // Antivirus o indicizzatore con il file aperto (Windows): pochi tentativi.
-            Err(e) if attempt < 4 && e.error.kind() == io::ErrorKind::PermissionDenied => {
-                tmp = e.file;
-                attempt += 1;
-                std::thread::sleep(std::time::Duration::from_millis(25 << attempt));
-            }
-            Err(e) => return Err(e.error),
-        }
-    }
+    persist_retrying(tmp, &dir.join(INDEX_FILE))?;
+    Ok(json.len() as u64)
 }
 
 /// Limiti di una lettura: oltre, ci si ferma a fine riga, si salva e il resto va alla chiamata

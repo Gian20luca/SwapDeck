@@ -222,6 +222,36 @@ impl History {
         Ok(out)
     }
 
+    /// Ultima decisione con `since <= ts <= now`: si leggono i file dal più recente e ci si ferma
+    /// al primo che ne ha una (il motore scrive una decisione solo quando cambia, e sempre al
+    /// primo giro da titolare del lock), al massimo [`DEFAULT_RETENTION_DAYS`] giorni.
+    pub fn last_decision(&self, since: i64, now: i64) -> io::Result<Option<DecisionRecord>> {
+        let oldest = now - i64::from(DEFAULT_RETENTION_DAYS) * 86_400;
+        let (Some(first), Some(mut day)) = (utc_date(since.max(oldest)), utc_date(now)) else {
+            return Ok(None);
+        };
+        while day >= first {
+            if let Some(text) = read_day(&self.dir.join(file_name(day)))? {
+                let found = text
+                    .lines()
+                    .filter(|l| l.contains("\"decision\""))
+                    .filter_map(|l| match serde_json::from_str::<HistoryRecord>(l) {
+                        Ok(HistoryRecord::Decision(d)) if (since..=now).contains(&d.ts) => Some(d),
+                        _ => None,
+                    })
+                    .max_by_key(|d| d.ts);
+                if found.is_some() {
+                    return Ok(found);
+                }
+            }
+            match day.previous_day() {
+                Some(prev) => day = prev,
+                None => break,
+            }
+        }
+        Ok(None)
+    }
+
     /// Cambi e decisioni da `query.since_seconds` (default 7 giorni, mai prima della
     /// conservazione di [`DEFAULT_RETENTION_DAYS`] giorni né dopo `now`) fino a `now`, dal più
     /// vecchio, al massimo [`MAX_EVENTS`] per tipo (i più recenti). Con `account`, solo i cambi
@@ -736,5 +766,77 @@ mod events_tests {
             )
             .unwrap();
         assert!(future.switches.is_empty() && future.decisions.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod last_decision_tests {
+    use super::*;
+    use crate::engine::SuspendReason;
+
+    fn line(ts: i64, reason: SuspendReason) -> String {
+        serde_json::to_string(&HistoryRecord::Decision(DecisionRecord {
+            ts,
+            decision: Decision::Suspended {
+                reason,
+                detail: vec![format!("d{ts}")],
+            },
+            dry_run: false,
+            why: None,
+        }))
+        .unwrap()
+    }
+
+    fn append(history: &History, ts: i64, text: &str) {
+        let file = history.dir().join(file_name(utc_date(ts).unwrap()));
+        let mut f = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(file)
+            .unwrap();
+        writeln!(f, "{text}").unwrap();
+    }
+
+    #[test]
+    fn newest_decision_in_range_from_the_newest_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let history = History::new(dir.path());
+        fs::create_dir_all(history.dir()).unwrap();
+        let now = 1_800_000_000;
+        assert_eq!(history.last_decision(now - 86_400, now).unwrap(), None);
+        // Due giorni fa (conflitto), ieri (nessun account), una riga illeggibile e un campione.
+        append(
+            &history,
+            now - 2 * 86_400,
+            &line(now - 2 * 86_400, SuspendReason::Conflict),
+        );
+        append(
+            &history,
+            now - 86_400,
+            &line(now - 86_400, SuspendReason::NoActiveAccount),
+        );
+        append(&history, now - 86_400 + 5, "{\"type\":\"decision\" rotta");
+        append(
+            &history,
+            now - 10,
+            "{\"type\":\"heartbeat\",\"ts\":1799999990}",
+        );
+        let last = history
+            .last_decision(now - 3 * 86_400, now)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            last.ts,
+            now - 86_400,
+            "il file di oggi non ne ha: si va a ieri"
+        );
+        // Prima di `since` (avvio del lock): non conta.
+        assert_eq!(history.last_decision(now - 86_400 + 1, now).unwrap(), None);
+        // Oggi: vince la più recente.
+        append(&history, now - 5, &line(now - 5, SuspendReason::Conflict));
+        let last = history.last_decision(now - 86_400, now).unwrap().unwrap();
+        assert_eq!(last.ts, now - 5);
+        // Oltre la conservazione non si cerca.
+        assert_eq!(history.last_decision(0, now + 40 * 86_400).unwrap(), None);
     }
 }

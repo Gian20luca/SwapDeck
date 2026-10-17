@@ -1,6 +1,7 @@
 //! Avvio dell'app Tauri: plugin, stato, area di notifica, ciclo di lettura.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -21,10 +22,13 @@ use crate::notify::AppNotifier;
 use crate::poller::Poller;
 use crate::settings::SettingsStore;
 use crate::state::{STATE_EVENT, Shared, Snapshot, lock, now_ms};
-use crate::{commands, engine_loop, setup_cmd, text, tray, updater, windows};
+use crate::{commands, config_watch, engine_loop, setup_cmd, text, tray, updater, windows};
 
 /// Cartella dati (storico e lock del motore); `None` se la home non è determinabile.
 pub struct DataDir(pub Option<PathBuf>);
+
+/// Arresto del controllo della config (`config_watch`), all'uscita.
+struct ConfigWatchStop(Arc<AtomicBool>);
 
 /// Thread del ciclo di lettura, atteso all'uscita.
 struct PollerThread(Mutex<Option<JoinHandle<()>>>);
@@ -299,6 +303,7 @@ pub fn run(api: Arc<dyn CswapApi>) {
             let dir = data_dir.clone();
             let live = Arc::clone(&shared);
             let found = Arc::clone(&shared);
+            let watched = config_file.clone();
             let (poller, thread) = Poller::spawn_with(
                 interval,
                 move |r| on_list(&cb, r),
@@ -333,6 +338,21 @@ pub fn run(api: Arc<dyn CswapApi>) {
                     on_auto_poll(&cb, p);
                 });
             app.manage(watcher);
+            // Config cambiata da VS Code o dalla CLI: preferenze applicate, schede aperte rilette.
+            if let Some(file) = watched {
+                let stop = Arc::new(AtomicBool::new(false));
+                config_watch::spawn(
+                    handle.clone(),
+                    Arc::clone(&shared),
+                    file,
+                    Arc::clone(&stop),
+                    |app| {
+                        windows::apply_saved_theme(app);
+                        self::poller(app).refresh();
+                    },
+                );
+                app.manage(ConfigWatchStop(stop));
+            }
             windows::apply_saved_theme(&handle);
             if !start_hidden {
                 windows::show_main(&handle);
@@ -356,6 +376,9 @@ pub fn run(api: Arc<dyn CswapApi>) {
             // Tauri non rilascia lo stato gestito: `cswap auto` va fermato qui, prima del ciclo.
             if let Some(w) = app.try_state::<AutoWatcher>() {
                 w.stop();
+            }
+            if let Some(s) = app.try_state::<ConfigWatchStop>() {
+                s.0.store(true, Ordering::Relaxed);
             }
             app.state::<Arc<Shared>>().api.shutdown();
             if let Some(p) = app.try_state::<Poller>() {

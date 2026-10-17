@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::engine::{EngineProfiles, EngineRules, ProfileCommand};
-use crate::paths::create_private_dir;
+use crate::paths::{create_private_dir, persist_retrying};
 
 /// Nome del file.
 pub const CONFIG_FILE: &str = "config.json";
@@ -471,20 +471,7 @@ pub fn save(path: &Path, config: &AppConfig) -> Result<(), ConfigError> {
         .tempfile_in(dir)?;
     tmp.write_all(&json)?;
     tmp.as_file().sync_all()?;
-    // Su Windows la rinomina fallisce per un attimo se un altro processo (antivirus, indicizzatore)
-    // tiene aperto il file senza condivisione: pochi tentativi ravvicinati.
-    let mut attempt = 0u32;
-    loop {
-        match tmp.persist(path) {
-            Ok(_) => return Ok(()),
-            Err(e) if attempt < 4 && e.error.kind() == io::ErrorKind::PermissionDenied => {
-                tmp = e.file;
-                attempt += 1;
-                std::thread::sleep(std::time::Duration::from_millis(25 << attempt));
-            }
-            Err(e) => return Err(ConfigError::Io(e.error)),
-        }
-    }
+    persist_retrying(tmp, path).map_err(ConfigError::Io)
 }
 
 /// Apre in lettura senza seguire un link simbolico finale (Unix).

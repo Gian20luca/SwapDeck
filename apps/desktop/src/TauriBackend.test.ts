@@ -3,6 +3,7 @@ import { BackendError } from '@swapdeck/ui';
 import { describe, expect, it, vi } from 'vitest';
 import list from '../../../fixtures/cswap/list.json';
 import {
+  CONFIG_EVENT,
   STATE_EVENT,
   TauriBackend,
   toBackendError,
@@ -139,6 +140,26 @@ describe('TauriBackend', () => {
     off();
     await new Promise((r) => setTimeout(r, 0));
     expect(unlisten).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards config changes made outside the app', async () => {
+    const handlers = new Map<string, (event: { payload: unknown }) => void>();
+    const unlisten = vi.fn();
+    const listen = vi.fn(async (event: string, handler: (event: { payload: unknown }) => void) => {
+      handlers.set(event, handler);
+      return unlisten;
+    }) as unknown as ListenFn;
+    const backend = new TauriBackend(vi.fn() as unknown as InvokeFn, listen);
+    let calls = 0;
+    const off = backend.onConfigChanged(() => calls++);
+    await Promise.resolve();
+    expect([...handlers.keys()]).toEqual([CONFIG_EVENT]);
+    handlers.get(CONFIG_EVENT)!({ payload: null });
+    expect(calls).toBe(1);
+    off();
+    expect(unlisten).toHaveBeenCalledTimes(1);
+    handlers.get(CONFIG_EVENT)!({ payload: null });
+    expect(calls).toBe(1);
   });
 
   it('calls the app commands', async () => {

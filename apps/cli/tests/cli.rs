@@ -676,3 +676,55 @@ fn diagnostics_text_and_json() {
     let (code, _) = env.run_stdin(&["log", "fatal", "-"], "x");
     assert_eq!(code, 2);
 }
+
+#[test]
+fn state_reports_suspension_written_by_the_running_engine() {
+    use swapdeck_core::engine::{Decision, SuspendReason};
+    use swapdeck_core::history::{DecisionRecord, History, HistoryRecord};
+    let env = Env::new();
+    let data = env.home().join("data");
+    let suspended = |ts: i64, reason: SuspendReason| {
+        HistoryRecord::Decision(DecisionRecord {
+            ts,
+            decision: Decision::Suspended {
+                reason,
+                detail: vec!["schtask:cswap".into()],
+            },
+            dry_run: false,
+            why: None,
+        })
+    };
+    fs::create_dir_all(&data).unwrap();
+    let now = swapdeck_core::timeutil::now_unix();
+    let swapdeck_core::lock::Acquire::Acquired(guard) =
+        swapdeck_core::lock::try_acquire(&data, 60, now).unwrap()
+    else {
+        panic!("lock non preso");
+    };
+    let mut writer = History::new(&data).writer(&guard, 30).unwrap();
+    // Decisione di un'esecuzione precedente (prima del lock): non conta.
+    writer
+        .append(&suspended(now - 120, SuspendReason::Conflict))
+        .unwrap();
+    let (_, s) = env.run(&["state"]);
+    assert_eq!(s["engine"]["running"], true, "{s}");
+    assert!(s["engine"].get("suspended").is_none(), "{s}");
+    writer
+        .append(&suspended(now, SuspendReason::Conflict))
+        .unwrap();
+    let (_, s) = env.run(&["state"]);
+    assert_eq!(s["engine"]["suspended"], "conflict", "{s}");
+    assert_eq!(s["engine"]["suspendDetail"], json!(["schtask:cswap"]));
+    // Motore spento (a parità di istante vale l'ultima scritta): niente da segnalare.
+    writer
+        .append(&suspended(now, SuspendReason::Disabled))
+        .unwrap();
+    let (_, s) = env.run(&["engine", "status"]);
+    assert!(s.get("suspended").is_none(), "{s}");
+    drop(writer);
+    guard.release();
+    // Motore fermo: nessuna sospensione, anche se lo storico ne ha una.
+    let (_, s) = env.run(&["state"]);
+    assert_eq!(s["engine"]["running"], false);
+    assert!(s["engine"].get("suspended").is_none(), "{s}");
+}

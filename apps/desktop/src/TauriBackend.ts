@@ -39,6 +39,12 @@ import {
 /** Evento del ciclo di lettura in Rust (`STATE_EVENT` in `src-tauri/src/state.rs`). */
 export const STATE_EVENT = 'state-changed';
 
+/**
+ * Config di SwapDeck cambiata fuori dall'app, o segnale di VS Code dopo una sua azione
+ * (`CONFIG_EVENT` in `src-tauri/src/config_watch.rs`): le schede aperte rileggono.
+ */
+export const CONFIG_EVENT = 'config-changed';
+
 /** Avanzamento di installazione e aggiornamento di cswap (`PROGRESS_EVENT` in `src-tauri/src/setup_cmd.rs`). */
 export const SETUP_PROGRESS_EVENT = 'setup-progress';
 
@@ -202,9 +208,19 @@ export class TauriBackend implements Backend, SetupBackend {
 
   /** Lo `Snapshot` completo (lista, errore, motore sospeso). */
   onSnapshot(listener: (snap: Snapshot) => void): Unsubscribe {
+    return this.subscribe<Snapshot>(STATE_EVENT, listener);
+  }
+
+  /** Config cambiata fuori dall'app (VS Code, CLI): le schede aperte rileggono i loro dati. */
+  onConfigChanged(listener: () => void): Unsubscribe {
+    return this.subscribe<unknown>(CONFIG_EVENT, () => listener());
+  }
+
+  /** Ascolto di un evento del Rust; l'annullamento vale anche prima che `listen` risponda. */
+  private subscribe<T>(name: string, listener: (payload: T) => void): Unsubscribe {
     let off: (() => void) | undefined;
     let closed = false;
-    this.listen<Snapshot>(STATE_EVENT, (event) => {
+    this.listen<T>(name, (event) => {
       if (!closed) listener(event.payload);
     })
       .then((unlisten) => {
