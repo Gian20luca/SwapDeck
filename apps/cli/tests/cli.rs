@@ -619,7 +619,7 @@ fn log_file_records_actions_and_headless_without_secrets() {
         "{text}"
     );
     assert!(
-        text.contains("vscode[") && text.contains("motore senza interfaccia avviato: SwapDeck")
+        text.contains("vscode[") && text.contains("avvio del motore senza interfaccia: SwapDeck")
     );
     assert!(
         text.contains("motore: "),

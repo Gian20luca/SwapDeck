@@ -218,7 +218,7 @@ pub fn run(api: Arc<dyn CswapApi>) {
     let start_hidden = std::env::args().any(|a| a == MINIMIZED_ARG);
     applog::info(&format!(
         "{}{}",
-        applog::startup_line("app"),
+        applog::startup_line("dell'app"),
         if start_hidden {
             " (avvio nascosto)"
         } else {

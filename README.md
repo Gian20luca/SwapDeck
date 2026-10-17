@@ -152,18 +152,30 @@ Codici di uscita: 0 ok, 1 errore, 2 uso errato, 3 lock occupato (un altro motore
 
 Contengono `config.json`, il lock del motore (`engine.lock`, nella cartella dati) e lo storico dei consumi. Con `SWAPDECK_HOME` (percorso assoluto) si usa un'altra radice, con `config/` e `data/` sotto, utile per le prove. Le credenziali restano quelle di `cswap`.
 
+## Log e diagnostica
+
+SwapDeck scrive un log per utente in `logs/swapdeck.log` nella cartella dati: `%APPDATA%\swapdeck\logs` su Windows, `~/.local/share/swapdeck/logs` su Linux, `~/Library/Application Support/swapdeck/logs` su macOS, `$SWAPDECK_HOME/data/logs` con `SWAPDECK_HOME`.
+
+- Scrivono l'app (`desktop`), `swapdeck --headless` (`headless`), `swapdeck-cli` (`cli`) e la CLI lanciata dall'estensione VS Code, motore compreso (`vscode`). Ogni riga: ora UTC, livello, componente e PID, messaggio.
+- Contenuto: avvio e arresto con versione e sistema, decisioni e cambi del motore, errori di `cswap` (classe, codice di uscita, tipo), conflitti, lock, esito dei comandi che scrivono. Mai token, segreti o email complete (`ma***@dominio`): la redazione è nel core.
+- Rotazione: oltre 1 MiB il file diventa `swapdeck.log.1`, fino a `.4` (5 file in tutto).
+- Livello: `info` di default; `SWAPDECK_LOG=debug|info|warn|error|off` lo cambia per il processo.
+
+**Diagnostica.** Strumenti → Diagnostica: «Apri cartella dei log» e «Copia diagnostica» (versioni di SwapDeck e `cswap`, sistema, stato del motore, mappa attiva, ultime 200 righe di log, cartella home sostituita da `~`). In VS Code gli stessi pulsanti nella scheda Strumenti, i comandi «SwapDeck: Copia diagnostica» e «SwapDeck: Apri cartella dei log» e il menu «…» della vista laterale. Da terminale: `swapdeck-cli diagnostics` stampa lo stesso testo (`--json` per `{text, logsDir}`).
+
 ## Problemi comuni
 
-| Sintomo                                  | Causa probabile e rimedio                                                             |
-| ---------------------------------------- | ------------------------------------------------------------------------------------- |
-| Motore «sospeso»                         | c'è `cswap auto` o un altro motore attivo: ferma l'altro automatismo (guida sopra)    |
-| «motore attivo in un'altra istanza»      | un'altra finestra o l'app tiene il lock: è voluto                                     |
-| Il motore non cambia mai                 | spento (`enabled: false`), in sola osservazione (`dryRun: true`) o `primary` mancante |
-| `cswap` non trovato                      | riapri l'app per l'installazione guidata, oppure imposta `swapdeck.cliPath` / il PATH |
-| Consumi non aggiornati, errori 429       | `cswap list` ha limiti di frequenza: l'intervallo minimo è 60 s                       |
-| Account con «re-login»                   | accedi di nuovo con `cswap` a quell'account                                           |
-| `headless` esce con 3                    | lock occupato: un altro motore è attivo, è corretto                                   |
-| Estensione inattiva dopo l'installazione | «Ricarica finestra»                                                                   |
+| Sintomo                                  | Causa probabile e rimedio                                                               |
+| ---------------------------------------- | --------------------------------------------------------------------------------------- |
+| Motore «sospeso»                         | c'è `cswap auto` o un altro motore attivo: ferma l'altro automatismo (guida sopra)      |
+| «motore attivo in un'altra istanza»      | un'altra finestra o l'app tiene il lock: è voluto                                       |
+| Il motore non cambia mai                 | spento (`enabled: false`), in sola osservazione (`dryRun: true`) o `primary` mancante   |
+| `cswap` non trovato                      | riapri l'app per l'installazione guidata, oppure imposta `swapdeck.cliPath` / il PATH   |
+| Consumi non aggiornati, errori 429       | `cswap list` ha limiti di frequenza: l'intervallo minimo è 60 s                         |
+| Account con «re-login»                   | accedi di nuovo con `cswap` a quell'account                                             |
+| `headless` esce con 3                    | lock occupato: un altro motore è attivo, è corretto                                     |
+| Estensione inattiva dopo l'installazione | «Ricarica finestra»                                                                     |
+| Qualcosa non va e non si capisce perché  | Strumenti → «Copia diagnostica» e allegala alla segnalazione (vedi «Log e diagnostica») |
 
 ## Per chi sviluppa
 

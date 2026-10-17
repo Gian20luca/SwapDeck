@@ -2,6 +2,7 @@
 //! storico, rilevamento dei conflitti e runner senza interfaccia.
 
 pub mod applog;
+pub mod autostart;
 pub mod config;
 pub mod conflicts;
 pub mod cswap;

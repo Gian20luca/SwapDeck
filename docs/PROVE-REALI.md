@@ -29,12 +29,13 @@ Esegui tutto su Windows 10 e su Windows 11, utente **non amministratore**, senza
 | 2.8 | Icona nell'area di notifica | Anello con il consumo dell'account attivo; tooltip con lo stato; menu con mappe, cambio account, apertura dashboard, uscita | [ ] |
 | 2.9 | Mini-widget | Sempre in primo piano e trascinabile; Aggiorna, Comprimi (striscia con %), Nascondi; posizioni ricordate dopo il riavvio | [ ] |
 | 2.10 | Notifiche (provoca un avviso, per esempio «cambio avvenuto» o un test dalla pagina Notifiche) | Il toast compare con il nome **«SwapDeck»** (non «Windows PowerShell») | [ ] |
-| 2.11 | Avvio automatico (default acceso) | Esci dalla sessione e rientra: l'app riparte da sola. Voce in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` | [ ] |
+| 2.11 | Avvio automatico (default acceso al primo avvio) | Esci dalla sessione e rientra: l'app riparte da sola **nell'area di notifica, senza finestra**. Voce `SwapDeck` in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` con valore `"<percorso>\swapdeck.exe" --minimized` (percorso tra virgolette). Nel log (2.17) la riga `avvio automatico: attivo (Enable)` | [ ] |
 | 2.12 | Spegni l'avvio automatico dalle impostazioni | La voce di `Run` sparisce; al login successivo l'app non parte | [ ] |
 | 2.13 | `swapdeck.exe --headless --once` da un'attività pianificata o da `Win+R` | Nessuna finestra né console; esce dopo un giro; se il motore è spento in config esce con errore chiaro, non con un crash | [ ] |
 | 2.14 | Zip portatile: estrai in una cartella **nuova**, avvia `swapdeck.exe` | Parte senza installare; le notifiche, senza il collegamento Start, compaiono sotto «Windows PowerShell» (atteso, README «Modalità senza interfaccia») | [ ] |
 | 2.15 | Disinstalla da «App installate» | Rimossi `%LOCALAPPDATA%\SwapDeck`, collegamento Start e voce `Run`; processo `swapdeck` chiuso | [ ] |
 | 2.16 | Dopo la disinstallazione | `%APPDATA%\swapdeck` (config, storico) può restare; le credenziali di `cswap` (`~\.claude-swap-backup`) restano intatte. Annota cosa resta | [ ] |
+| 2.17 | Log e diagnostica | `%APPDATA%\swapdeck\logs\swapdeck.log` esiste dopo il primo avvio, con `avvio dell'app: SwapDeck <versione> su Windows …`; Strumenti → «Apri cartella dei log» apre Esplora file lì; «Copia diagnostica» mette negli appunti versioni, sistema, motore, mappa attiva e ultime righe; nessuna email completa, la home è `~` | [ ] |
 
 ## 3. Motore con cambi veri
 
@@ -106,11 +107,15 @@ Installa solo il `.vsix` (`code --install-extension swapdeck-vscode-<piattaforma
 |---|---|---|---|
 | 6.1 | AppImage: `chmod +x` e avvio | Parte senza `sudo`; procedura guidata se manca `cswap` | [ ] |
 | 6.2 | `.deb`: `sudo dpkg -i` | Installa in `/usr/bin`; `swapdeck` e `swapdeck-cli` nel PATH | [ ] |
-| 6.3 | Area di notifica | GNOME: serve l'estensione AppIndicator (annota se manca e come l'icona si comporta); KDE: icona e menu funzionano | [ ] |
+| 6.3 | Area di notifica | GNOME **non** mostra le icone di stato senza l'estensione «AppIndicator and KStatusNotifierItem Support» (`gnome-shell-extension-appindicator`; su Ubuntu è già attiva come «Ubuntu AppIndicators»). Controlla in «Estensioni» che sia attiva; se manca, l'app gira ma senza icona: annotalo e prova ad aprirla dal menu applicazioni (la seconda istanza mostra la finestra). KDE: icona e menu funzionano | [ ] |
 | 6.4 | Notifiche | Compaiono via D-Bus; senza sessione grafica (SSH) si saltano senza errori | [ ] |
-| 6.5 | Avvio automatico | Voce in `~/.config/autostart`; l'app riparte al login | [ ] |
+| 6.5 | Avvio automatico | File `~/.config/autostart/SwapDeck.desktop` (sempre `~/.config`, anche con `XDG_CONFIG_HOME` diverso) con `Exec=<percorso> --minimized`: `.deb` → `/usr/bin/swapdeck`; AppImage → il file `.AppImage` (non il punto di montaggio `/tmp/.mount_…`). Al login l'app parte nell'area di notifica senza finestra | [ ] |
+| 6.5b | AppImage spostata o rinominata | La voce punta ancora al vecchio percorso e al login non parte nulla finché non riapri l'AppImage dal nuovo posto: a quell'avvio la voce si riscrive. Annota il comportamento | [ ] |
+| 6.5c | Avvio automatico spento dal sistema (GNOME «Applicazioni d'avvio»/Tweaks, KDE «Avvio automatico») | Se il desktop toglie il file o vi scrive `Hidden=true` / `X-GNOME-Autostart-enabled=false`, al riavvio SwapDeck lo legge come spento e **non** lo riattiva; l'interruttore dell'app si allinea | [ ] |
+| 6.5d | `.deb` avviato da un terminale aperto dentro un'altra AppImage (es. editor in AppImage) | La voce punta a `/usr/bin/swapdeck`, non all'AppImage dell'editor (`APPIMAGE` ereditata si ignora se l'app non gira dentro `APPDIR`) | [ ] |
 | 6.6 | Dati | `~/.config/swapdeck` e `~/.local/share/swapdeck`; `cswap` in `~/.local/share/claude-swap` | [ ] |
 | 6.7 | `swapdeck-cli headless --once --notify=stdout` | Righe JSON; codice di uscita 0 | [ ] |
+| 6.7b | Log | `~/.local/share/swapdeck/logs/swapdeck.log` (cartella `0700`, file `0600`) con le righe di 6.7; «Apri cartella dei log» usa `xdg-open` | [ ] |
 
 ### macOS (Apple Silicon e Intel, se hai entrambi)
 
@@ -121,7 +126,10 @@ Installa solo il `.vsix` (`code --install-extension swapdeck-vscode-<piattaforma
 | 6.10 | Barra dei menu | Icona con il consumo; menu con mappe e cambio account | [ ] |
 | 6.11 | Notifiche | Centro notifiche, col nome «SwapDeck» se l'app è in `/Applications` | [ ] |
 | 6.12 | Portachiavi | `cswap` può chiedere accesso al Portachiavi: l'app non si blocca e non perde l'account | [ ] |
-| 6.13 | Avvio al login | L'app riparte al login (LaunchAgent o Elementi di login: annota quale) | [ ] |
+| 6.13 | Avvio al login | LaunchAgent `~/Library/LaunchAgents/SwapDeck.plist` (`Label` `SwapDeck`, `ProgramArguments` = `/Applications/SwapDeck.app/Contents/MacOS/swapdeck` e `--minimized`, `RunAtLoad`, niente `KeepAlive`); non si carica subito: vale dal login successivo, e l'app parte nella barra dei menu senza finestra. Da macOS 13 compare la notifica «Elemento di sfondo aggiunto» | [ ] |
+| 6.13b | Impostazioni → Generali → Elementi login → «Consenti in background»: spegni `swapdeck` | Al login l'app non parte, ma il file resta e l'interruttore di SwapDeck resta acceso (limite noto: macOS non dice all'app che l'ha spenta). Annota il nome mostrato | [ ] |
+| 6.13c | Primo avvio direttamente dal `.dmg` o da Download (App Translocation) | Nessuna voce scritta con il percorso casuale in quarantena: nel log `avvio automatico non aggiornato: app avviata in quarantena…`; dopo averla spostata in `/Applications` e riaperta, la voce si scrive | [ ] |
+| 6.14 | Log | `~/Library/Application Support/swapdeck/logs/swapdeck.log`; «Apri cartella dei log» apre il Finder lì | [ ] |
 
 ## 7. Aggiornamento automatico 0.1.0 → 0.2.0
 
@@ -150,13 +158,27 @@ Richiede il repo **pubblico** con release pubblicata (`docs/RILASCIO.md`, «Atti
 
 ## 9. Come riportare un problema
 
-Includi:
+Il modo più rapido: **Strumenti → Diagnostica → «Copia diagnostica»** (in VS Code anche il comando «SwapDeck: Copia diagnostica» o il menu «…» della vista laterale; da terminale `swapdeck-cli diagnostics`) e incolla il testo nella segnalazione. Contiene versioni di SwapDeck e `cswap`, sistema operativo, stato del motore, mappa attiva e le ultime 200 righe del log, già ripulite (niente token, email mascherate, home sostituita da `~`). Rileggilo comunque prima di inviarlo.
 
-1. **Versione** di SwapDeck (`swapdeck-cli --version`) e di `cswap` (`cswap --version`), **sistema operativo** e versione, forma di installazione (NSIS, zip, AppImage, `.deb`, `.dmg`, solo `.vsix`).
+Il log completo è `logs/swapdeck.log` (più `swapdeck.log.1` … `.4`) nella cartella dati; «Apri cartella dei log» lo mostra:
+
+| Sistema | Cartella dei log |
+|---|---|
+| Windows | `%APPDATA%\swapdeck\logs` |
+| Linux | `~/.local/share/swapdeck/logs` |
+| macOS | `~/Library/Application Support/swapdeck/logs` |
+| Con `SWAPDECK_HOME` | `$SWAPDECK_HOME/data/logs` |
+
+Per un problema difficile da riprodurre rilancia con `SWAPDECK_LOG=debug` (variabile d'ambiente del processo) e allega le righe del momento.
+
+Includi inoltre:
+
+1. **Versione** di SwapDeck (`swapdeck-cli version`) e di `cswap` (`cswap --version`), **sistema operativo** e versione, forma di installazione (NSIS, zip, AppImage, `.deb`, `.dmg`, solo `.vsix`): tutto già nella diagnostica, tranne la forma di installazione.
 2. **Numero della prova** di questa guida e **passi** per riprodurla, con esito atteso e osservato.
 3. **Cosa ti aiuta a diagnosticare**, nell'ordine:
    - schermata dell'avviso o della scheda;
    - sezione `engine` di `config.json` (cartelle in README, «Dove stanno config e dati»);
+   - righe pertinenti di `swapdeck.log` (decisioni e cambi del motore iniziano con `motore:`; errori di `cswap` con classe, codice e tipo);
    - output di `swapdeck-cli headless --once --dry-run --notify=stdout` per i problemi del motore;
    - righe pertinenti di `claude-swap.log` nella cartella di backup di `cswap` (Windows e macOS `~/.claude-swap-backup`; Linux `~/.local/share/claude-swap`);
    - lo storico (`history/AAAA-MM-GG.jsonl` nella cartella dati) solo se serve.

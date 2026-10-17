@@ -287,6 +287,16 @@ export class TauriBackend implements Backend, SetupBackend {
     return this.call('get_usage_breakdown', { query });
   }
 
+  /** Testo di diagnostica già redatto (stesso di `swapdeck-cli diagnostics`). */
+  getDiagnostics(): Promise<string> {
+    return this.call('get_diagnostics');
+  }
+
+  /** Cartella dei log nel file manager del sistema. */
+  openLogsFolder(): Promise<void> {
+    return this.call('open_logs_folder');
+  }
+
   diagnoseSetup(): Promise<SetupDiagnosis> {
     return this.call('diagnose_setup');
   }

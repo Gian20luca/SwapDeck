@@ -215,6 +215,8 @@ describe('TauriBackend: gestione completa', () => {
     await backend.getHistoryEvents({ sinceSeconds: 5 });
     await backend.getHistoryEvents();
     await backend.getUsageBreakdown({ window: '7d', groupBy: 'agent', account: 2 });
+    await backend.getDiagnostics();
+    await backend.openLogsFolder();
     expect(calls.map((c) => [c.cmd, c.args])).toEqual([
       ['list_mappings', undefined],
       ['get_engine_state', undefined],
@@ -224,6 +226,8 @@ describe('TauriBackend: gestione completa', () => {
       ['get_history_events', { query: { sinceSeconds: 5 } }],
       ['get_history_events', { query: {} }],
       ['get_usage_breakdown', { query: { window: '7d', groupBy: 'agent', account: 2 } }],
+      ['get_diagnostics', undefined],
+      ['open_logs_folder', undefined],
     ]);
   });
 

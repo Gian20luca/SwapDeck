@@ -817,7 +817,7 @@ pub fn cli_main(args: &[String], stop: &AtomicBool) -> i32 {
     };
     applog::info(&format!(
         "{} (once: {}, dry-run: {}, notifiche: {:?})",
-        applog::startup_line("motore senza interfaccia"),
+        applog::startup_line("del motore senza interfaccia"),
         flags.once,
         flags.dry_run,
         flags.notify

@@ -395,7 +395,7 @@ pub fn error(message: &str) {
 /// Riga d'avvio comune: versione, sistema operativo e architettura.
 pub fn startup_line(what: &str) -> String {
     format!(
-        "{what} avviato: SwapDeck {} su {} ({} {})",
+        "avvio {what}: SwapDeck {} su {} ({} {})",
         crate::version(),
         os_description(),
         std::env::consts::OS,
