@@ -53,9 +53,14 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 - Prove reali (macchine pulite, motore con cambi veri, Linux e macOS): `docs/PROVE-REALI.md`.
 - Domande aperte: invariate, più rileggere i testi delle «i» e confermare il motore spento sul PC (nella config reale era acceso, con la 0.1.0 in esecuzione; si riaccende dalla scheda Regole).
 
-## Correzioni alla 0.2.0 (19/10, fatte, da committare)
+## Correzioni alla 0.2.0 → v0.2.1 (19/10)
 - Cartella del progetto rinominata da `WidgetCswap` a `SwapDeck`: dipendenze reinstallate (i link di pnpm puntavano al vecchio percorso), schema in `PIANO.md` corretto.
 - «Configurazione di cswap» → «Impostazioni di cswap auto», chiusa sotto il pulsante «Avanzate» (con tooltip; la config di cswap si legge solo all'apertura) e testo che dice che SwapDeck non usa questi valori.
 - Vista stretta: la causa vera era un nome di organizzazione lungo e senza spazi («email's Organization») che allargava la griglia di `.sd-app`. Corretto con `grid-template-columns: minmax(0, 1fr)` e `overflow-wrap: anywhere` sull'email; nuovo E2E in inglese a 280 px con organizzazione lunga.
 - Lingua in VS Code: l'estensione ora usa `language` della config comune (`preferredLocaleOf`/`viewLocale` in `protocol.ts`, riletta all'avvio, dopo `setPreferences` e a ogni cambio della config) e la manda alle viste; prima seguiva solo la lingua di VS Code.
 - Verifiche: lint, unit (types 3, ui 378, desktop 21, vscode 81), Playwright 33/33, `test:ext` tutto ok. Vitest con `--pool=threads`: col pool predefinito oggi i worker non si chiudono (`kill EPERM`), problema dell'ambiente.
+- v0.2.1 (commit 6409881, tag non pubblicato): installata sul PC (setup NSIS per utente, app avviata nascosta) e .vsix 0.2.1 in VS Code; config reale lasciata com'è su richiesta dell'utente (motore acceso dall'utente il 19/10 alle 13:12, cswap-guard ancora attivo: SwapDeck si sospende per conflitto salvo «Ignora»).
+- `dist:local`: l'NSIS mancava per os error 32. Causa: cargo mette `target/release` nel PATH degli script di build e lo script di Tauri (gnullvm) caricava il `libunwind.dll` rimasto lì, poi non poteva sovrascriverlo copiando le risorse. Ora le DLL vecchie si cancellano prima; `build.rs` stampa la catena completa dell'errore. `dist-locale/linux/` resta tra una build e l'altra.
+- Distribuzione senza GitHub Actions (billing: pagamenti falliti o limite di spesa; repo resta privato per scelta dell'utente): Linux con `pnpm dist:linux` (Docker); macOS dal collega con `docs/BUILD-MAC.md` (guida per il suo Claude, non provata su un Mac). Run `Release` solo macOS (`platforms: macos`, `dry_run`) da lanciare quando l'account GitHub è sbloccato.
+- `dist:linux` provato fino a clone e `pnpm install` nel container: la compilazione non è finita per mancanza di spazio (Docker usa ~82 GB del disco C:, quasi tutti di altri progetti). Da rifare con almeno 10 GB liberi.
+- Disco C: pieno durante la prima build Linux (Docker ~82 GB): liberati `target/debug`, `target/release` e la cache di build di Docker; Docker Desktop riavviato con il consenso dell'utente (bloccava anche altre sessioni).

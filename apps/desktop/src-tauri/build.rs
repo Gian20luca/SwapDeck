@@ -38,5 +38,6 @@ fn main() {
             "dismiss_cswap_update",
         ]),
     ))
-    .expect("build di Tauri non riuscita");
+    // `{:?}` di anyhow stampa tutta la catena, compreso il file coinvolto (per esempio in uso).
+    .unwrap_or_else(|e| panic!("build di Tauri non riuscita: {e:?}"));
 }

@@ -40,6 +40,8 @@ Avvisi attesi, perché i pacchetti non sono firmati con certificati dei produtto
 
 Aggiornamenti automatici: spenti di default finché il repo è privato; si scarica a mano la nuova release. Su Linux il `.deb` si aggiorna comunque a mano.
 
+Su macOS, finché la CI è ferma, si costruisce tutto dai sorgenti: [docs/BUILD-MAC.md](docs/BUILD-MAC.md).
+
 Per provare l'installazione su una macchina pulita (Windows, Linux, macOS), il motore con cambi veri e l'estensione: [guida alle prove reali](docs/PROVE-REALI.md).
 
 ## Primo avvio

@@ -82,12 +82,14 @@ const host = /host: (\S+)/.exec(execFileSync('rustc', ['-vV'], { encoding: 'utf8
 const gnullvm = host?.endsWith('-gnullvm') ?? false;
 const hasCli = existsSync(join(repo, 'apps', 'cli', 'Cargo.toml'));
 
-// Cartella di uscita: si ricrea da zero (mai seguendo un collegamento).
+// Cartella di uscita: si svuota (mai seguendo un collegamento), tranne `linux/` di `dist:linux`.
 if (existsSync(out)) {
   if (lstatSync(out).isSymbolicLink()) throw new Error(`${out} è un collegamento: non lo tocco`);
-  rmSync(out, { recursive: true, force: true });
+  for (const name of readdirSync(out))
+    if (name !== 'linux') rmSync(join(out, name), { recursive: true, force: true });
+} else {
+  mkdirSync(out);
 }
-mkdirSync(out);
 
 // 1. Pagina e binari di rilascio.
 must(pnpm(['--filter', '@swapdeck/desktop', 'build']), 'pagina di @swapdeck/desktop');
@@ -127,6 +129,10 @@ if (hasCli) {
   copyFileSync(join(release, 'swapdeck-cli.exe'), join(binaries, `swapdeck-cli-${host}.exe`));
   overlay.bundle.externalBin = ['binaries/swapdeck-cli'];
 }
+// Cargo mette `target/release` nel PATH degli script di build: lo script di Tauri (gnullvm) caricherebbe
+// il `libunwind.dll` rimasto lì dalla build precedente e poi non potrebbe sovrascriverlo copiando le
+// risorse (os error 32, niente NSIS). Senza le copie vecchie carica quello di llvm-mingw.
+for (const dll of dlls) rmSync(join(release, dll.split(/[\\/]/).pop()), { force: true });
 const overlayFile = join(tauriDir, 'tauri.local.conf.json');
 writeFileSync(overlayFile, JSON.stringify(overlay));
 const nsisOk = pnpm(

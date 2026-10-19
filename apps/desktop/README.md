@@ -40,6 +40,9 @@ allo sviluppo; gli installer escono dalla CI con MSVC.
 
 - Installer dalla CI (`.github/workflows/release.yml`, MSVC su Windows); build locale di prova con
   `pnpm dist:local` in `dist-locale/` (installer NSIS e portatile con `libunwind.dll` e `WebView2Loader.dll`).
+- Linux senza CI: `pnpm dist:linux` costruisce in Docker (ubuntu 22.04, come la CI) l'ultimo commit e mette
+  `.deb`, AppImage, `swapdeck-cli` e `.vsix` linux-x64 in `dist-locale/linux/` (serve una decina di GB liberi
+  per il disco di Docker). macOS: [docs/BUILD-MAC.md](../../docs/BUILD-MAC.md).
 - Updater (`tauri-plugin-updater`, `src-tauri/src/updater.rs`): spento di default finché il repo è
   privato; si accende con `"updates": { "enabled": true }` in `config.json`. Endpoint `latest.json`
   sulle GitHub Releases, chiave pubblica in `tauri.conf.json`. La CI compila senza segreti e firma
