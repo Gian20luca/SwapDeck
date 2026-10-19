@@ -3,6 +3,12 @@
 Workflow: `.github/workflows/release.yml`. Produce installer, `swapdeck-cli`, `.vsix` per piattaforma,
 firme dell'updater e `latest.json`, e li mette in una release **in bozza**: la pubblicazione resta manuale.
 
+## Novità 0.2.1 (19/10)
+
+- **Barra laterale stretta**: le card non escono più dal pannello con nomi di organizzazione lunghi.
+- **Lingua in VS Code**: l'estensione usa la lingua scelta in SwapDeck e non torna a quella di VS Code al cambio di scheda.
+- **Impostazioni di cswap auto** (prima «Configurazione di cswap») spostate sotto «Avanzate»: SwapDeck non le usa.
+
 ## Novità 0.2.0 (17/10)
 
 - **Chi consuma**: classifica in sola lettura per progetto, sessione e agente su 5h e 7d dalle sessioni
