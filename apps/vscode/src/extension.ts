@@ -34,8 +34,14 @@ import { DEACTIVATE_GRACE_MS, EngineProcess, shouldRetryEngine } from './engine.
 import { rulesToStart, type FirstEnableAnswer } from './firstEnable.js';
 import type { CliState } from './generated/index.js';
 import { fromPoll, langOf, messageOf, parseEngineEvent, shouldPoll } from './notifications.js';
-import { DashboardPanel, SIDEBAR_VIEW_ID, SidebarView, WebviewHub } from './panel.js';
-import { suspensionOf, type PickParams } from './protocol.js';
+import {
+  DashboardPanel,
+  SIDEBAR_VIEW_ID,
+  setPreferredLocale,
+  SidebarView,
+  WebviewHub,
+} from './panel.js';
+import { preferredLocaleOf, suspensionOf, type PickParams } from './protocol.js';
 import { Refresher } from './refresher.js';
 import { SyncWatcher } from './sync.js';
 import {
@@ -215,45 +221,66 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     return picked?.[0]?.fsPath ?? null;
   }
 
+  const handle = createRequestHandler({
+    cli,
+    lastState: () => state,
+    refresh: () => refresh(),
+    onOutcome: (outcome) => afterAction(outcome),
+    confirm: (action, needed) =>
+      askConfirmation(needed, t('SwapDeck: confirm "{0}"?', describeAction(action))),
+    pick: pickPath,
+    confirmSetup: async (kind) => {
+      const ok = t('Confirm');
+      const label =
+        kind === 'install'
+          ? t('SwapDeck: install uv (if missing) and claude-swap for the current user?')
+          : t('SwapDeck: upgrade claude-swap with "uv tool upgrade claude-swap"?');
+      return (await vscode.window.showWarningMessage(label, { modal: true }, ok)) === ok;
+    },
+    clientInfo,
+    openFolder,
+    copyText,
+    pauseEngine: async () => {
+      if (!engine.running) return () => undefined;
+      output.info('[motore] arresto per l’aggiornamento di cswap');
+      await engine.stop();
+      return () => syncEngine();
+    },
+    onChanged: () => {
+      void signalSync();
+      configChanged();
+    },
+  });
   const hub = new WebviewHub(
     context.extensionUri,
-    createRequestHandler({
-      cli,
-      lastState: () => state,
-      refresh: () => refresh(),
-      onOutcome: (outcome) => afterAction(outcome),
-      confirm: (action, needed) =>
-        askConfirmation(needed, t('SwapDeck: confirm "{0}"?', describeAction(action))),
-      pick: pickPath,
-      confirmSetup: async (kind) => {
-        const ok = t('Confirm');
-        const label =
-          kind === 'install'
-            ? t('SwapDeck: install uv (if missing) and claude-swap for the current user?')
-            : t('SwapDeck: upgrade claude-swap with "uv tool upgrade claude-swap"?');
-        return (await vscode.window.showWarningMessage(label, { modal: true }, ok)) === ok;
-      },
-      clientInfo,
-      openFolder,
-      copyText,
-      pauseEngine: async () => {
-        if (!engine.running) return () => undefined;
-        output.info('[motore] arresto per l’aggiornamento di cswap');
-        await engine.stop();
-        return () => syncEngine();
-      },
-      onChanged: () => {
-        void signalSync();
-        configChanged();
-      },
-    }),
+    async (method, params, progress) => {
+      const result = await handle(method, params, progress);
+      if (method === 'setPreferences') void loadLanguage();
+      return result;
+    },
     (post) => {
       if (state?.list) post({ type: 'state', list: state.list });
       if (state) post({ type: 'engine', suspended: suspensionOf(state.engine) });
     },
   );
   /** Le schede aperte nei webview di questa finestra rileggono i loro dati. */
-  const configChanged = () => hub.post({ type: 'configChanged' });
+  const configChanged = () => {
+    hub.post({ type: 'configChanged' });
+    void loadLanguage();
+  };
+  /**
+   * Lingua di `language` nella config comune, come l'app desktop: le viste la seguono anche
+   * dopo un cambio da Impostazioni o da un'altra finestra. Errore: resta quella attuale.
+   */
+  async function loadLanguage(): Promise<void> {
+    try {
+      const prefs = await cli<{ language?: unknown }>(['preferences', 'get']);
+      if (setPreferredLocale(preferredLocaleOf(prefs.language))) hub.refreshView();
+    } catch {
+      // CLI non disponibile: resta la lingua di VS Code.
+    }
+  }
+  void loadLanguage();
   const panel = new DashboardPanel(hub);
   const sidebar = new SidebarView(hub);
 

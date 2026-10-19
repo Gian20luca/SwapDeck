@@ -60,7 +60,9 @@ describe('«i» nelle pagine', () => {
     const backend = new FakeBackend();
     (backend as { getNotificationSettings?: unknown }).getNotificationSettings = undefined;
     renderWith(<SettingsPage />, backend);
-    await screen.findByRole('list', { name: 'Configurazione di cswap' });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: 'Avanzate' }));
+    await screen.findByRole('list', { name: 'Impostazioni di cswap auto' });
     const names = infoButtons().map((b) => b.getAttribute('aria-label'));
     for (const name of [
       'Lingua',
@@ -70,11 +72,10 @@ describe('«i» nelle pagine', () => {
       'Strategia',
       'Isteresi (%)',
       'Pausa tra i cambi (secondi)',
-      'Configurazione di cswap',
+      'Impostazioni di cswap auto',
     ])
       expect(names, name).toContain(`Informazioni su ${name}`);
-    const user = userEvent.setup();
-    const list = screen.getByRole('list', { name: 'Configurazione di cswap' });
+    const list = screen.getByRole('list', { name: 'Impostazioni di cswap auto' });
     await user.click(within(list).getByRole('button', { name: 'Informazioni su Isteresi (%)' }));
     expect(screen.getByText(/evita i cambi avanti e indietro/)).toBeVisible();
   });

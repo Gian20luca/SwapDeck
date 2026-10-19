@@ -55,7 +55,8 @@ describe('schede aperte e modifiche fatte in un’altra finestra', () => {
     const backend = new FakeBackend();
     const user = userEvent.setup();
     renderWith(<SettingsPage />, backend);
-    await screen.findByRole('list', { name: 'Configurazione di cswap' });
+    await user.click(await screen.findByRole('button', { name: 'Avanzate' }));
+    await screen.findByRole('list', { name: 'Impostazioni di cswap auto' });
     const row = () =>
       screen
         .getByRole('button', { name: 'Salva autoswitch.cooldownSeconds' })

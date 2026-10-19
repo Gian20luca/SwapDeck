@@ -33,8 +33,9 @@ const rememberTab = (tab: TabId) => {
 };
 
 /**
- * App completa a schede, nella vista della barra laterale e nella scheda dell'editor. Lingua e tema
- * seguono VS Code: a ogni cambio la UI si rimonta con i nuovi valori, sulla scheda salvata. Le
+ * App completa a schede, nella vista della barra laterale e nella scheda dell’editor. La lingua è
+ * quella scelta in SwapDeck (o di VS Code), il tema quello di VS Code: a ogni cambio la UI si
+ * rimonta con i nuovi valori, sulla scheda salvata. Le
  * conferme le chiede l'host (`hostConfirms`).
  */
 function App() {

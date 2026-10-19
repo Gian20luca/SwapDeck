@@ -95,10 +95,23 @@ export type RequestParams =
 /** Webview → host. */
 export type WebviewMessage = ({ type: 'request'; id: number } & RequestParams) | { type: 'ready' };
 
-/** Impostazioni di presentazione decise dall'host (lingua e tema di VS Code). */
+/** Impostazioni di presentazione decise dall'host (lingua di SwapDeck o di VS Code, tema di VS Code). */
 export interface ViewSettings {
   locale: 'it' | 'en';
   theme: 'light' | 'dark';
+}
+
+/** `language` delle preferenze di SwapDeck, se valida. */
+export function preferredLocaleOf(language: unknown): ViewSettings['locale'] | undefined {
+  return language === 'it' || language === 'en' ? language : undefined;
+}
+
+/** Lingua delle viste: quella scelta in SwapDeck, altrimenti quella di VS Code. */
+export function viewLocale(
+  preferred: ViewSettings['locale'] | undefined,
+  vscodeLanguage: string,
+): ViewSettings['locale'] {
+  return preferred ?? (vscodeLanguage.toLowerCase().startsWith('it') ? 'it' : 'en');
 }
 
 /** Motore in esecuzione sospeso (`swapdeck-cli state`): riga sopra le schede. */

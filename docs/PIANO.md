@@ -53,7 +53,7 @@ Esclusa: esportazione dello storico in CSV (punto 12).
 ## 2. Architettura
 
 ```
-WidgetCswap/
+SwapDeck/
   crates/swapdeck-core/   Rust: client cswap, config, motore regole, lock, storico, rilevamento conflitti
   apps/desktop/           Tauri 2: area di notifica, finestre, notifiche, autostart, updater, modalità --headless
   apps/vscode/            estensione VS Code (TypeScript, esbuild)

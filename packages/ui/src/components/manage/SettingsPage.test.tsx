@@ -14,8 +14,10 @@ async function setup() {
   const setAutostart = vi.spyOn(backend, 'setAutostart');
   renderWith(<SettingsPage />, backend);
   await screen.findByLabelText('Intervallo di controllo (secondi)');
-  await screen.findByRole('list', { name: 'Configurazione di cswap' });
-  return { backend, run, setPrefs, setAutostart, user: userEvent.setup() };
+  const user = userEvent.setup();
+  await user.click(screen.getByRole('button', { name: 'Avanzate' }));
+  await screen.findByRole('list', { name: 'Impostazioni di cswap auto' });
+  return { backend, run, setPrefs, setAutostart, user };
 }
 
 describe('parseThresholds', () => {
@@ -90,16 +92,27 @@ describe('SettingsPage: impostazioni dell’app', () => {
 
   it('senza il supporto dell’host (VS Code) niente avvio al login né salvataggio delle preferenze', async () => {
     renderWith(<SettingsPage />, bareBackend(new FakeBackend()));
-    await screen.findByRole('list', { name: 'Configurazione di cswap' });
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Avanzate' }));
+    await screen.findByRole('list', { name: 'Impostazioni di cswap auto' });
     expect(screen.queryByLabelText('Avvia SwapDeck al login')).toBeNull();
     expect(screen.queryByLabelText('Intervallo di controllo (secondi)')).toBeNull();
   });
 });
 
 describe('SettingsPage: configurazione di cswap', () => {
+  it('sta chiusa sotto «Avanzate» finché non la si apre', async () => {
+    renderWith(<SettingsPage />, new FakeBackend());
+    const toggle = await screen.findByRole('button', { name: 'Avanzate' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('list', { name: 'Impostazioni di cswap auto' })).toBeNull();
+    await userEvent.setup().click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await screen.findByRole('list', { name: 'Impostazioni di cswap auto' });
+  });
+
   it('elenca le chiavi del contratto con etichetta e stato', async () => {
     await setup();
-    const list = screen.getByRole('list', { name: 'Configurazione di cswap' });
+    const list = screen.getByRole('list', { name: 'Impostazioni di cswap auto' });
     expect(within(list).getAllByRole('listitem')).toHaveLength(9);
     expect(within(list).getByText('autoswitch.threshold · default')).toBeInTheDocument();
   });

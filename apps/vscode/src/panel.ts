@@ -7,7 +7,12 @@ import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { toCswapError } from './cli.js';
 import type { SetupProgress } from '@swapdeck/types';
-import type { HostMessage, ViewSettings, WebviewMessage } from './protocol.js';
+import {
+  viewLocale,
+  type HostMessage,
+  type ViewSettings,
+  type WebviewMessage,
+} from './protocol.js';
 
 export type RequestHandler = (
   method: unknown,
@@ -56,12 +61,22 @@ export function webviewHtml(opts: {
 </html>`;
 }
 
+/** Lingua scelta in SwapDeck (`language` della config comune); senza, quella di VS Code. */
+let preferredLocale: ViewSettings['locale'] | undefined;
+
+/** Imposta la lingua scelta in SwapDeck; `true` se è cambiata. */
+export function setPreferredLocale(locale: ViewSettings['locale'] | undefined): boolean {
+  if (locale === preferredLocale) return false;
+  preferredLocale = locale;
+  return true;
+}
+
 export function viewSettings(): ViewSettings {
   const kind = vscode.window.activeColorTheme.kind;
   const light =
     kind === vscode.ColorThemeKind.Light || kind === vscode.ColorThemeKind.HighContrastLight;
   return {
-    locale: vscode.env.language.toLowerCase().startsWith('it') ? 'it' : 'en',
+    locale: viewLocale(preferredLocale, vscode.env.language),
     theme: light ? 'light' : 'dark',
   };
 }
@@ -80,11 +95,7 @@ export class WebviewHub implements vscode.Disposable {
     private readonly handle: RequestHandler,
     private readonly onReady: (post: (message: HostMessage) => void) => void,
   ) {
-    this.disposables.push(
-      vscode.window.onDidChangeActiveColorTheme(() =>
-        this.post({ type: 'view', settings: viewSettings() }),
-      ),
-    );
+    this.disposables.push(vscode.window.onDidChangeActiveColorTheme(() => this.refreshView()));
   }
 
   /** Cartella delle risorse del webview (unica radice permessa). */
@@ -117,6 +128,11 @@ export class WebviewHub implements vscode.Disposable {
       sub.dispose();
       this.webviews.delete(webview);
     });
+  }
+
+  /** Lingua e tema attuali a tutti i webview: la UI si rimonta sulla scheda salvata. */
+  refreshView(): void {
+    this.post({ type: 'view', settings: viewSettings() });
   }
 
   /** A tutti i webview aperti. */

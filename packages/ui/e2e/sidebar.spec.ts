@@ -95,3 +95,29 @@ test(`app completa a ${WIDTH} px (barra laterale di VS Code) senza scroll orizzo
   await noHorizontalScroll(page, 'Notifiche');
   await page.screenshot({ path: `${SHOTS}/sidebar-notifiche-${WIDTH}.png`, fullPage: true });
 });
+
+test.describe('in inglese', () => {
+  // Testi più lunghi (Next available, Who consumes…): la lingua di VS Code nella maggior parte dei PC.
+  test.use({ locale: 'en-US' });
+
+  test(`account e impostazioni a ${WIDTH} px senza scroll orizzontale`, async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: WIDTH, height: 800 });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1, name: 'Accounts' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Next available' })).toBeInViewport();
+    await noHorizontalScroll(page, 'Accounts');
+    // Dati veri: un nome di organizzazione lungo e senza spazi («email's Organization»).
+    await page
+      .locator('.sd-card__email')
+      .first()
+      .evaluate((el) => {
+        el.textContent = 'someone.with.a.long.name@example.com’s Organization';
+      });
+    await noHorizontalScroll(page, 'Accounts con organizzazione lunga');
+    await page.screenshot({ path: `${SHOTS}/sidebar-accounts-en-${WIDTH}.png`, fullPage: true });
+    await tab(page, 'Settings');
+    await page.getByText('Advanced', { exact: true }).click();
+    await noHorizontalScroll(page, 'Settings');
+  });
+});

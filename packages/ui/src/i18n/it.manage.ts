@@ -168,8 +168,11 @@ export const itManage = {
   'settings.autostart.dev': 'Build di sviluppo: il sistema non viene modificato.',
   'settings.version': 'Versione {version}',
 
-  'config.title': 'Configurazione di cswap',
-  'config.hint': 'Valori usati da «cswap auto». Senza valore impostato vale il default di cswap.',
+  'settings.advanced': 'Avanzate',
+  'settings.advanced.tip': 'Mostra o nasconde le impostazioni di cswap auto, che SwapDeck non usa.',
+  'config.title': 'Impostazioni di cswap auto',
+  'config.hint':
+    'Valori letti solo da «cswap auto» avviato a mano. SwapDeck non li usa: il suo motore segue Regole e mappe. Senza valore impostato vale il default di cswap.',
   'config.path': 'File: {path}',
   'config.isSet': 'impostato',
   'config.isDefault': 'default',

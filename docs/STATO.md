@@ -52,3 +52,10 @@ Piano: [PIANO.md](PIANO.md). Aggiornato dalla regia a ogni chiusura di step.
 - Sul PC dell'utente: chiusa la 0.1.0 portatile in esecuzione da `dist-locale` (motore acceso nella config reale, avvio automatico registrato); config reale portata a `autostart:false` e motore spento (copia `config.json.bak-*` accanto), voce Run tolta; installata la 0.2.0 per utente in `%LOCALAPPDATA%\SwapDeck` e avviata minimizzata (log: avvio automatico spento, motore sospeso perché spento); .vsix 0.2.0 installato con `swapdeck.engine.enabled: false` (copia `settings.json.bak-*`), finestre VS Code da ricaricare a cura dell'utente.
 - Prove reali (macchine pulite, motore con cambi veri, Linux e macOS): `docs/PROVE-REALI.md`.
 - Domande aperte: invariate, più rileggere i testi delle «i» e confermare il motore spento sul PC (nella config reale era acceso, con la 0.1.0 in esecuzione; si riaccende dalla scheda Regole).
+
+## Correzioni alla 0.2.0 (19/10, fatte, da committare)
+- Cartella del progetto rinominata da `WidgetCswap` a `SwapDeck`: dipendenze reinstallate (i link di pnpm puntavano al vecchio percorso), schema in `PIANO.md` corretto.
+- «Configurazione di cswap» → «Impostazioni di cswap auto», chiusa sotto il pulsante «Avanzate» (con tooltip; la config di cswap si legge solo all'apertura) e testo che dice che SwapDeck non usa questi valori.
+- Vista stretta: la causa vera era un nome di organizzazione lungo e senza spazi («email's Organization») che allargava la griglia di `.sd-app`. Corretto con `grid-template-columns: minmax(0, 1fr)` e `overflow-wrap: anywhere` sull'email; nuovo E2E in inglese a 280 px con organizzazione lunga.
+- Lingua in VS Code: l'estensione ora usa `language` della config comune (`preferredLocaleOf`/`viewLocale` in `protocol.ts`, riletta all'avvio, dopo `setPreferences` e a ogni cambio della config) e la manda alle viste; prima seguiva solo la lingua di VS Code.
+- Verifiche: lint, unit (types 3, ui 378, desktop 21, vscode 81), Playwright 33/33, `test:ext` tutto ok. Vitest con `--pool=threads`: col pool predefinito oggi i worker non si chiudono (`kill EPERM`), problema dell'ambiente.

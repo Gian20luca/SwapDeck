@@ -170,8 +170,11 @@ export const enManage: Record<keyof typeof itManage, string> = {
   'settings.autostart.dev': 'Development build: the system is not changed.',
   'settings.version': 'Version {version}',
 
-  'config.title': 'cswap configuration',
-  'config.hint': 'Values used by “cswap auto”. Without a value cswap uses its default.',
+  'settings.advanced': 'Advanced',
+  'settings.advanced.tip': 'Shows or hides the cswap auto settings, which SwapDeck does not use.',
+  'config.title': 'cswap auto settings',
+  'config.hint':
+    'Values read only by “cswap auto” started by hand. SwapDeck does not use them: its engine follows Rules and maps. Without a value cswap uses its default.',
   'config.path': 'File: {path}',
   'config.isSet': 'set',
   'config.isDefault': 'default',

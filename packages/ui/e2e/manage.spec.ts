@@ -76,7 +76,9 @@ test('navigazione a schede a 420×640 senza scroll orizzontale', async ({ page }
 
   await tab(page, 'Impostazioni');
   await expect(page.getByRole('heading', { name: 'Impostazioni' })).toBeVisible();
-  await expect(page.getByRole('list', { name: 'Configurazione di cswap' })).toBeVisible();
+  await expect(page.getByRole('list', { name: 'Impostazioni di cswap auto' })).toBeHidden();
+  await page.getByText('Avanzate', { exact: true }).click();
+  await expect(page.getByRole('list', { name: 'Impostazioni di cswap auto' })).toBeVisible();
   await noHorizontalScroll(page);
   await page.screenshot({ path: `${SHOTS}/impostazioni-420x640.png`, fullPage: true });
 

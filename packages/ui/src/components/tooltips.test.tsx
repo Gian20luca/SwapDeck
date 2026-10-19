@@ -132,6 +132,9 @@ describe('Tooltip su ogni elemento interattivo', () => {
     await user.click(await screen.findByRole('button', { name: 'Gestisci l’account alias3' }));
     problems.push(...missingTooltips(document.body).map((p) => `Dettaglio: ${p}`));
     await user.click(screen.getByRole('tab', { name: 'Impostazioni' }));
+    await user.click(await screen.findByRole('button', { name: 'Avanzate' }));
+    await screen.findByRole('list', { name: 'Impostazioni di cswap auto' });
+    problems.push(...missingTooltips(document.body).map((p) => `Avanzate: ${p}`));
     await user.click(await screen.findByRole('button', { name: 'Notifiche…' }));
     await screen.findByRole('region', { name: 'Notifiche' });
     await waitFor(() => expect(document.querySelector('.sd-state[role="status"]')).toBeNull());

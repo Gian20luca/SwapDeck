@@ -49,6 +49,7 @@ export function SettingsPage() {
   const { t } = useI18n();
   const backend = useBackend();
   const [page, setPage] = useState<'main' | 'notifications'>('main');
+  const [advanced, setAdvanced] = useState(false);
   const notifications =
     typeof backend.getNotificationSettings === 'function' &&
     typeof backend.setNotificationSettings === 'function';
@@ -70,7 +71,20 @@ export function SettingsPage() {
       )}
       <PreferencesSection />
       <AutostartSection />
-      <CswapConfigSection />
+      {/* Valori di `cswap auto`, che SwapDeck non usa: chiusi per non confonderli col motore. */}
+      <div className="sd-advanced">
+        <Tooltip text={t('settings.advanced.tip')}>
+          <button
+            type="button"
+            className="sd-btn sd-btn--small"
+            aria-expanded={advanced}
+            onClick={() => setAdvanced((open) => !open)}
+          >
+            {t('settings.advanced')}
+          </button>
+        </Tooltip>
+        {advanced && <CswapConfigSection />}
+      </div>
     </div>
   );
 }
