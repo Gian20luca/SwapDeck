@@ -51,6 +51,7 @@
         "installMode": "currentUser",
         "languages": ["Italian", "English"],
         "displayLanguageSelector": false,
+        "customLanguageFiles": { "Italian": "./windows/Italian.nsh" },
         "installerHooks": "./windows/hooks.nsh"
       }
     },
