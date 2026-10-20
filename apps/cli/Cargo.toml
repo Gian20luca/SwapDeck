@@ -26,6 +26,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 swapdeck-core = { path = "../../crates/swapdeck-core" }
 ts-rs = { version = "12.0.1", features = ["serde-json-impl", "no-serde-warnings"] }
+zeroize = "1.9.1"
 
 [dev-dependencies]
 tempfile = "3.27.0"

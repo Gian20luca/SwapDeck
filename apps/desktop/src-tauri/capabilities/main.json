@@ -36,6 +36,10 @@
     "allow-install-cswap",
     "allow-upgrade-cswap",
     "allow-check-cswap-update",
-    "allow-dismiss-cswap-update"
+    "allow-dismiss-cswap-update",
+    "allow-relogin-accounts-for",
+    "allow-start-relogin",
+    "allow-submit-relogin-code",
+    "allow-cancel-relogin"
   ]
 }

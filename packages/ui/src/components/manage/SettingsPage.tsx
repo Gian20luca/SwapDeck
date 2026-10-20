@@ -4,7 +4,7 @@ import { actions } from '../../backend/actions.js';
 import { useBackend } from '../../backend/context.js';
 import { useActionRunner, type Notice } from '../../backend/useActionRunner.js';
 import { errorMessage } from '../../backend/useAccounts.js';
-import type { AppPreferences, HostSettings } from '../../backend/types.js';
+import { hasRelogin, type AppPreferences, type HostSettings } from '../../backend/types.js';
 import { resolveLocale, useI18n, type LocalePreference } from '../../i18n/index.js';
 import {
   CONFIG_KEYS,
@@ -83,7 +83,12 @@ export function SettingsPage() {
             {t('settings.advanced')}
           </button>
         </Tooltip>
-        {advanced && <CswapConfigSection />}
+        {advanced && (
+          <>
+            <ClaudePathSection />
+            <CswapConfigSection />
+          </>
+        )}
       </div>
     </div>
   );
@@ -238,6 +243,96 @@ function PollForm({
           </button>
         </Tooltip>
       </div>
+    </form>
+  );
+}
+
+/** Percorso di Claude Code per «Rifai login» (F21): solo se l'host offre l'operazione. */
+function ClaudePathSection() {
+  const { t } = useI18n();
+  const backend = useBackend();
+  const supported =
+    hasRelogin(backend) &&
+    typeof backend.getPreferences === 'function' &&
+    typeof backend.setPreferences === 'function';
+  const load = useCallback(
+    () => (backend.getPreferences ? backend.getPreferences() : Promise.reject(new Error('n/d'))),
+    [backend],
+  );
+  const { state, set, reload } = useLoad<AppPreferences>(load, [load]);
+  useConfigChanged(() => supported && reload());
+  if (!supported) return null;
+  return (
+    <Section title={t('settings.claude.title')}>
+      <LoadGate state={state} onRetry={() => void reload()}>
+        {(prefs) => <ClaudePathForm prefs={prefs} onSaved={set} />}
+      </LoadGate>
+    </Section>
+  );
+}
+
+function ClaudePathForm({
+  prefs,
+  onSaved,
+}: {
+  prefs: AppPreferences;
+  onSaved: (prefs: AppPreferences) => void;
+}) {
+  const { t } = useI18n();
+  const backend = useBackend();
+  const saved = prefs.claudeCodePath ?? '';
+  const [value, setValue] = useState(saved);
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const external = useSyncedForm(
+    prefs,
+    (p) => value.trim() === (p.claudeCodePath ?? ''),
+    (p) => setValue(p.claudeCodePath ?? ''),
+  );
+  return (
+    <form
+      className="sd-form"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!backend.setPreferences) return;
+        setSaving(true);
+        setNotice(null);
+        backend
+          .setPreferences({ claudeCodePath: value.trim() })
+          .then((next) => {
+            onSaved(next);
+            setNotice({ tone: 'info', text: t('settings.saved') });
+          })
+          .catch((error: unknown) =>
+            setNotice({
+              tone: 'danger',
+              text: t('common.actionFailed', { message: errorMessage(error) }),
+            }),
+          )
+          .finally(() => setSaving(false));
+      }}
+    >
+      <TextField
+        label={t('settings.claude.path')}
+        tip={t('settings.claude.path.tip')}
+        hint={t('settings.claude.path.hint')}
+        value={value}
+        onChange={setValue}
+        disabled={saving}
+      />
+      <ExternalChangeNotice stale={external.stale} onReload={external.reloadNow} />
+      <div className="sd-row">
+        <Tooltip text={t('settings.claude.save.tip')}>
+          <button
+            type="submit"
+            className="sd-btn sd-btn--primary"
+            disabled={saving || value.trim() === saved}
+          >
+            {t('settings.claude.save')}
+          </button>
+        </Tooltip>
+      </div>
+      <NoticeView notice={notice} />
     </form>
   );
 }

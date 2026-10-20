@@ -13,6 +13,8 @@ import type {
   NotificationConfig,
   ProfileCommand,
   HistoryEvents,
+  ReloginEvent,
+  ReloginOutcome,
   ListResponse,
   SetupDiagnosis,
   SetupOutcome,
@@ -30,6 +32,7 @@ import {
   type HistoryQuery,
   type NotificationPatch,
   type PickOptions,
+  type ReloginBackend,
   type SetupBackend,
   type Unsubscribe,
 } from '@swapdeck/ui';
@@ -38,6 +41,7 @@ import type {
   HistoryParams,
   HostMessage,
   PickParams,
+  ProgressEvent,
   RequestParams,
   ViewSettings,
   WebviewMessage,
@@ -50,11 +54,11 @@ interface Pending {
   resolve: (value: unknown) => void;
   reject: (error: BackendError) => void;
   /** Avanzamento di installazione o aggiornamento di cswap. */
-  progress?: (event: SetupProgress) => void;
+  progress?: (event: ProgressEvent) => void;
 }
 
 /** `Backend` del webview di VS Code: ogni chiamata è un messaggio all'extension host. */
-export class VsCodeBackend implements Backend, SetupBackend {
+export class VsCodeBackend implements Backend, SetupBackend, ReloginBackend {
   /** Le conferme le impone l'extension host (`bridge.ts`) con i dialoghi modali di VS Code. */
   readonly hostConfirms = true;
   private nextId = 1;
@@ -120,7 +124,7 @@ export class VsCodeBackend implements Backend, SetupBackend {
     }
   }
 
-  private request<T>(req: RequestParams, progress?: (event: SetupProgress) => void): Promise<T> {
+  private request<T>(req: RequestParams, progress?: (event: ProgressEvent) => void): Promise<T> {
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
       this.pending.set(id, {
@@ -246,12 +250,35 @@ export class VsCodeBackend implements Backend, SetupBackend {
 
   /** L'host chiede conferma con un dialogo modale; se annullata la promessa rifiuta con cancelled. */
   installCswap(onProgress: (event: SetupProgress) => void): Promise<SetupOutcome> {
-    return this.request({ method: 'installCswap', params: {} }, onProgress);
+    return this.request({ method: 'installCswap', params: {} }, (e) =>
+      onProgress(e as SetupProgress),
+    );
   }
 
   /** L'host chiede conferma e ferma il proprio motore prima di aggiornare. */
   upgradeCswap(onProgress: (event: SetupProgress) => void): Promise<SetupOutcome> {
-    return this.request({ method: 'upgradeCswap', params: {} }, onProgress);
+    return this.request({ method: 'upgradeCswap', params: {} }, (e) =>
+      onProgress(e as SetupProgress),
+    );
+  }
+
+  reloginAccounts(list: ListResponse): Promise<number[]> {
+    return this.request({ method: 'reloginAccounts', params: { list } });
+  }
+
+  /** L'host ferma il proprio motore per tutta l'operazione e lo riavvia alla fine. */
+  startRelogin(account: number, onEvent: (event: ReloginEvent) => void): Promise<ReloginOutcome> {
+    return this.request({ method: 'startRelogin', params: { account } }, (e) =>
+      onEvent(e as ReloginEvent),
+    );
+  }
+
+  async submitReloginCode(code: string): Promise<void> {
+    await this.request({ method: 'submitReloginCode', params: { code } });
+  }
+
+  async cancelRelogin(): Promise<void> {
+    await this.request({ method: 'cancelRelogin', params: {} });
   }
 
   checkCswapUpdate(options?: { force?: boolean }): Promise<UpdateInfo> {

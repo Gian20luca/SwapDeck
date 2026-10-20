@@ -146,6 +146,29 @@ Richiede il repo **pubblico** con release pubblicata (`docs/RILASCIO.md`, «Atti
 | 7.5 | Linux | Si aggiorna solo l'AppImage; il `.deb` no (atteso) | [ ] |
 | 7.6 | Firma errata o `latest.json` alterato (prova negativa, se puoi) | L'aggiornamento viene rifiutato e l'app continua a funzionare | [ ] |
 
+## 7bis. «Rifai login» (F21)
+
+Serve un'utenza di prova **già registrata** in `cswap` con login scaduto o da rifare (oppure in scadenza entro i giorni dell'avviso di scadenza), una seconda utenza di prova attiva e la persona (o un secondo browser) che fa l'accesso. Claude Code installato (PATH, `~/.local/bin` o estensione di VS Code). Le prove si ripetono dall'app desktop e dall'estensione VS Code.
+
+| # | Prova | Esito atteso | OK |
+|---|---|---|---|
+| 7b.1 | Pulsante | «Rifai login» solo sulle utenze `relogin_required`, `token_expired` o in scadenza, sia sulla scheda sia nel dettaglio; «Aggiungi account» invariato | [ ] |
+| 7b.2 | Clic su «Rifai login» | Passi «Salvo l'utenza attiva», «Avvio Claude Code», poi il link; nessuna finestra di console; **nessuna scheda del browser si apre sul PC** (Claude Code avviato con `BROWSER=none`: se una scheda si apre comunque, annota sistema e browser) | [ ] |
+| 7b.3 | «Copia link» e invio alla persona | Il link incollato in un altro browser porta all'accesso Claude e mostra il codice | [ ] |
+| 7b.4 | Codice giusto, email giusta | «Login di … rinnovato. È di nuovo attiva l'utenza di prima.»; l'utenza torna `ok` alla lettura successiva, nessuna riga nuova in `cswap list`, attiva quella di prima | [ ] |
+| 7b.5 | Accesso con un'**altra** email | «Ha effettuato l'accesso con un altro account»; nessun `add`; l'utenza di prima resta attiva e funzionante in Claude Code | [ ] |
+| 7b.6 | «Annulla» prima del codice | «Login annullato: credenziali invariate»; processo `claude` chiuso (Gestione attività / `ps`); motore ripreso | [ ] |
+| 7b.7 | Nessun codice per 5 minuti | «Tempo scaduto…»; processo chiuso; motore ripreso | [ ] |
+| 7b.8 | Claude Code **mancante** (rinominalo o togli dal PATH) | «Claude Code non trovato: indica il percorso in Impostazioni → Avanzate»; nessun `cswap add` eseguito; con il percorso assoluto in «Percorso di Claude Code» l'operazione parte | [ ] |
+| 7b.9 | Motore acceso in un'altra SwapDeck (app aperta mentre si usa VS Code) | Errore «il motore di SwapDeck è attivo…»: nessun passo eseguito | [ ] |
+| 7b.10 | Log e diagnostica dopo le prove | Solo «link generato», «codice inviato», esiti e numeri di utenza: **mai** URL, codice, token o email complete | [ ] |
+| 7b.11 | Nessuna utenza attiva in cswap e in Claude Code un account **non registrato** | Errore «In Claude Code è collegato un account non registrato in cswap…» prima di avviare il login; nessun `cswap add` | [ ] |
+| 7b.12 | Nessuna utenza attiva e nessun login in Claude Code | Login fatto; esito «… rinnovato. Non c’era un’utenza a cui tornare.» | [ ] |
+| 7b.13 | VS Code: chiudi la vista (o la scheda) di SwapDeck mentre attende il codice | Operazione annullata subito: processo `claude` chiuso, motore dell’estensione ripreso, utenza di prima attiva | [ ] |
+| 7b.13b | VS Code: mentre attende il codice passa a un'altra vista della barra laterale (o a un altro file), poi torna su SwapDeck | Nessun annullamento: link e campo «Codice» ancora lì, l'operazione si chiude solo con il codice, «Annulla», la chiusura o i 5 minuti | [ ] |
+| 7b.14 | App desktop con `cswap auto` avviato dall’app: «Rifai login» fino in fondo (e una volta con «Annulla») | Alla fine `cswap auto` riparte con le stesse opzioni (stato «auto» acceso) | [ ] |
+| 7b.15 | App desktop: «Esci» dal menu dell’area di notifica mentre attende il codice | Entro ~10 s l’app si chiude; processo `claude` chiuso; `cswap list` mostra attiva l’utenza di prima | [ ] |
+
 ## 8. Casi difficili
 
 | # | Prova | Esito atteso | OK |

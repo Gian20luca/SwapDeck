@@ -11,8 +11,8 @@ mod ts_export;
 
 use std::io::{self, Read, Write};
 use std::path::Path;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -24,6 +24,7 @@ use swapdeck_core::config::{
 use swapdeck_core::conflicts::{ConflictSource, SystemConflicts};
 use swapdeck_core::cswap::{
     ActionOutcome, AutoMessage, CswapAction, CswapClient, CswapError, CswapErrorKind, ListResponse,
+    SecretToken,
 };
 use swapdeck_core::engine::{
     Decision, EngineMemory, EngineProfiles, EngineRules, EngineState, EngineView, Observation,
@@ -33,6 +34,7 @@ use swapdeck_core::history::{History, HistoryEvents, HistoryQuery, HistoryRecord
 use swapdeck_core::lock;
 use swapdeck_core::notify::{self, NotificationConfig, NotifyPoll};
 use swapdeck_core::paths::AppPaths;
+use swapdeck_core::relogin;
 use swapdeck_core::setup::{Setup, SetupProgress};
 use swapdeck_core::timeutil::now_unix;
 use swapdeck_core::usage::{
@@ -79,6 +81,9 @@ pub const USAGE: &str = "uso: swapdeck-cli <comando>
   diagnostics [--json] [--client TESTO]   (testo di diagnostica redatto; --json: {text, logsDir})
   logs dir                            (cartella dei log, creata se manca)
   log info|warn|error -               (una riga nel log, testo da stdin)
+  relogin candidates -                (lista da stdin: utenze per «Rifai login»)
+  relogin start <N>                   (eventi JSON per riga, poi l'esito; da stdin righe
+                                       JSON con code o cancel; fine di stdin = annulla)
   headless [--once] [--dry-run] [--stop-on-stdin-eof] [--notify=os|stdout|both]";
 
 /// Dimensione massima del JSON letto da argomento o stdin.
@@ -124,7 +129,7 @@ pub fn main_with(args: &[String]) -> i32 {
 }
 
 /// Parole dei comandi (niente valori dell'utente nel log).
-const COMMAND_WORDS: [&str; 31] = [
+const COMMAND_WORDS: [&str; 34] = [
     "version",
     "state",
     "status",
@@ -154,6 +159,9 @@ const COMMAND_WORDS: [&str; 31] = [
     "logs",
     "dir",
     "log",
+    "relogin",
+    "candidates",
+    "start",
     "--force",
     "-",
 ];
@@ -181,6 +189,7 @@ fn is_write(args: &[String]) -> bool {
             | ["engine", "rules", "set", ..]
             | ["engine", "profiles", _]
             | ["setup", "install" | "upgrade" | "dismiss-update", ..]
+            | ["relogin", "start", ..]
     )
 }
 
@@ -313,6 +322,8 @@ fn dispatch(args: &[String]) -> Res<Value> {
         ["setup", rest @ ..] => setup_command(rest),
         ["logs", "dir"] => logs_dir(),
         ["log", level, "-"] => log_line(level, &read_input("-")?),
+        ["relogin", "candidates", "-"] => relogin_candidates(&read_input("-")?),
+        ["relogin", "start", n] => relogin_start(n),
         [] | ["help" | "--help" | "-h"] => Err(usage_error(USAGE)),
         // Solo il primo argomento (accorciato): gli altri possono contenere dati dell'utente.
         [first, ..] => Err(usage_error(format!(
@@ -341,6 +352,81 @@ fn setup_command(rest: &[&str]) -> Res<Value> {
         }
         _ => Err(usage_error(format!("opzioni di setup non valide\n{USAGE}"))),
     }
+}
+
+/// Utenze per cui mostrare «Rifai login» (criterio di `relogin::needs_relogin`).
+fn relogin_candidates(text: &str) -> Res<Value> {
+    let list: ListResponse = serde_json::from_str(text).map_err(|e| json_error("lista", &e))?;
+    let notifications = paths()
+        .ok()
+        .and_then(|p| config::load(&p.config_file()).ok())
+        .map(|l| l.config.notifications)
+        .unwrap_or_default();
+    Ok(serde_json::json!({
+        "accounts": relogin::relogin_accounts(&list, &notifications, now_unix())
+    }))
+}
+
+/// Riga di stdin durante «Rifai login».
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReloginInput {
+    #[serde(default)]
+    code: Option<SecretToken>,
+    #[serde(default)]
+    cancel: bool,
+}
+
+/// Lunghezza massima di una riga di comando su stdin.
+const MAX_RELOGIN_LINE: u64 = 16 * 1024;
+
+/// `relogin start <N>`: eventi `ReloginEvent` per riga, poi l'esito. Il codice arriva solo da
+/// stdin (mai negli argomenti); righe non valide ignorate; fine di stdin = annulla.
+fn relogin_start(n: &str) -> Res<Value> {
+    let account = parse_u32("account", n)?;
+    let paths = paths()?;
+    let loaded = config::load(&paths.config_file()).map_err(config_error)?;
+    let claude = relogin::locate_claude(
+        loaded.config.claude_code_path.as_deref(),
+        &relogin::ClaudeSearch::from_process(),
+    );
+    let client = client()?;
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        use std::io::BufRead;
+        let mut stdin = io::stdin().lock();
+        loop {
+            let mut buf = zeroize::Zeroizing::new(Vec::new());
+            match stdin
+                .by_ref()
+                .take(MAX_RELOGIN_LINE)
+                .read_until(b'\n', &mut buf)
+            {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {}
+            }
+            let Ok(input) = serde_json::from_slice::<ReloginInput>(&buf) else {
+                continue;
+            };
+            let cmd = match (input.code, input.cancel) {
+                (_, true) => relogin::ReloginCommand::Cancel,
+                (Some(code), false) => relogin::ReloginCommand::Code(code),
+                (None, false) => continue,
+            };
+            if tx.send(cmd).is_err() {
+                break;
+            }
+        }
+    });
+    let mut progress = |event: relogin::ReloginEvent| {
+        let _ = write_json(&mut io::stdout().lock(), &event);
+    };
+    let outcome = relogin::Relogin::new(client, Some(paths.data_dir), claude).run(
+        account,
+        &rx,
+        &mut progress,
+    )?;
+    to_value(outcome)
 }
 
 fn paths() -> Res<AppPaths> {

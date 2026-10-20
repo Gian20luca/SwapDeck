@@ -240,9 +240,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     clientInfo,
     openFolder,
     copyText,
-    pauseEngine: async () => {
+    pauseEngine: async (why) => {
       if (!engine.running) return () => undefined;
-      output.info('[motore] arresto per l’aggiornamento di cswap');
+      output.info(
+        why === 'relogin'
+          ? '[motore] in pausa per «Rifai login»'
+          : '[motore] arresto per l’aggiornamento di cswap',
+      );
       await engine.stop();
       return () => syncEngine();
     },
@@ -253,8 +257,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
   });
   const hub = new WebviewHub(
     context.extensionUri,
-    async (method, params, progress) => {
-      const result = await handle(method, params, progress);
+    async (method, params, progress, signal) => {
+      const result = await handle(method, params, progress, signal);
       if (method === 'setPreferences') void loadLanguage();
       return result;
     },
@@ -625,7 +629,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     hub,
     panel,
     sidebar,
-    vscode.window.registerWebviewViewProvider(SIDEBAR_VIEW_ID, sidebar),
+    // Viva anche nascosta: un «Rifai login» in attesa del codice non perde link e campo.
+    vscode.window.registerWebviewViewProvider(SIDEBAR_VIEW_ID, sidebar, {
+      webviewOptions: { retainContextWhenHidden: true },
+    }),
     vscode.commands.registerCommand('swapdeck.showView', showView),
     vscode.commands.registerCommand('swapdeck.openPanel', () => panel.show()),
     vscode.commands.registerCommand('swapdeck.refresh', () => refresh()),

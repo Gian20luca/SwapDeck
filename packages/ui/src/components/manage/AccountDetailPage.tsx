@@ -1,5 +1,5 @@
 import type { Account } from '@swapdeck/types';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { actions } from '../../backend/actions.js';
 import { useActionRunner } from '../../backend/useActionRunner.js';
 import { useI18n } from '../../i18n/index.js';
@@ -17,6 +17,8 @@ export interface AccountDetailPageProps {
   onBack: (notice?: string) => void;
   /** L'utenza ha cambiato slot (sposta o scambia): la pagina la segue. */
   onNumberChange: (number: number) => void;
+  /** Pulsanti accanto al titolo (per esempio «Rifai login»). */
+  headExtra?: ReactNode;
 }
 
 /**
@@ -28,6 +30,7 @@ export function AccountDetailPage({
   accounts,
   onBack,
   onNumberChange,
+  headExtra,
 }: AccountDetailPageProps) {
   const { t } = useI18n();
   const { run, busy, notice, dialog } = useActionRunner();
@@ -75,6 +78,7 @@ export function AccountDetailPage({
       <div className="sd-detail__head">
         {backButton}
         <h2>{t('detail.title', { name })}</h2>
+        {headExtra}
       </div>
 
       <Section title={t('detail.name')} info={t('info.detail.name')}>

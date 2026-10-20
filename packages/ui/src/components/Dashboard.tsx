@@ -13,6 +13,7 @@ import { useNavigate } from './navigation.js';
 import { AccountActions } from './manage/AccountActions.js';
 import { AccountDetailPage } from './manage/AccountDetailPage.js';
 import { AddAccount } from './manage/AddAccount.js';
+import { ReloginButton, ReloginPanel, useRelogin, useReloginAccounts } from './manage/Relogin.js';
 import { WithInfo } from './InfoTip.js';
 import { QuickSwitch, type QuickStrategy } from './QuickSwitch.js';
 import { Tooltip } from './Tooltip.js';
@@ -49,6 +50,12 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
   const navigate = useNavigate();
   /** Utenza aperta nella pagina di dettaglio (solo con `manage`). */
   const [detail, setDetail] = useState<number | null>(null);
+  const relogin = useRelogin(setNotice);
+  const reloginable = useReloginAccounts(
+    manage && relogin.available && state.status === 'ready' ? state.data : undefined,
+  );
+  const reloginButton = (account: Account) =>
+    reloginable.has(account.number) ? <ReloginButton account={account} control={relogin} /> : null;
 
   const accounts = useMemo(
     () => (state.status === 'ready' ? sortAccounts(state.data.accounts) : []),
@@ -97,7 +104,17 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
               : {}),
           }
         : {})}
-      {...(manage ? { extra: <AccountActions account={account} onManage={setDetail} /> } : {})}
+      {...(manage
+        ? {
+            extra: (
+              <AccountActions
+                account={account}
+                onManage={setDetail}
+                extra={reloginButton(account)}
+              />
+            ),
+          }
+        : {})}
     />
   );
 
@@ -120,9 +137,11 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
     return (
       <main className="sd-app">
         {liveNotice}
+        <ReloginPanel control={relogin} />
         <AccountDetailPage
           account={account}
           accounts={accounts}
+          headExtra={account ? reloginButton(account) : null}
           onBack={(text) => {
             setDetail(null);
             setNotice(text ? { tone: 'info', text } : null);
@@ -170,6 +189,8 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
       )}
 
       {liveNotice}
+
+      {manage && <ReloginPanel control={relogin} />}
 
       {manage && <AddAccount />}
 

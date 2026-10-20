@@ -76,6 +76,10 @@ pub struct AppConfig {
     /// Regole del motore.
     #[serde(default)]
     pub engine: EngineRules,
+    /// Percorso assoluto di Claude Code per «Rifai login» (assente = ricerca automatica).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub claude_code_path: Option<String>,
     /// Mappe (profili con nome); `engine` sono le regole di quella attiva. Assenti nel file
     /// = migrazione: le regole attuali diventano la mappa «Personale», più i preset.
     #[serde(default)]
@@ -101,6 +105,7 @@ impl Default for AppConfig {
             language: Language::default(),
             theme: Theme::default(),
             engine: EngineRules::default(),
+            claude_code_path: None,
             engine_profiles: EngineProfiles::seeded(&EngineRules::default()),
             extra: serde_json::Map::new(),
             preserved: serde_json::Map::new(),
@@ -150,6 +155,15 @@ impl AppConfig {
                 "le soglie devono essere crescenti e distinte".into(),
             ));
         }
+        if self
+            .claude_code_path
+            .as_deref()
+            .is_some_and(|p| !crate::relogin::valid_setting(p))
+        {
+            return Err(ConfigError::Invalid(
+                "claudeCodePath deve essere un percorso assoluto".into(),
+            ));
+        }
         let problems = self.notifications.problems();
         if !problems.is_empty() {
             return Err(ConfigError::Invalid(problems.join("; ")));
@@ -186,6 +200,14 @@ impl AppConfig {
             warnings.push("soglie delle notifiche corrette".into());
             self.notifications.thresholds = t;
         }
+        if self
+            .claude_code_path
+            .as_deref()
+            .is_some_and(|p| !crate::relogin::valid_setting(p))
+        {
+            warnings.push("claudeCodePath non è un percorso assoluto: ignorato".into());
+            self.claude_code_path = None;
+        }
         self.engine.sync_order();
         warnings.extend(self.engine_profiles.normalize(&self.engine));
         warnings.extend(self.notifications.normalize());
@@ -202,6 +224,10 @@ pub struct AppPreferences {
     pub notification_thresholds: Vec<f64>,
     pub language: Language,
     pub theme: Theme,
+    /// Percorso di Claude Code scelto dall'utente (assente = ricerca automatica).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub claude_code_path: Option<String>,
 }
 
 /// Modifica di [`AppPreferences`]: solo i campi presenti; un campo sconosciuto è un errore.
@@ -220,6 +246,10 @@ pub struct PreferencesPatch {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub theme: Option<Theme>,
+    /// Percorso assoluto di Claude Code; stringa vuota = ricerca automatica.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub claude_code_path: Option<String>,
 }
 
 impl AppConfig {
@@ -229,6 +259,7 @@ impl AppConfig {
             notification_thresholds: self.notifications.thresholds.clone(),
             language: self.language,
             theme: self.theme,
+            claude_code_path: self.claude_code_path.clone(),
         }
     }
 
@@ -250,6 +281,9 @@ impl AppConfig {
         if let Some(v) = patch.theme {
             next.theme = v;
             next.preserved.remove("theme");
+        }
+        if let Some(v) = &patch.claude_code_path {
+            next.claude_code_path = (!v.is_empty()).then(|| v.clone());
         }
         next.validate()?;
         *self = next;
@@ -904,5 +938,28 @@ mod preferences_tests {
         std::fs::write(&path, "{ rotto").unwrap();
         assert!(update(&path, |c| c.apply_preferences(&patch)).is_err());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "{ rotto");
+    }
+
+    #[test]
+    fn claude_code_path_is_absolute_or_cleared() {
+        let abs = if cfg!(windows) {
+            r"C:\Tools\claude.exe"
+        } else {
+            "/opt/claude"
+        };
+        let mut c = AppConfig::default();
+        let set = |v: &str| PreferencesPatch {
+            claude_code_path: Some(v.to_owned()),
+            ..PreferencesPatch::default()
+        };
+        c.apply_preferences(&set(abs)).unwrap();
+        assert_eq!(c.preferences().claude_code_path.as_deref(), Some(abs));
+        assert!(c.apply_preferences(&set("claude")).is_err());
+        assert_eq!(c.claude_code_path.as_deref(), Some(abs), "config intatta");
+        c.apply_preferences(&set("")).unwrap();
+        assert_eq!(c.claude_code_path, None);
+        c.claude_code_path = Some("rel/claude".into());
+        assert_eq!(c.normalize().len(), 1);
+        assert_eq!(c.claude_code_path, None);
     }
 }

@@ -113,7 +113,7 @@ pub(crate) fn find_in(dirs: impl IntoIterator<Item = PathBuf>, name: &str) -> Op
         .map(|d| d.join(name))
         .find(|c| is_executable(c))
 }
-fn is_executable(path: &Path) -> bool {
+pub(crate) fn is_executable(path: &Path) -> bool {
     let Ok(meta) = path.metadata() else {
         return false;
     };

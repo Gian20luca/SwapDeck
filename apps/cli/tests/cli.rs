@@ -728,3 +728,82 @@ fn state_reports_suspension_written_by_the_running_engine() {
     assert_eq!(s["engine"]["running"], false);
     assert!(s["engine"].get("suspended").is_none(), "{s}");
 }
+
+/// F21: `relogin candidates` e `relogin start` con il finto Claude Code (stesso binario del
+/// finto cswap, chiamato `claude`): link come evento, codice da stdin, esito alla fine.
+#[test]
+fn relogin_candidates_and_start() {
+    use std::io::{BufRead, BufReader};
+    let env = Env::new();
+    let list = fs::read_to_string(fixtures().join("list.json")).unwrap();
+    let (code, v) = env.run_stdin(&["relogin", "candidates", "-"], &list);
+    assert_eq!(code, 0, "{v}");
+    let accounts = v["accounts"].as_array().unwrap();
+    assert!(
+        accounts.contains(&json!(2)) && accounts.contains(&json!(5)),
+        "{v}"
+    );
+
+    let claude = env
+        .dir
+        .path()
+        .join(format!("claude{}", std::env::consts::EXE_SUFFIX));
+    fs::hard_link(&env.cswap, &claude).unwrap();
+    // Con SWAPDECK_CSWAP l'impostazione non vale (solo SWAPDECK_CLAUDE): esito claudeNotFound.
+    let prefs = json!({ "claudeCodePath": claude }).to_string();
+    let (code, v) = env.run_stdin(&["preferences", "set", "-"], &prefs);
+    assert_eq!(code, 0, "{v}");
+    let (code, v) = parse(
+        env.command(&["relogin", "start", "2"])
+            .env_remove("SWAPDECK_CLAUDE")
+            .output()
+            .unwrap(),
+    );
+    assert_eq!(
+        (code, v["result"].as_str()),
+        (0, Some("claudeNotFound")),
+        "{v}"
+    );
+
+    fs::write(
+        env.dir.path().join("state.login.json"),
+        json!({"email": "user6@example.com"}).to_string(),
+    )
+    .unwrap();
+    let mut child = env
+        .command(&["relogin", "start", "2"])
+        .env("SWAPDECK_CLAUDE", &claude)
+        .stdin(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut lines = Vec::new();
+    for line in BufReader::new(child.stdout.take().unwrap()).lines() {
+        let line = line.unwrap();
+        let v: Value = serde_json::from_str(&line).unwrap();
+        if v["event"] == "link" {
+            writeln!(stdin, "non json").unwrap();
+            writeln!(stdin, r#"{{"code":"good-code"}}"#).unwrap();
+        }
+        lines.push(v);
+    }
+    let status = child.wait().unwrap();
+    let last = lines.last().unwrap();
+    assert!(status.success(), "{last}");
+    assert_eq!(last["result"], "updated", "{last}");
+    assert_eq!(last["restored"], true);
+    assert!(lines.iter().any(|e| e["event"] == "codeSent"));
+    let calls = env.fake_calls();
+    assert!(
+        !calls
+            .lines()
+            .any(|l| l.contains("good-code") && !l.contains(r#""stdin":["good-code"]"#))
+    );
+    let log = fs::read_to_string(env.home().join("data").join("logs").join("swapdeck.log"))
+        .unwrap_or_default();
+    assert!(log.contains("rifai login"), "{log}");
+    assert!(
+        !log.contains("good-code") && !log.contains("oauth"),
+        "{log}"
+    );
+}

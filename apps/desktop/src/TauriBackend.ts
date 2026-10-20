@@ -9,6 +9,8 @@ import type {
   ListResponse,
   NotificationConfig,
   ProfileCommand,
+  ReloginEvent,
+  ReloginOutcome,
   SetupDiagnosis,
   SetupOutcome,
   SetupProgress,
@@ -32,6 +34,7 @@ import {
   type NotificationPatch,
   type MiniWindowControls,
   type PickOptions,
+  type ReloginBackend,
   type SetupBackend,
   type Unsubscribe,
 } from '@swapdeck/ui';
@@ -47,6 +50,9 @@ export const CONFIG_EVENT = 'config-changed';
 
 /** Avanzamento di installazione e aggiornamento di cswap (`PROGRESS_EVENT` in `src-tauri/src/setup_cmd.rs`). */
 export const SETUP_PROGRESS_EVENT = 'setup-progress';
+
+/** Avanzamento di «Rifai login» (`PROGRESS_EVENT` in `src-tauri/src/relogin_cmd.rs`). */
+export const RELOGIN_PROGRESS_EVENT = 'relogin-progress';
 
 /** Stato inviato dal Rust a ogni lettura (`Snapshot`). */
 export interface Snapshot {
@@ -132,7 +138,7 @@ export interface WindowApi {
 }
 
 /** `Backend` dell'app desktop: comandi `invoke` di Tauri ed evento `state-changed`. */
-export class TauriBackend implements Backend, SetupBackend {
+export class TauriBackend implements Backend, SetupBackend, ReloginBackend {
   constructor(
     private readonly invoke: InvokeFn,
     private readonly listen: ListenFn,
@@ -332,6 +338,33 @@ export class TauriBackend implements Backend, SetupBackend {
 
   dismissCswapUpdate(version: string): Promise<void> {
     return this.call('dismiss_cswap_update', { version });
+  }
+
+  reloginAccounts(list: ListResponse): Promise<number[]> {
+    return this.call('relogin_accounts_for', { list });
+  }
+
+  /** Il Rust tiene fermi ciclo di lettura, motore e `cswap auto` per tutta l'operazione. */
+  async startRelogin(
+    account: number,
+    onEvent: (event: ReloginEvent) => void,
+  ): Promise<ReloginOutcome> {
+    const unlisten = await this.listen<ReloginEvent>(RELOGIN_PROGRESS_EVENT, (event) =>
+      onEvent(event.payload),
+    );
+    try {
+      return await this.call<ReloginOutcome>('start_relogin', { account });
+    } finally {
+      unlisten();
+    }
+  }
+
+  submitReloginCode(code: string): Promise<void> {
+    return this.call('submit_relogin_code', { code });
+  }
+
+  cancelRelogin(): Promise<void> {
+    return this.call('cancel_relogin');
   }
 
   /** Ascolta l'avanzamento prima di avviare il comando e smette alla fine, anche se non riesce. */

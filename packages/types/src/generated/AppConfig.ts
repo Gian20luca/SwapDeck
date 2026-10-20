@@ -15,4 +15,8 @@ pollIntervalSeconds: number, notifications: NotificationConfig, language: Langua
 /**
  * Regole del motore.
  */
-engine: EngineRules, };
+engine: EngineRules, 
+/**
+ * Percorso assoluto di Claude Code per «Rifai login» (assente = ricerca automatica).
+ */
+claudeCodePath?: string, };

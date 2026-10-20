@@ -5,7 +5,11 @@
 //! Senza `fake.json` usa `fixtures/cswap/` e parte da `list.json`, salvando lo
 //! stato in `state.json` accanto all'eseguibile: così si può indicare con
 //! `SWAPDECK_CSWAP` per provare app ed estensione senza toccare il cswap reale.
-//! Chiamato `uv`, simula `uv tool upgrade claude-swap`.
+//! Chiamato `uv`, simula `uv tool upgrade claude-swap`. Chiamato `claude`, simula
+//! `claude auth login` (F21): stampa le tre righe reali, legge il codice da stdin e scrive il
+//! login simulato in `<stato>.login.json` (`fake.json` → `claude`: `mode` success|fail|hang,
+//! `code`, `loginEmail`, `urlStream` stdout|stderr). Con quel file `status`, `add` e `switch`
+//! seguono il login simulato come cswap segue quello di Claude Code.
 
 use std::fs::{self, OpenOptions};
 use std::io::{BufRead, Write};
@@ -44,8 +48,13 @@ fn main() -> ExitCode {
     let is_uv = exe
         .file_stem()
         .is_some_and(|s| s.to_string_lossy().starts_with("uv"));
+    let is_claude = exe
+        .file_stem()
+        .is_some_and(|s| s.to_string_lossy().starts_with("claude"));
     let code = if is_uv {
         fake.uv(&args)
+    } else if is_claude {
+        fake.claude(&args)
     } else {
         fake.dispatch(&args)
     };
@@ -64,6 +73,7 @@ impl Fake {
             "code": code,
             "noColor": std::env::var("NO_COLOR").ok().as_deref() == Some("1"),
             "secureStorageEnv": std::env::var_os("CLAUDE_SECURESTORAGE_CONFIG_DIR").is_some(),
+            "browser": std::env::var("BROWSER").ok(),
         });
         let mut f = OpenOptions::new()
             .create(true)
@@ -98,6 +108,77 @@ impl Fake {
             .as_str()
             .map(PathBuf::from)
             .unwrap_or_else(|| self.dir.join("state.json"))
+    }
+
+    /// Login simulato di Claude Code (`<stato>.login.json`, `{"email": …}`).
+    fn login_path(&self) -> PathBuf {
+        self.state_path().with_extension("login.json")
+    }
+
+    fn login_email(&self) -> Option<String> {
+        fs::read_to_string(self.login_path())
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .and_then(|v| v["email"].as_str().map(str::to_owned))
+    }
+
+    fn set_login(&self, email: &str) {
+        fs::write(self.login_path(), json!({ "email": email }).to_string()).unwrap();
+    }
+
+    fn find_email(state: &Value, email: &str) -> Option<Value> {
+        Self::accounts(state).into_iter().find(|a| {
+            a["email"]
+                .as_str()
+                .is_some_and(|e| e.eq_ignore_ascii_case(email))
+        })
+    }
+
+    /// Finto `claude auth login --claudeai --email <E>`.
+    fn claude(&mut self, args: &[String]) -> u8 {
+        let cfg = self.cfg.get("claude").cloned().unwrap_or(json!({}));
+        let ok_args = args.len() == 5
+            && args[..4] == ["auth", "login", "--claudeai", "--email"].map(String::from);
+        if !ok_args {
+            eprintln!("error: unknown arguments");
+            return 2;
+        }
+        let url = "https://claude.ai/oauth/authorize?code=true&client_id=fake&state=s3cr3t";
+        println!("Opening browser to sign in…");
+        let visit = format!("If the browser didn't open, visit: {url}");
+        if cfg["urlStream"].as_str() == Some("stderr") {
+            eprintln!("{visit}");
+        } else {
+            println!("{visit}");
+        }
+        print!("Paste code here if prompted > ");
+        let _ = std::io::stdout().flush();
+        match cfg["mode"].as_str().unwrap_or("success") {
+            "fail" => {
+                eprintln!("OAuth error: request failed");
+                1
+            }
+            "hang" => {
+                std::thread::sleep(Duration::from_secs(600));
+                1
+            }
+            _ => {
+                let Some(code) = self.read_line() else {
+                    eprintln!("No code provided");
+                    return 1;
+                };
+                if code != cfg["code"].as_str().unwrap_or("good-code") {
+                    eprintln!("Invalid code");
+                    return 1;
+                }
+                let email = cfg["loginEmail"]
+                    .as_str()
+                    .map_or_else(|| args[4].clone(), str::to_owned);
+                self.set_login(&email);
+                println!("Login successful.");
+                0
+            }
+        }
     }
 
     fn state(&self) -> Value {
@@ -221,9 +302,28 @@ impl Fake {
         1
     }
 
+    /// Chiamate già registrate nel log con il sottocomando `sub`.
+    fn previous_calls(&self, sub: &str) -> u64 {
+        let Some(log) = self.cfg.get("log").and_then(Value::as_str) else {
+            return 0;
+        };
+        fs::read_to_string(log)
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+            .filter(|v| v["args"][0].as_str() == Some(sub))
+            .count() as u64
+    }
+
     /// Applica le sostituzioni configurate per il sottocomando; `Some(code)` = esce subito.
+    /// Con `fromCall: N` vale solo dalla N-esima chiamata di quel sottocomando (contata nel log).
     fn overrides(&self, sub: &str) -> Option<u8> {
         let o = self.cfg.get("overrides")?.get(sub)?;
+        if let Some(from) = o.get("fromCall").and_then(Value::as_u64)
+            && self.previous_calls(sub) + 1 < from
+        {
+            return None;
+        }
         if let Some(s) = o.get("sleep").and_then(Value::as_f64) {
             if o.get("spawnChild").and_then(Value::as_bool) == Some(true) {
                 let _ = Command::new(std::env::current_exe().unwrap())
@@ -457,17 +557,28 @@ impl Fake {
 
     fn status(&self) -> u8 {
         let state = self.state();
-        let active = state["activeAccountNumber"]
-            .as_u64()
-            .and_then(|n| Self::find(&state, n))
-            .map(|mut a| {
-                let o = a.as_object_mut().unwrap();
-                o.remove("active");
-                o.remove("disabled");
-                o.remove("loginExpiresAt");
-                o.insert("managed".into(), json!(true));
-                a
-            });
+        let login = self.login_email();
+        if let Some(email) = &login
+            && Self::find_email(&state, email).is_none()
+        {
+            let out = json!({"schemaVersion": 1, "active": {"email": email, "managed": false}});
+            println!("{out}");
+            return 0;
+        }
+        let active = match &login {
+            Some(email) => Self::find_email(&state, email),
+            None => state["activeAccountNumber"]
+                .as_u64()
+                .and_then(|n| Self::find(&state, n)),
+        }
+        .map(|mut a| {
+            let o = a.as_object_mut().unwrap();
+            o.remove("active");
+            o.remove("disabled");
+            o.remove("loginExpiresAt");
+            o.insert("managed".into(), json!(true));
+            a
+        });
         let mut out = json!({"schemaVersion": 1, "active": active});
         if active.is_some() {
             out["totalManagedAccounts"] = json!(Self::accounts(&state).len());
@@ -548,7 +659,17 @@ impl Fake {
             }
         };
         let switched = dest.is_some() && dest != active;
+        let force = rest.contains(&"--force");
+        if (switched || force)
+            && self.login_email().is_some()
+            && let Some(e) = dest
+                .and_then(|n| Self::find(&state, n))
+                .and_then(|a| a["email"].as_str().map(str::to_owned))
+        {
+            self.set_login(&e);
+        }
         let reason = match (switched, strategy_name) {
+            (false, "direct") if force => "activated",
             (true, _) => "switched",
             (false, "best") => "already-best",
             (false, _) => "already-active",
@@ -604,6 +725,32 @@ impl Fake {
             i += 2;
         }
         let mut state = self.state();
+        let login = self
+            .login_email()
+            .filter(|_| token.is_none() && slot.is_none());
+        if let Some(login) = &login
+            && let Some(existing) = Self::find_email(&state, login)
+        {
+            // Come cswap: l'account già presente si aggiorna sul posto e diventa l'attivo.
+            let n = existing["number"].as_u64().unwrap();
+            let accounts = Self::accounts(&state)
+                .into_iter()
+                .map(|mut a| {
+                    let me = a["number"].as_u64() == Some(n);
+                    a["active"] = json!(me);
+                    if me {
+                        a["usageStatus"] = json!("ok");
+                    }
+                    a
+                })
+                .collect();
+            Self::set_accounts(&mut state, accounts);
+            state["activeAccountNumber"] = json!(n);
+            self.save(&state);
+            println!("Updated Account-{n} ({login})");
+            return 0;
+        }
+        let email = email.or(login.as_deref());
         let mut accounts = Self::accounts(&state);
         let n = slot.unwrap_or_else(|| {
             accounts

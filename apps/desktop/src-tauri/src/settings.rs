@@ -51,6 +51,8 @@ pub struct Settings {
     pub engine: EngineRules,
     /// Mappe (sezione `engineProfiles`); `engine` sono le regole di quella attiva.
     pub engine_profiles: EngineProfiles,
+    /// Percorso di Claude Code per «Rifai login» (`claudeCodePath`; assente = ricerca automatica).
+    pub claude_code_path: Option<String>,
 }
 
 impl Default for Settings {
@@ -127,6 +129,7 @@ impl Settings {
                 .unwrap_or(false),
             engine: EngineRules::default(),
             engine_profiles: EngineProfiles::default(),
+            claude_code_path: None,
         };
         s.apply_config(c);
         s
@@ -146,6 +149,7 @@ impl Settings {
         self.theme = c.theme;
         self.engine.clone_from(&c.engine);
         self.engine_profiles.clone_from(&c.engine_profiles);
+        self.claude_code_path.clone_from(&c.claude_code_path);
     }
 
     /// Config equivalente, per chi la modifica quando le impostazioni restano in memoria.
@@ -156,6 +160,7 @@ impl Settings {
             theme: self.theme,
             engine: self.engine.clone(),
             engine_profiles: self.engine_profiles.clone(),
+            claude_code_path: self.claude_code_path.clone(),
             ..AppConfig::default()
         };
         c.notifications.clone_from(&self.notifications);
@@ -172,6 +177,7 @@ impl Settings {
                 Lang::En => Language::En,
             },
             theme: self.theme,
+            claude_code_path: self.claude_code_path.clone(),
         }
     }
 

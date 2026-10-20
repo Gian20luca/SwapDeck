@@ -12,6 +12,7 @@ import {
   parseCliResult,
   resolveCliPath,
   toCswapError,
+  type StdinChannel,
 } from './cli.js';
 import { preloadEnv, PROCESS_TEST_TIMEOUT_MS } from './testing.js';
 
@@ -84,6 +85,27 @@ describe('createCliRunner', { timeout: PROCESS_TEST_TIMEOUT_MS }, () => {
       { event: 'stepStarted', step: 'installCswap' },
       { event: 'line', step: 'installCswap', text: 'è ok' },
     ]);
+  });
+
+  it('stdin aperto per i comandi interattivi: righe scritte dopo l’avvio, chiuso all’uscita', async () => {
+    const env = fake(
+      "const fs = require('fs'); const w = (o) => fs.writeSync(1, JSON.stringify(o) + '\\n'); w({ event: 'link', url: 'https://x' }); const b = Buffer.alloc(256); let s = ''; while (!s.includes('\\n')) { const n = fs.readSync(0, b, 0, 256, null); if (n <= 0) break; s += b.toString('utf8', 0, n); } w({ got: JSON.parse(s.trim()).code ? 'code' : '?' }); process.exit(0);",
+    );
+    let stdin: StdinChannel | undefined;
+    const events: unknown[] = [];
+    const result = run(['relogin', 'start', '2'], {
+      env,
+      onEvent: (e) => {
+        events.push(e);
+        stdin?.write('{"code":"abc"}\n');
+      },
+      channel: (c) => {
+        stdin = c;
+      },
+    });
+    await expect(result).resolves.toEqual({ got: 'code' });
+    expect(events).toEqual([{ event: 'link', url: 'https://x' }]);
+    expect(stdin?.write('x')).toBe(false);
   });
 
   it("errore della CLI: rifiuta con l'errore del JSON", async () => {

@@ -22,7 +22,9 @@ use crate::notify::AppNotifier;
 use crate::poller::Poller;
 use crate::settings::SettingsStore;
 use crate::state::{STATE_EVENT, Shared, Snapshot, lock, now_ms};
-use crate::{commands, config_watch, engine_loop, setup_cmd, text, tray, updater, windows};
+use crate::{
+    commands, config_watch, engine_loop, relogin_cmd, setup_cmd, text, tray, updater, windows,
+};
 
 /// Cartella dati (storico e lock del motore); `None` se la home non è determinabile.
 pub struct DataDir(pub Option<PathBuf>);
@@ -288,6 +290,10 @@ pub fn run(api: Arc<dyn CswapApi>) {
             setup_cmd::upgrade_cswap,
             setup_cmd::check_cswap_update,
             setup_cmd::dismiss_cswap_update,
+            relogin_cmd::relogin_accounts_for,
+            relogin_cmd::start_relogin,
+            relogin_cmd::submit_relogin_code,
+            relogin_cmd::cancel_relogin,
         ])
         .on_window_event(windows::on_window_event)
         .setup(move |app| {
@@ -373,6 +379,8 @@ pub fn run(api: Arc<dyn CswapApi>) {
             api, code: None, ..
         } => api.prevent_exit(),
         RunEvent::Exit => {
+            // «Rifai login» in corso: annulla (Claude Code chiuso, ritorno a P) e attesa breve.
+            relogin_cmd::shutdown(relogin_cmd::EXIT_WAIT);
             // Tauri non rilascia lo stato gestito: `cswap auto` va fermato qui, prima del ciclo.
             if let Some(w) = app.try_state::<AutoWatcher>() {
                 w.stop();

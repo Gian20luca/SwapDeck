@@ -9,6 +9,7 @@ import type {
   EngineRules,
   ListResponse,
   ProfileCommand,
+  ReloginEvent,
   SetupProgress,
   SuspendReason,
   UsageQuery,
@@ -46,7 +47,14 @@ export const REQUEST_METHODS = [
   'getDiagnostics',
   'openLogsFolder',
   'copyText',
+  'reloginAccounts',
+  'startRelogin',
+  'submitReloginCode',
+  'cancelRelogin',
 ] as const;
+
+/** Evento di avanzamento di una richiesta lunga: setup di cswap o «Rifai login». */
+export type ProgressEvent = SetupProgress | ReloginEvent;
 
 export type RequestMethod = (typeof REQUEST_METHODS)[number];
 
@@ -90,7 +98,11 @@ export type RequestParams =
   | { method: 'checkCswapUpdate'; params: { force?: boolean } }
   | { method: 'dismissCswapUpdate'; params: { version: string } }
   | { method: 'getDiagnostics' | 'openLogsFolder'; params: Record<string, never> }
-  | { method: 'copyText'; params: { text: string } };
+  | { method: 'copyText'; params: { text: string } }
+  | { method: 'reloginAccounts'; params: { list: ListResponse } }
+  | { method: 'startRelogin'; params: { account: number } }
+  | { method: 'submitReloginCode'; params: { code: string } }
+  | { method: 'cancelRelogin'; params: Record<string, never> };
 
 /** Webview → host. */
 export type WebviewMessage = ({ type: 'request'; id: number } & RequestParams) | { type: 'ready' };
@@ -131,8 +143,8 @@ export type HostMessage =
   | { type: 'response'; id: number; ok: true; result: unknown }
   | { type: 'response'; id: number; ok: false; error: CswapError }
   | { type: 'state'; list: ListResponse }
-  /** Avanzamento di installazione o aggiornamento di cswap per la richiesta id. */
-  | { type: 'progress'; id: number; event: SetupProgress }
+  /** Avanzamento di installazione o aggiornamento di cswap, o di «Rifai login», per la richiesta id. */
+  | { type: 'progress'; id: number; event: ProgressEvent }
   | { type: 'view'; settings: ViewSettings }
   /** Stato del motore per la riga «motore sospeso» (`null` = niente da segnalare). */
   | { type: 'engine'; suspended: EngineSuspension | null }

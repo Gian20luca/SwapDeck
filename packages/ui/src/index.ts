@@ -34,6 +34,7 @@ export {
 
 export {
   BackendError,
+  hasRelogin,
   hasSetup,
   type ActionOutcome,
   type AppPreferences,
@@ -43,6 +44,7 @@ export {
   type EngineViewInfo,
   type FileFilter,
   type HistoryEvents,
+  type ReloginBackend,
   type SetupBackend,
   type HistoryPoint,
   type HistoryQuery,

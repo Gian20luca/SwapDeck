@@ -36,6 +36,10 @@ fn main() {
             "upgrade_cswap",
             "check_cswap_update",
             "dismiss_cswap_update",
+            "relogin_accounts_for",
+            "start_relogin",
+            "submit_relogin_code",
+            "cancel_relogin",
         ]),
     ))
     // `{:?}` di anyhow stampa tutta la catena, compreso il file coinvolto (per esempio in uso).

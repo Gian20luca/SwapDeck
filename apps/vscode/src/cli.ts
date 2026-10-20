@@ -101,6 +101,15 @@ export function parseCliResult<T>(code: number | null, stdout: string, stderr = 
 
 /** `setup install|upgrade`: script di uv e `uv tool` hanno 10 minuti ciascuno in Rust. */
 export const SETUP_TIMEOUT_MS = 30 * 60_000;
+/** «Rifai login»: 5 minuti di attesa del login più i passi di cswap prima e dopo. */
+export const RELOGIN_TIMEOUT_MS = 10 * 60_000;
+
+/** Stdin lasciato aperto per i comandi interattivi (`relogin start`): una riga per comando. */
+export interface StdinChannel {
+  /** `false` se il processo è già chiuso. */
+  write(text: string): boolean;
+  end(): void;
+}
 
 export interface RunOptions {
   /** Testo su stdin (le azioni passano da qui: un token non deve finire negli argomenti). */
@@ -112,6 +121,8 @@ export interface RunOptions {
    * arriva qui appena completa; l'esito è l'ultima riga.
    */
   onEvent?: (event: unknown) => void;
+  /** Stdin resta aperto (dopo `stdin`, se c'è) e si passa al chiamante; chiuso all'uscita. */
+  channel?: (stdin: StdinChannel) => void;
 }
 
 /** Spezza l'output in righe JSON e passa quelle con `event`. */
@@ -231,6 +242,20 @@ export function createCliRunner(getPath: () => string): CliRunner {
       child.stdin.on('error', () => {
         // Il processo può chiudere stdin prima di leggerlo (errore d'uso): l'esito arriva da `close`.
       });
-      child.stdin.end(options.stdin ?? '');
+      if (options.channel) {
+        let open = true;
+        child.on('close', () => {
+          open = false;
+        });
+        if (options.stdin) child.stdin.write(options.stdin);
+        options.channel({
+          write: (text) => open && !child.stdin.destroyed && child.stdin.write(text),
+          end: () => {
+            if (open) child.stdin.end();
+          },
+        });
+      } else {
+        child.stdin.end(options.stdin ?? '');
+      }
     });
 }

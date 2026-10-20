@@ -14,6 +14,8 @@ import type {
   ListResponse,
   NotificationConfig,
   ProfileCommand,
+  ReloginEvent,
+  ReloginOutcome,
   SetupDiagnosis,
   SetupOutcome,
   SetupProgress,
@@ -78,6 +80,8 @@ export type {
   EngineState,
   HistoryEvents,
   ProfileCommand,
+  ReloginEvent,
+  ReloginOutcome,
 };
 /** Stato del motore all'ultimo giro (`EngineView` del Rust). */
 export type EngineViewInfo = EngineView;
@@ -243,5 +247,33 @@ export function hasSetup(backend: Backend): backend is Backend & SetupBackend {
     typeof b.checkCswapUpdate === 'function' &&
     typeof b.dismissCswapUpdate === 'function' &&
     typeof b.upgradeCswap === 'function'
+  );
+}
+
+/**
+ * F21 «Rifai login» di un'utenza già registrata. Facoltativa: un host che non la implementa non
+ * mostra il pulsante (vedi `hasRelogin`). Il flusso è nel core Rust; qui solo comandi ed eventi.
+ */
+export interface ReloginBackend {
+  /** Utenze per cui mostrare «Rifai login» (`relogin_required`, `token_expired` o login in scadenza). */
+  reloginAccounts(list: ListResponse): Promise<number[]>;
+  /**
+   * Avvia l'operazione e risolve con l'esito alla fine (riuscita, altro account, annullata, tempo
+   * scaduto, Claude Code mancante). Gli errori di cswap rifiutano come `Backend` (`busy`, `uncertain`…).
+   */
+  startRelogin(account: number, onEvent: (event: ReloginEvent) => void): Promise<ReloginOutcome>;
+  /** Codice incollato dall'utente: va solo su stdin di Claude Code. */
+  submitReloginCode(code: string): Promise<void>;
+  cancelRelogin(): Promise<void>;
+}
+
+/** L'host offre «Rifai login». */
+export function hasRelogin(backend: Backend): backend is Backend & ReloginBackend {
+  const b = backend as Partial<ReloginBackend>;
+  return (
+    typeof b.reloginAccounts === 'function' &&
+    typeof b.startRelogin === 'function' &&
+    typeof b.submitReloginCode === 'function' &&
+    typeof b.cancelRelogin === 'function'
   );
 }

@@ -434,3 +434,111 @@ describe('diagnostica', () => {
     await expect(full('copyText', { text: 1 })).rejects.toMatchObject(invalid);
   });
 });
+
+describe('«Rifai login» (F21)', () => {
+  function withRelogin() {
+    const written: string[] = [];
+    let finish: (value: unknown) => void = () => undefined;
+    const calls: Array<{ args: string[]; options?: RunOptions }> = [];
+    const cli = ((args: string[], options?: RunOptions) => {
+      calls.push(options ? { args, options } : { args });
+      if (args[1] === 'candidates') return Promise.resolve({ accounts: [2, 'x', 5] });
+      options?.channel?.({
+        write: (text) => {
+          written.push(text);
+          return true;
+        },
+        end: () => undefined,
+      });
+      options?.onEvent?.({ event: 'link', url: 'https://claude.ai/x', timeoutSeconds: 300 });
+      return new Promise((resolve) => {
+        finish = resolve as (value: unknown) => void;
+      });
+    }) as CliRunner;
+    const order: string[] = [];
+    const pauseEngine = vi.fn(async (why: string) => {
+      order.push(`pause:${why}`);
+      return () => order.push('resume');
+    });
+    const handle = createRequestHandler({
+      cli,
+      lastState: () => undefined,
+      refresh: vi.fn(async () => cliState(fixtureList())),
+      onOutcome: vi.fn(),
+      confirm: vi.fn(async () => true),
+      pauseEngine,
+      onChanged: () => order.push('changed'),
+    });
+    return { handle, calls, written, order, finish: (v: unknown) => finish(v) };
+  }
+
+  it('candidati dalla CLI con la lista su stdin', async () => {
+    const { handle, calls } = withRelogin();
+    const list = fixtureList();
+    expect(await handle('reloginAccounts', { list })).toEqual([2, 5]);
+    expect(calls[0]!.args).toEqual(['relogin', 'candidates', '-']);
+    expect(calls[0]!.options?.stdin).toBe(JSON.stringify(list));
+    await expect(handle('reloginAccounts', { list: 1 })).rejects.toMatchObject({
+      info: { kind: 'invalidUsage' },
+    });
+  });
+
+  it('motore in pausa, codice e annulla solo su stdin, una operazione alla volta', async () => {
+    const { handle, calls, written, order, finish } = withRelogin();
+    const events: unknown[] = [];
+    const running = handle('startRelogin', { account: 2 }, (e) => events.push(e));
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    expect(calls[0]!.args).toEqual(['relogin', 'start', '2']);
+    expect(calls[0]!.args.join(' ')).not.toContain('codice');
+    await expect(handle('startRelogin', { account: 3 })).rejects.toMatchObject({
+      info: { kind: 'busy' },
+    });
+    await handle('submitReloginCode', { code: 'codice#1' });
+    await handle('cancelRelogin', {});
+    expect(written).toEqual(['{"code":"codice#1"}\n', '{"cancel":true}\n']);
+    await expect(handle('submitReloginCode', { code: 'a\nb' })).rejects.toMatchObject({
+      info: { kind: 'invalidUsage' },
+    });
+    finish({ result: 'cancelled', account: 2, restored: true });
+    expect(await running).toMatchObject({ result: 'cancelled' });
+    expect(events).toEqual([{ event: 'link', url: 'https://claude.ai/x', timeoutSeconds: 300 }]);
+    expect(order).toEqual(['pause:relogin', 'resume', 'changed']);
+    await expect(handle('cancelRelogin', {})).rejects.toMatchObject({
+      info: { kind: 'invalidUsage' },
+    });
+    await expect(handle('startRelogin', { account: 0 })).rejects.toMatchObject({
+      info: { kind: 'invalidUsage' },
+    });
+  });
+
+  it('webview chiuso durante l’operazione = annulla, motore ripreso', async () => {
+    const { handle, calls, written, order, finish } = withRelogin();
+    const lifetime = new AbortController();
+    const running = handle('startRelogin', { account: 2 }, undefined, lifetime.signal);
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    lifetime.abort();
+    expect(written).toEqual(['{"cancel":true}\n']);
+    finish({ result: 'cancelled', account: 2, previous: 6, restored: true });
+    expect(await running).toMatchObject({ result: 'cancelled' });
+    expect(order).toEqual(['pause:relogin', 'resume', 'changed']);
+  });
+
+  it('webview chiuso prima dell’avvio della CLI: annulla appena c’è stdin', async () => {
+    const { handle, calls, written, finish } = withRelogin();
+    const lifetime = new AbortController();
+    lifetime.abort();
+    await expect(
+      handle('startRelogin', { account: 2 }, undefined, lifetime.signal),
+    ).rejects.toMatchObject({ info: { kind: 'cancelled' } });
+    expect(calls).toHaveLength(0);
+
+    const late = new AbortController();
+    const running = handle('startRelogin', { account: 2 }, undefined, late.signal);
+    // Chiuso durante la pausa del motore, prima che la CLI parta.
+    late.abort();
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    expect(written).toEqual(['{"cancel":true}\n']);
+    finish({ result: 'cancelled', account: 2, restored: true });
+    await running;
+  });
+});

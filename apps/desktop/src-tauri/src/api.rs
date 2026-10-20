@@ -7,8 +7,9 @@ use std::time::Duration;
 
 pub use swapdeck_core::cswap::{ActionOutcome as Outcome, CommandSpec};
 use swapdeck_core::cswap::{
-    AutoEvent, AutoMessage, AutoProcess, ConfigGetResponse, ConfigListResponse, CswapAction,
-    CswapClient, CswapError, CswapErrorKind, DirectoryMapping, ListResponse, StatusResponse,
+    AutoEvent, AutoMessage, AutoOptions, AutoProcess, ConfigGetResponse, ConfigListResponse,
+    CswapAction, CswapClient, CswapError, CswapErrorKind, DirectoryMapping, ListResponse,
+    StatusResponse,
 };
 
 use crate::state::lock;
@@ -42,6 +43,15 @@ pub trait CswapApi: Send + Sync {
     fn exclusive(&self, f: &mut dyn FnMut()) {
         f();
     }
+    /// Ferma `cswap auto` avviato dall'app e ne restituisce le opzioni, per riavviarlo dopo
+    /// un'operazione esclusiva (`None` = non era attivo).
+    fn pause_auto(&self) -> Option<AutoOptions> {
+        None
+    }
+    /// Processo figlio da chiudere con l'app (Job Object su Windows); `false` se non adottato.
+    fn adopt_child(&self, _child: &std::process::Child) -> bool {
+        false
+    }
     /// cswap installato o spostato: la prossima chiamata lo cerca di nuovo.
     fn relocate(&self) {}
     /// Versione installata (`cswap --version`), per l'avviso di aggiornamento.
@@ -71,6 +81,8 @@ pub enum AutoPoll {
 /// `cswap auto` avviato dall'app, con l'ultima busta d'errore ricevuta.
 struct RunningAuto {
     process: AutoProcess,
+    /// Opzioni dell'avvio, per riavviarlo dopo un «Rifai login».
+    options: AutoOptions,
     error: Option<CswapError>,
     /// Messo nel Job Object dell'app (solo Windows).
     #[cfg_attr(not(test), allow(dead_code))]
@@ -148,13 +160,20 @@ impl ClientApi {
 
     #[cfg(windows)]
     fn adopt(&self, process: &AutoProcess) -> bool {
-        let (Some(job), Some(handle)) = (&self.job, process.raw_handle()) else {
+        process
+            .raw_handle()
+            .is_some_and(|h| self.assign(h, "cswap auto"))
+    }
+
+    #[cfg(windows)]
+    fn assign(&self, handle: std::os::windows::io::RawHandle, what: &str) -> bool {
+        let Some(job) = &self.job else {
             return false;
         };
         match job.assign_process(handle as isize) {
             Ok(()) => true,
             Err(e) => {
-                eprintln!("cswap auto non messo nel Job Object: {e}");
+                eprintln!("{what} non messo nel Job Object: {e}");
                 false
             }
         }
@@ -210,6 +229,7 @@ impl CswapApi for ClientApi {
                 let running = RunningAuto {
                     in_job: self.adopt(&process),
                     process,
+                    options: options.clone(),
                     error: None,
                 };
                 // Un solo `cswap auto` alla volta: il precedente si ferma, fuori dal lock.
@@ -249,6 +269,20 @@ impl CswapApi for ClientApi {
         }
     }
 
+    fn pause_auto(&self) -> Option<AutoOptions> {
+        let mut old = lock(&self.auto).take()?;
+        // Già terminato da solo: non si riavvia.
+        let running = old.process.try_exit().is_none();
+        old.process.stop_within(SHUTDOWN_AUTO_WAIT);
+        running.then_some(old.options)
+    }
+
+    #[cfg(windows)]
+    fn adopt_child(&self, child: &std::process::Child) -> bool {
+        use std::os::windows::io::AsRawHandle;
+        self.assign(child.as_raw_handle(), "Claude Code")
+    }
+
     fn exclusive(&self, f: &mut dyn FnMut()) {
         self.shutdown();
         {
@@ -286,6 +320,8 @@ pub mod mock {
         pub actions: Mutex<Vec<String>>,
         /// Esiti di `auto_poll` in ordine; finiti questi, `NotRunning`.
         pub auto_polls: Mutex<std::collections::VecDeque<AutoPoll>>,
+        /// Opzioni di `cswap auto` restituite (una volta) da `pause_auto`.
+        pub paused_auto: Mutex<Option<AutoOptions>>,
     }
 
     impl MockApi {
@@ -295,6 +331,7 @@ pub mod mock {
                 list_calls: AtomicUsize::new(0),
                 actions: Mutex::new(Vec::new()),
                 auto_polls: Mutex::new(std::collections::VecDeque::new()),
+                paused_auto: Mutex::new(None),
             }
         }
         pub fn calls(&self) -> usize {
@@ -329,6 +366,10 @@ pub mod mock {
                 .unwrap()
                 .pop_front()
                 .unwrap_or(AutoPoll::NotRunning)
+        }
+        fn pause_auto(&self) -> Option<AutoOptions> {
+            self.actions.lock().unwrap().push("pause_auto".into());
+            self.paused_auto.lock().unwrap().take()
         }
         fn exclusive(&self, f: &mut dyn FnMut()) {
             self.actions.lock().unwrap().push("exclusive".into());
@@ -444,6 +485,21 @@ mod tests {
             }
         );
         assert_eq!(api.auto_poll(), AutoPoll::NotRunning);
+    }
+
+    #[test]
+    fn pause_auto_returns_the_options_of_a_running_auto() {
+        let dir = tempfile::tempdir().unwrap();
+        let Some(api) = api_on_fake(&dir) else { return };
+        assert_eq!(api.pause_auto(), None, "non avviato");
+        start_auto(&api, false);
+        assert_eq!(next_poll(&api), AutoPoll::Running { switched: true });
+        assert_eq!(
+            api.pause_auto(),
+            Some(AutoOptions::default()),
+            "opzioni dell'avvio"
+        );
+        assert_eq!(api.auto_poll(), AutoPoll::NotRunning, "fermato");
     }
 
     #[test]

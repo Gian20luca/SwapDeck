@@ -19,6 +19,7 @@ mod config_watch;
 mod engine_loop;
 mod notify;
 mod poller;
+mod relogin_cmd;
 mod ring;
 mod settings;
 mod setup_cmd;

@@ -9,4 +9,8 @@ export type AppPreferences = { pollIntervalSeconds: number,
 /**
  * Soglie delle notifiche in percentuale, crescenti.
  */
-notificationThresholds: Array<number>, language: Language, theme: Theme, };
+notificationThresholds: Array<number>, language: Language, theme: Theme, 
+/**
+ * Percorso di Claude Code scelto dall'utente (assente = ricerca automatica).
+ */
+claudeCodePath?: string, };

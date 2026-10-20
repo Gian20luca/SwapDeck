@@ -5,4 +5,8 @@ import type { Theme } from "./Theme.js";
 /**
  * Modifica di [`AppPreferences`]: solo i campi presenti; un campo sconosciuto è un errore.
  */
-export type PreferencesPatch = { pollIntervalSeconds?: number, notificationThresholds?: Array<number>, language?: Language, theme?: Theme, };
+export type PreferencesPatch = { pollIntervalSeconds?: number, notificationThresholds?: Array<number>, language?: Language, theme?: Theme, 
+/**
+ * Percorso assoluto di Claude Code; stringa vuota = ricerca automatica.
+ */
+claudeCodePath?: string, };

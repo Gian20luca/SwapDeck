@@ -6,18 +6,20 @@
 import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { toCswapError } from './cli.js';
-import type { SetupProgress } from '@swapdeck/types';
 import {
   viewLocale,
+  type ProgressEvent,
   type HostMessage,
   type ViewSettings,
   type WebviewMessage,
 } from './protocol.js';
 
+/** `signal` si interrompe quando il webview che ha fatto la richiesta si chiude o si scarica. */
 export type RequestHandler = (
   method: unknown,
   params: unknown,
-  progress?: (event: SetupProgress) => void,
+  progress?: (event: ProgressEvent) => void,
+  signal?: AbortSignal,
 ) => Promise<unknown>;
 
 /** Id della vista nella barra delle attività (`contributes.views` in `package.json`). */
@@ -87,6 +89,8 @@ export function viewSettings(): ViewSettings {
  */
 export class WebviewHub implements vscode.Disposable {
   private readonly webviews = new Set<vscode.Webview>();
+  /** Per webview: interrotto quando si chiude o si scarica (richieste lunghe come «Rifai login»). */
+  private readonly lifetimes = new Map<vscode.Webview, AbortController>();
   private readonly disposables: vscode.Disposable[] = [];
   private readyCount = 0;
 
@@ -121,12 +125,15 @@ export class WebviewHub implements vscode.Disposable {
       title: 'SwapDeck',
     });
     this.webviews.add(webview);
+    this.lifetimes.set(webview, new AbortController());
     const sub = webview.onDidReceiveMessage(
       (message: WebviewMessage) => void this.receive(webview, message),
     );
     return new vscode.Disposable(() => {
       sub.dispose();
       this.webviews.delete(webview);
+      this.lifetimes.get(webview)?.abort();
+      this.lifetimes.delete(webview);
     });
   }
 
@@ -152,8 +159,11 @@ export class WebviewHub implements vscode.Disposable {
     if (message.type !== 'request' || !Number.isSafeInteger(message.id)) return;
     const id = message.id;
     try {
-      const result = await this.handle(message.method, message.params, (event) =>
-        post({ type: 'progress', id, event }),
+      const result = await this.handle(
+        message.method,
+        message.params,
+        (event) => post({ type: 'progress', id, event }),
+        this.lifetimes.get(webview)?.signal,
       );
       post({ type: 'response', id, ok: true, result });
     } catch (error) {
@@ -163,14 +173,16 @@ export class WebviewHub implements vscode.Disposable {
 
   dispose(): void {
     for (const d of this.disposables) d.dispose();
+    for (const lifetime of this.lifetimes.values()) lifetime.abort();
+    this.lifetimes.clear();
     this.webviews.clear();
   }
 }
 
 /**
  * Vista SwapDeck nella barra delle attività: l'app completa alla larghezza della barra laterale.
- * Senza `retainContextWhenHidden`: nascosta si scarica, e alla riapertura il webview riparte dalla
- * scheda salvata con `setState` e chiede di nuovo lo stato all'host.
+ * Registrata con `retainContextWhenHidden` (in `extension.ts`): nascosta resta viva, così un «Rifai
+ * login» in attesa del codice tiene link e campo; si annulla solo alla chiusura (`onDidDispose`).
  */
 export class SidebarView implements vscode.WebviewViewProvider, vscode.Disposable {
   private view: vscode.WebviewView | undefined;
@@ -218,7 +230,7 @@ export class DashboardPanel implements vscode.Disposable {
       'swapdeck.dashboard',
       'SwapDeck',
       vscode.ViewColumn.Active,
-      { enableScripts: true, localResourceRoots: [this.hub.root], retainContextWhenHidden: false },
+      { enableScripts: true, localResourceRoots: [this.hub.root], retainContextWhenHidden: true },
     );
     this.panel = panel;
     const attached = this.hub.attach(panel.webview);

@@ -8,6 +8,8 @@ import type {
   EngineProfiles,
   EngineRules,
   ListResponse,
+  ReloginEvent,
+  ReloginOutcome,
   NotificationConfig,
   ProfileCommand,
   SetupDiagnosis,
@@ -36,6 +38,7 @@ import {
   type NotificationPatch,
   type MiniWindowControls,
   type PickOptions,
+  type ReloginBackend,
   type SetupBackend,
   type Unsubscribe,
 } from '../backend/types.js';
@@ -45,6 +48,7 @@ import configList from '../../../../fixtures/cswap/config-list.json';
 import { loadScenario, type ScenarioName } from './fixtures.js';
 import { generateEvents, generateHistory } from './history.js';
 import { FakeSetup, type FakeSetupOptions } from './fakeSetup.js';
+import { FakeRelogin, type FakeReloginOptions } from './fakeRelogin.js';
 import {
   applyProfile,
   checkEditable,
@@ -81,6 +85,8 @@ export interface FakeBackendOptions {
    * `partial` (avanzamento crescente), come il core (default 0: lettura già completa).
    */
   usageScanCalls?: number;
+  /** «Rifai login» simulato (F21); `false` = host senza l'operazione. */
+  relogin?: FakeReloginOptions | false;
 }
 
 /** Byte totali simulati delle sessioni per `usageScanCalls`. */
@@ -131,7 +137,7 @@ function usable(account: Account): boolean {
  * Backend finto per sviluppo e test: legge le fixture di `fixtures/cswap/`, simula i cambi di account
  * e genera uno storico sintetico di 7 giorni. Non parla con cswap né con il disco.
  */
-export class FakeBackend implements Backend, SetupBackend {
+export class FakeBackend implements Backend, SetupBackend, ReloginBackend {
   readonly hostConfirms?: boolean;
   /** Finestra del mini-widget simulata (assente con `miniWindow: false`). */
   readonly miniWindow?: MiniWindowControls;
@@ -168,6 +174,8 @@ export class FakeBackend implements Backend, SetupBackend {
   readonly actionLog: CswapAction[] = [];
   /** Simulazione di diagnosi, installazione e aggiornamento (`calls` per i test). */
   readonly setup: FakeSetup;
+  /** «Rifai login» simulato; `null` se disattivato con `relogin: false`. */
+  readonly relogin: FakeRelogin | null;
 
   constructor(options: FakeBackendOptions = {}) {
     this.latencyMs = options.latencyMs ?? 0;
@@ -199,6 +207,18 @@ export class FakeBackend implements Backend, SetupBackend {
         },
       };
     }
+    this.relogin =
+      options.relogin === false
+        ? null
+        : new FakeRelogin(
+            options.relogin ?? {},
+            () => this.snapshot(),
+            (n) => {
+              const a = this.find(n);
+              if (a) a.usageStatus = 'ok';
+              this.emit();
+            },
+          );
     this.setup = new FakeSetup(
       options.setup ?? {},
       () => this.list.accounts.length,
@@ -405,6 +425,30 @@ export class FakeBackend implements Backend, SetupBackend {
     await this.delay();
     this.prefs = { ...this.prefs, ...structuredClone(prefs) };
     return structuredClone(this.prefs);
+  }
+
+  async reloginAccounts(list: ListResponse): Promise<number[]> {
+    await this.delay();
+    return this.relogin ? this.relogin.accounts(list) : [];
+  }
+
+  async startRelogin(
+    account: number,
+    onEvent: (event: ReloginEvent) => void,
+  ): Promise<ReloginOutcome> {
+    await this.delay();
+    if (!this.relogin) throw new BackendError({ kind: 'invalidUsage', message: 'n/d' });
+    return this.relogin.start(account, onEvent);
+  }
+
+  async submitReloginCode(code: string): Promise<void> {
+    await this.delay();
+    this.relogin?.submit(code);
+  }
+
+  async cancelRelogin(): Promise<void> {
+    await this.delay();
+    this.relogin?.cancel();
   }
 
   async getAppSettings(): Promise<HostSettings> {

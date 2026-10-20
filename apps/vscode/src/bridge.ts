@@ -5,18 +5,27 @@ import type {
   CswapAction,
   HistoryRecord,
   ListResponse,
+  ReloginEvent,
+  ReloginOutcome,
   SetupProgress,
 } from '@swapdeck/types';
 import type { HistoryPoint } from '@swapdeck/ui';
 import {
   ACTION_TIMEOUT_MS,
   CliError,
+  RELOGIN_TIMEOUT_MS,
   SETUP_TIMEOUT_MS,
   USAGE_TIMEOUT_MS,
   type CliRunner,
+  type StdinChannel,
 } from './cli.js';
 import type { CliState } from './generated/index.js';
-import { isRequestMethod, type PickParams, type RequestMethod } from './protocol.js';
+import {
+  isRequestMethod,
+  type PickParams,
+  type ProgressEvent,
+  type RequestMethod,
+} from './protocol.js';
 
 const DAY_SECONDS = 24 * 3600;
 const DEFAULT_HISTORY_SECONDS = 7 * DAY_SECONDS;
@@ -45,7 +54,7 @@ export interface BridgeDeps {
    * Prima dell'aggiornamento: ferma il motore dell'estensione (il suo `cswap auto` bloccherebbe i
    * file) e restituisce la funzione che lo riavvia alla fine, riuscita o no.
    */
-  pauseEngine?: () => Promise<() => void>;
+  pauseEngine?: (why: 'upgrade' | 'relogin') => Promise<() => void>;
   /** Chi ospita, per la diagnostica (es. `VS Code 1.99, estensione 0.1.0`). */
   clientInfo?: string;
   /** Apre una cartella nel file manager; assente = `openLogsFolder` non disponibile. */
@@ -195,17 +204,22 @@ function stateList(state: CliState): ListResponse {
 /** Gestore delle richieste: valida metodo e parametri, poi chiama la CLI. */
 export function createRequestHandler(deps: BridgeDeps) {
   const now = deps.now ?? (() => Date.now());
+  /** Stdin di `relogin start` in corso (codice e annulla); una sola operazione alla volta. */
+  let relogin: StdinChannel | null = null;
+  let reloginRunning = false;
+
   return async (
     method: unknown,
     rawParams: unknown,
-    progress?: (event: SetupProgress) => void,
+    progress?: (event: ProgressEvent) => void,
+    signal?: AbortSignal,
   ): Promise<unknown> => {
     if (!isRequestMethod(method)) throw invalid('metodo sconosciuto');
     const params = (typeof rawParams === 'object' && rawParams !== null ? rawParams : {}) as Record<
       string,
       unknown
     >;
-    return handle(method, params, progress ?? (() => undefined));
+    return handle(method, params, progress ?? (() => undefined), signal);
   };
 
   /** Installazione o aggiornamento: conferma dell'host, eventi in streaming, poi nuova lettura. */
@@ -217,7 +231,8 @@ export function createRequestHandler(deps: BridgeDeps) {
     if (!(await deps.confirmSetup(kind))) {
       throw new CliError({ kind: 'cancelled', message: 'operazione annullata' });
     }
-    const resume = kind === 'upgrade' && deps.pauseEngine ? await deps.pauseEngine() : undefined;
+    const resume =
+      kind === 'upgrade' && deps.pauseEngine ? await deps.pauseEngine('upgrade') : undefined;
     try {
       return await deps.cli(['setup', kind], {
         timeoutMs: SETUP_TIMEOUT_MS,
@@ -230,12 +245,88 @@ export function createRequestHandler(deps: BridgeDeps) {
     }
   }
 
+  /**
+   * «Rifai login»: motore dell'estensione fermo per tutta l'operazione, eventi in streaming.
+   * `signal` interrotto (webview chiuso o scaricato) = «Annulla».
+   */
+  async function startRelogin(
+    params: Record<string, unknown>,
+    progress: (event: ProgressEvent) => void,
+    signal: AbortSignal | undefined,
+  ): Promise<ReloginOutcome> {
+    const account = optionalInt(params['account'], 'account');
+    if (account === undefined || account < 1) throw invalid('account non valido');
+    if (reloginRunning) {
+      throw new CliError({ kind: 'busy', message: 'un «Rifai login» è già in corso' });
+    }
+    if (signal?.aborted) {
+      throw new CliError({ kind: 'cancelled', message: 'operazione annullata' });
+    }
+    reloginRunning = true;
+    let resume: (() => void) | undefined;
+    let abandoned = false;
+    const cancelLine = `${JSON.stringify({ cancel: true })}\n`;
+    const onAbort = () => {
+      abandoned = true;
+      relogin?.write(cancelLine);
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+    try {
+      resume = deps.pauseEngine ? await deps.pauseEngine('relogin') : undefined;
+      return await deps.cli<ReloginOutcome>(['relogin', 'start', String(account)], {
+        timeoutMs: RELOGIN_TIMEOUT_MS,
+        onEvent: (event) => progress(event as ReloginEvent),
+        channel: (stdin) => {
+          relogin = stdin;
+          // Chiuso prima che la CLI partisse: annulla subito.
+          if (abandoned) stdin.write(cancelLine);
+        },
+      });
+    } finally {
+      signal?.removeEventListener('abort', onAbort);
+      relogin = null;
+      reloginRunning = false;
+      resume?.();
+      deps.onChanged?.();
+      void deps.refresh().catch(() => undefined);
+    }
+  }
+
+  /** Riga per stdin di `relogin start`; errore se non c'è un'operazione in corso. */
+  function reloginWrite(line: object): null {
+    if (!relogin?.write(`${JSON.stringify(line)}\n`)) {
+      throw invalid('nessun «Rifai login» in corso');
+    }
+    return null;
+  }
+
   async function handle(
     method: RequestMethod,
     params: Record<string, unknown>,
-    progress: (event: SetupProgress) => void,
+    progress: (event: ProgressEvent) => void,
+    signal: AbortSignal | undefined,
   ): Promise<unknown> {
     switch (method) {
+      case 'reloginAccounts': {
+        const list = params['list'];
+        if (typeof list !== 'object' || list === null) throw invalid('lista non valida');
+        const { accounts } = await deps.cli<{ accounts: unknown }>(['relogin', 'candidates', '-'], {
+          stdin: JSON.stringify(list),
+        });
+        return Array.isArray(accounts) ? accounts.filter((n) => Number.isSafeInteger(n)) : [];
+      }
+      case 'startRelogin':
+        return startRelogin(params, progress, signal);
+      case 'submitReloginCode': {
+        const code = params['code'];
+        // Una riga, lunghezza limitata; il valore va solo su stdin della CLI, mai nei log.
+        if (typeof code !== 'string' || code.length > 4096 || /[\r\n]/.test(code)) {
+          throw invalid('codice non valido');
+        }
+        return reloginWrite({ code });
+      }
+      case 'cancelRelogin':
+        return reloginWrite({ cancel: true });
       case 'diagnoseSetup':
         return deps.cli(['setup', 'diagnose']);
       case 'installCswap':

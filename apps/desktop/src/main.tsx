@@ -28,8 +28,8 @@ const DRAG_THRESHOLD = 4;
 
 /**
  * Mini-widget: si trascina da qualunque punto non interattivo (il trascinamento parte quando il
- * mouse si muove, così un clic semplice sulla striscia la riespande); doppio clic apre la finestra
- * principale.
+ * mouse si muove, così un clic semplice sulla striscia la riespande). Nessun clic apre la finestra
+ * principale: si apre dall'icona nell'area di notifica.
  */
 function Mini() {
   const start = useRef<{ x: number; y: number } | null>(null);
@@ -40,10 +40,6 @@ function Mini() {
         const target = event.target as HTMLElement;
         start.current = null;
         if (event.button !== 0 || target.closest('button, a, input, select')) return;
-        if (event.detail === 2) {
-          if (!target.closest('.sd-mini--compact')) void backend.showMain();
-          return;
-        }
         start.current = { x: event.clientX, y: event.clientY };
       }}
       onMouseMove={(event) => {

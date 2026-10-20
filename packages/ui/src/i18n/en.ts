@@ -4,12 +4,14 @@ import { enInfo } from './en.info.js';
 import { enTips } from './en.tips.js';
 import { enManage } from './en.manage.js';
 import { enUsage } from './en.usage.js';
+import { enRelogin } from './en.relogin.js';
 import type { MessageKey } from './it.js';
 
 /** English dictionary: must cover every key of the Italian one. */
 export const en: Record<MessageKey, string> = {
   ...enManage,
   ...enUsage,
+  ...enRelogin,
   ...enFlow,
   ...enNotify,
   ...enTips,

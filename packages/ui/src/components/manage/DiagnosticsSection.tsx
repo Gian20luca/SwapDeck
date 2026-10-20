@@ -8,7 +8,7 @@ import { Tooltip } from '../Tooltip.js';
 import { NoticeView, Section } from './common.js';
 
 /** Appunti: prima l'host (VS Code), poi `navigator.clipboard`. Errore se nessuno dei due va. */
-async function copy(backend: Backend, text: string): Promise<void> {
+export async function copyToClipboard(backend: Backend, text: string): Promise<void> {
   if (backend.copyText) {
     await backend.copyText(text);
     return;
@@ -42,7 +42,7 @@ export function DiagnosticsSection() {
       return;
     }
     try {
-      await copy(backend, text);
+      await copyToClipboard(backend, text);
       setNotice({ tone: 'info', text: t('tools.diag.copied') });
     } catch {
       setManual(text);

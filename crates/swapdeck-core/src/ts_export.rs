@@ -23,6 +23,7 @@ use crate::engine::{
 use crate::history::{HistoryEvents, HistoryQuery, HistoryRecord};
 use crate::lock::LockInfo;
 use crate::notify::{HeadlessEvent, NotificationConfig, NotifyPoll};
+use crate::relogin::{ReloginEvent, ReloginOutcome};
 use crate::setup::{SetupDiagnosis, SetupOutcome, SetupProgress, UpdateInfo};
 use crate::usage::{UsageBreakdown, UsageQuery};
 
@@ -76,6 +77,8 @@ fn render(dir: &Path) -> BTreeMap<String, String> {
     HeadlessEvent::export_all(&cfg).unwrap();
     UsageQuery::export_all(&cfg).unwrap();
     UsageBreakdown::export_all(&cfg).unwrap();
+    ReloginEvent::export_all(&cfg).unwrap();
+    ReloginOutcome::export_all(&cfg).unwrap();
 
     let mut files = BTreeMap::new();
     collect(dir, dir, &mut files);

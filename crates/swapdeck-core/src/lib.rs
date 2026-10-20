@@ -15,6 +15,7 @@ pub mod lock;
 pub mod notify;
 pub mod paths;
 pub mod redact;
+pub mod relogin;
 pub mod setup;
 pub mod timeutil;
 pub mod usage;
