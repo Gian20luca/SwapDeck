@@ -22,6 +22,8 @@ pub struct SearchEnv {
     pub path: Option<OsString>,
     pub xdg_bin_home: Option<OsString>,
     pub home: Option<PathBuf>,
+    /// Cartelle fisse dell'OS dopo le altre (Homebrew su macOS); vuote nei test.
+    pub system_bin_dirs: Vec<PathBuf>,
 }
 
 impl SearchEnv {
@@ -33,7 +35,21 @@ impl SearchEnv {
             path: env::var_os("PATH"),
             xdg_bin_home: env::var_os("XDG_BIN_HOME"),
             home: directories::BaseDirs::new().map(|d| d.home_dir().to_path_buf()),
+            system_bin_dirs: system_bin_dirs(),
         }
+    }
+}
+
+/// Cartelle di Homebrew (Apple Silicon e Intel) su macOS: un'app avviata dal Finder non
+/// eredita il `PATH` della shell. Vuote sugli altri OS.
+pub(crate) fn system_bin_dirs() -> Vec<PathBuf> {
+    if cfg!(target_os = "macos") {
+        ["/opt/homebrew/bin", "/usr/local/bin"]
+            .iter()
+            .map(PathBuf::from)
+            .collect()
+    } else {
+        Vec::new()
     }
 }
 
@@ -77,16 +93,10 @@ pub fn locate_uv(search: &SearchEnv) -> Option<PathBuf> {
         if let Some(home) = &search.home {
             dirs.push(home.join(".cargo").join("bin"));
         }
-        if cfg!(target_os = "macos") {
-            dirs.extend(HOMEBREW_BIN_DIRS.iter().map(PathBuf::from));
-        }
+        dirs.extend(search.system_bin_dirs.iter().cloned());
         find_in(dirs, &exe_name("uv"))
     })
 }
-
-/// Cartelle dei binari di Homebrew (Apple Silicon e Intel): un'app avviata dal
-/// Finder non eredita il `PATH` della shell.
-const HOMEBREW_BIN_DIRS: [&str; 2] = ["/opt/homebrew/bin", "/usr/local/bin"];
 
 pub(crate) fn locate(base: &str, search: &SearchEnv) -> Option<PathBuf> {
     let name = exe_name(base);
@@ -183,12 +193,32 @@ mod tests {
             locate_cswap(&empty).unwrap_err().kind,
             CswapErrorKind::NotInstalled
         );
-        if !cfg!(target_os = "macos") {
-            assert!(locate_uv(&empty).is_none());
-        }
+        assert!(
+            locate_uv(&empty).is_none(),
+            "niente cartelle fisse nei test"
+        );
+        let system = tmp.path().join("brew");
+        std::fs::create_dir_all(&system).unwrap();
+        let from_system = fake_exe(&system, "uv");
+        env.system_bin_dirs = vec![system];
+        assert_eq!(
+            locate_uv(&env),
+            Some(from_system),
+            "cartelle fisse per ultime"
+        );
         let cargo_bin = home.join(".cargo").join("bin");
         std::fs::create_dir_all(&cargo_bin).unwrap();
         let uv = fake_exe(&cargo_bin, "uv");
         assert_eq!(locate_uv(&env), Some(uv));
+    }
+
+    #[test]
+    fn system_bin_dirs_only_on_macos() {
+        assert_eq!(
+            system_bin_dirs().is_empty(),
+            !cfg!(target_os = "macos"),
+            "{:?}",
+            system_bin_dirs()
+        );
     }
 }

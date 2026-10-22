@@ -138,6 +138,13 @@ fn action_errors_are_json() {
         (code, v["error"]["kind"].as_str()),
         (2, Some("invalidUsage"))
     );
+    // Con il finto cswap nessuno uv: l'aggiornamento non arriva mai allo uv reale.
+    let (code, v) = env.run_stdin(&["action", "-"], r#"{"kind":"upgrade"}"#);
+    assert_eq!(
+        (code, v["error"]["kind"].as_str()),
+        (1, Some("notInstalled")),
+        "{v}"
+    );
 }
 
 #[test]

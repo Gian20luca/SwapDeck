@@ -239,10 +239,13 @@ impl CswapClient {
     }
 
     /// Cerca cswap (e uv) nell'ambiente del processo.
+    /// Con `SWAPDECK_CSWAP` (finto cswap) niente uv: `upgrade` toccherebbe lo uv reale.
     pub fn locate() -> Res<Self> {
         let env = SearchEnv::from_process();
         let program = locate_cswap(&env)?;
-        Ok(Self::new(program).with_uv(locate_uv(&env)))
+        let fake = env.override_path.as_ref().is_some_and(|v| !v.is_empty());
+        let uv = if fake { None } else { locate_uv(&env) };
+        Ok(Self::new(program).with_uv(uv))
     }
 
     /// Imposta i tempi massimi.
