@@ -292,8 +292,21 @@ pub fn apply_saved_theme(app: &AppHandle) {
     }
 }
 
+/// macOS: icona nel Dock solo con la finestra principale aperta, come le app della barra
+/// dei menu (con il mini-widget o la sola icona nella barra resta fuori dal Dock).
+pub fn set_dock_visible(app: &AppHandle, visible: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        use tauri::ActivationPolicy::{Accessory, Regular};
+        let _ = app.set_activation_policy(if visible { Regular } else { Accessory });
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, visible);
+}
+
 pub fn show_main(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(MAIN) {
+        set_dock_visible(app, true);
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
@@ -533,6 +546,7 @@ pub fn on_window_event(window: &Window, event: &WindowEvent) {
         (MAIN, WindowEvent::CloseRequested { api, .. }) => {
             api.prevent_close();
             let _ = window.hide();
+            set_dock_visible(app, false);
         }
         (MINI, WindowEvent::Moved(_)) => user_moved(app, window.outer_position()),
         (MINI, WindowEvent::CloseRequested { .. }) => persist_mini(app),
