@@ -285,5 +285,5 @@ jobs:
           else
             gh release create "$TAG" assets/* --draft --target "$GITHUB_SHA" \
               --title "SwapDeck ${{ steps.ver.outputs.version }}" \
-              --notes "Bozza generata dalla CI. macOS non firmato: al primo avvio clic destro e Apri."
+              --notes "Bozza generata dalla CI. macOS non notarizzato: al primo avvio Privacy e sicurezza, Apri comunque."
           fi

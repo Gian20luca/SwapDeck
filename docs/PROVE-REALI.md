@@ -124,7 +124,7 @@ Installa solo il `.vsix` (`code --install-extension swapdeck-vscode-<piattaforma
 | # | Prova | Esito atteso | OK |
 |---|---|---|---|
 | 6.8 | `.dmg`: trascina in `/Applications` | Copiata; al primo avvio Gatekeeper blocca (sviluppatore non identificato) | [ ] |
-| 6.9 | Tasto destro → «Apri» → conferma (oppure Privacy e sicurezza → «Apri comunque») | L'app si apre; dal secondo avvio non chiede più | [ ] |
+| 6.9 | Primo avvio bloccato, poi Privacy e sicurezza → «Apri comunque» (da macOS 15 il tasto destro → «Apri» non basta) | L'app si apre; dal secondo avvio non chiede più | [ ] |
 | 6.10 | Barra dei menu | Icona con il consumo; menu con mappe e cambio account | [ ] |
 | 6.11 | Notifiche | Centro notifiche, col nome «SwapDeck» se l'app è in `/Applications` | [ ] |
 | 6.12 | Portachiavi | `cswap` può chiedere accesso al Portachiavi: l'app non si blocca e non perde l'account | [ ] |
@@ -132,6 +132,10 @@ Installa solo il `.vsix` (`code --install-extension swapdeck-vscode-<piattaforma
 | 6.13b | Impostazioni → Generali → Elementi login → «Consenti in background»: spegni `swapdeck` | Al login l'app non parte, ma il file resta e l'interruttore di SwapDeck resta acceso (limite noto: macOS non dice all'app che l'ha spenta). Annota il nome mostrato | [ ] |
 | 6.13c | Primo avvio direttamente dal `.dmg` o da Download (App Translocation) | Nessuna voce scritta con il percorso casuale in quarantena: nel log `avvio automatico non aggiornato: app avviata in quarantena…`; dopo averla spostata in `/Applications` e riaperta, la voce si scrive | [ ] |
 | 6.14 | Log | `~/Library/Application Support/swapdeck/logs/swapdeck.log`; «Apri cartella dei log» apre il Finder lì | [ ] |
+| 6.15 | Dock | Icona nel Dock solo con la finestra principale aperta; chiusa la finestra (o avvio `--minimized`) sparisce e restano barra dei menu e mini-widget | [ ] |
+| 6.16 | App riaperta dal Finder o dal Launchpad mentre gira nascosta | Si mostra la finestra principale (evento `Reopen`), nessuna seconda istanza | [ ] |
+| 6.17 | Cmd+Q con la finestra aperta | Annota se l'app esce (con `cswap auto` fermato e lock rilasciato, vedi log) o resta nella barra dei menu | [ ] |
+| 6.18 | «Apri terminale come questo account» (`cswap run`) | Si apre il terminale predefinito per i file `.command` con il comando giusto; lo script temporaneo in `$TMPDIR` si cancella | [ ] |
 
 ## 7. Aggiornamento automatico 0.1.0 → 0.2.0
 

@@ -78,7 +78,7 @@ SwapDeck/
 - **Installer:**
   - Windows: NSIS `currentUser` con bootstrapper WebView2.
   - Linux: AppImage e .deb.
-  - macOS: .dmg (non firmato: al primo avvio clic destro → Apri).
+  - macOS: .dmg (firma ad-hoc, non notarizzato: al primo avvio Privacy e sicurezza → «Apri comunque»).
   - VS Code: .vsix interno.
 - **Sicurezza:** i token di `add-token` passano via stdin (`-`) e non finiscono mai in log, storico o messaggi di errore. Nei log niente email complete.
 

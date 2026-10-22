@@ -1,4 +1,4 @@
-# Build e installazione di SwapDeck 0.2.1 su macOS
+# Build e installazione di SwapDeck 0.2.2 su macOS
 
 Guida per un agente Claude Code su un Mac. Costruisce tutto in locale dai sorgenti (la CI di GitHub è ferma). Pacchetti **non firmati** e **non notarizzati**; updater spento. Fonti: `.github/workflows/release.yml` (job `app` e `vsix`), `apps/vscode/scripts/package.mjs`, `README.md`.
 
@@ -64,7 +64,7 @@ Se fallisce: `rustup target add` senza rete, controlla proxy/VPN; `clang` assent
 
 ```bash
 git clone https://github.com/Gian20luca/SwapDeck.git && cd SwapDeck   # repo privato: serve l'accesso del collega (gh auth login o credenziali git)
-grep -m1 '^version' Cargo.toml                                         # atteso: version = "0.2.1"
+grep -m1 '^version' Cargo.toml                                         # atteso: version = "0.2.2"
 pnpm install --frozen-lockfile
 ```
 
@@ -85,7 +85,7 @@ chmod +x "out/cli/swapdeck-cli-$TARGET"
 Verifica. Non c'è `--version`: il sottocomando è `version` e risponde in JSON.
 
 ```bash
-"target/$TARGET/release/swapdeck-cli" version   # atteso: {"name":"swapdeck-cli","version":"0.2.1",...}
+"target/$TARGET/release/swapdeck-cli" version   # atteso: {"name":"swapdeck-cli","version":"0.2.2",...}
 ```
 
 Se fallisce: errori di linker, CLT incompleti (passo 1.2). La prima compilazione richiede alcuni minuti. Non provare altri sottocomandi (`status`, `action`, ...): parlano col `cswap` reale.
@@ -110,7 +110,7 @@ Verifica:
 
 ```bash
 B="target/$TARGET/release/bundle"
-ls "$B"/dmg/*.dmg "$B/macos/SwapDeck.app/Contents/MacOS/"   # attesi: SwapDeck_0.2.1_*.dmg; swapdeck e swapdeck-cli
+ls "$B"/dmg/*.dmg "$B/macos/SwapDeck.app/Contents/MacOS/"   # attesi: SwapDeck_0.2.2_*.dmg; swapdeck e swapdeck-cli
 ```
 
 Se fallisce: la prima build è lunga (10-30 minuti). Il `.dmg` può fallire se il Terminale non ha il permesso di automazione (Impostazioni di Sistema, Privacy e sicurezza, Automazione), poi rilancia. Se manca `swapdeck-cli` in `Contents/MacOS/`, il passo 3 non è stato fatto per lo stesso `TARGET`.
@@ -121,10 +121,10 @@ Se fallisce: la prima build è lunga (10-30 minuti). Il `.dmg` può fallire se i
 cp -R "$B/macos/SwapDeck.app" /Applications/    # o ~/Applications se /Applications non è scrivibile
 ```
 
-Gatekeeper: l'app è di «sviluppatore non identificato». Rischio: macOS non può verificare autore e integrità del pacchetto, quindi apri solo build fatte da te da questo repo. Due modi:
+Gatekeeper: l'app ha solo una firma ad-hoc (`signingIdentity: "-"`), senza certificato Apple né notarizzazione, quindi è di «sviluppatore non identificato». Rischio: macOS non può verificare l'autore, quindi apri solo build fatte da te da questo repo. Costruita e aperta sullo stesso Mac non ha la quarantena e parte senza avvisi. Se arriva da un `.dmg` scaricato o da un altro Mac:
 
-- clic destro sull'app, «Apri», conferma; oppure Impostazioni di Sistema, Privacy e sicurezza, «Apri comunque»;
-- oppure togli la quarantena (di norma assente per file costruiti in locale; serve se l'app arriva da un `.dmg` scaricato o copiata da un altro Mac):
+- apri l'app una volta (macOS la blocca), poi Impostazioni di Sistema → Privacy e sicurezza → «Apri comunque» e conferma. Da macOS 15 il clic destro → «Apri» non basta più;
+- oppure togli la quarantena:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/SwapDeck.app
@@ -144,8 +144,8 @@ Riusa il `swapdeck-cli` del passo 3:
 
 ```bash
 node apps/vscode/scripts/package.mjs --target "$VSTARGET" --cli "out/cli/swapdeck-cli-$TARGET"
-ls apps/vscode/dist/*.vsix    # swapdeck-vscode-<VSTARGET>-0.2.1.vsix
-code --install-extension "apps/vscode/dist/swapdeck-vscode-$VSTARGET-0.2.1.vsix"
+ls apps/vscode/dist/*.vsix    # swapdeck-vscode-<VSTARGET>-0.2.2.vsix
+code --install-extension "apps/vscode/dist/swapdeck-vscode-$VSTARGET-0.2.2.vsix"
 ```
 
 Poi in VS Code: «Developer: Reload Window». L'estensione contiene già `swapdeck-cli` e non richiede l'app.
@@ -155,11 +155,11 @@ Se fallisce: `code: command not found`, vedi passo 1.5, oppure «Estensioni», �
 ## 6. Verifiche finali
 
 ```bash
-grep -m1 '^version' Cargo.toml                                                                                # 0.2.1
-"target/$TARGET/release/swapdeck-cli" version                                                                 # "version":"0.2.1"
+grep -m1 '^version' Cargo.toml                                                                                # 0.2.2
+"target/$TARGET/release/swapdeck-cli" version                                                                 # "version":"0.2.2"
 /Applications/SwapDeck.app/Contents/MacOS/swapdeck-cli version                                                # sidecar nell'app, stesso JSON
-/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' /Applications/SwapDeck.app/Contents/Info.plist  # 0.2.1
-code --list-extensions --show-versions | grep -i swapdeck                                                     # ...@0.2.1
+/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' /Applications/SwapDeck.app/Contents/Info.plist  # 0.2.2
+code --list-extensions --show-versions | grep -i swapdeck                                                     # ...@0.2.2
 ```
 
 - App: si apre (finestra o icona nella barra dei menu) senza errori; con la home isolata del passo 4 non tocca il profilo reale.
@@ -175,9 +175,19 @@ git pull --ff-only
 pnpm install --frozen-lockfile
 ```
 
-Poi rifai i passi 3, 4 e 5 (stessi comandi; chiudi prima l'app e sostituisci `/Applications/SwapDeck.app`). Se la versione cambia, aggiorna `0.2.1` nei nomi di `.dmg` e `.vsix`. L'aggiornamento non tocca il `cswap` né la config dell'utente.
+Poi rifai i passi 3, 4 e 5 (stessi comandi; chiudi prima l'app e sostituisci `/Applications/SwapDeck.app`). Se la versione cambia, aggiorna `0.2.2` nei nomi di `.dmg` e `.vsix`. L'aggiornamento non tocca il `cswap` né la config dell'utente.
 
 ## Da verificare
 
-- Build non provata su Mac: i comandi derivano da `release.yml` e `package.mjs`.
-- Nome del `.dmg`: Tauri lo chiama `SwapDeck_0.2.1_aarch64.dmg` (Apple Silicon) o `SwapDeck_0.2.1_x64.dmg` (Intel); se diverso, vale l'output reale. La voce dell'estensione è `swapdeck.swapdeck-vscode`.
+- Passi 1-5 provati il 22/10 su un Mac Apple Silicon (macOS 26.3) con la 0.2.2: `.dmg`, `.app` con `swapdeck-cli` e `.vsix` darwin-arm64 costruiti. Non provati: Mac Intel, installazione in `/Applications` e primo avvio da un `.dmg` scaricato (vedi `docs/PROVE-REALI.md` §6).
+- Nome del `.dmg`: `SwapDeck_0.2.2_aarch64.dmg` su Apple Silicon; su Intel atteso `SwapDeck_0.2.2_x64.dmg`. La voce dell'estensione è `swapdeck.swapdeck-vscode`.
+
+## Test sul Mac
+
+Come su Windows (`CLAUDE.md`, «Comandi»), più il browser per gli E2E, una volta sola:
+
+```bash
+pnpm --filter @swapdeck/ui exec playwright install chromium
+```
+
+I test usano solo il finto cswap. Fino alla 0.2.2 compresa `crates/swapdeck-core/tests/setup.rs` trovava lo uv reale di Homebrew (`/opt/homebrew/bin/uv`) e lanciava `uv tool upgrade claude-swap`: con un checkout più vecchio non eseguire `cargo test` sul Mac senza escludere quel file (`cargo test --workspace -- --skip upgrade_busy_and_without_uv`).

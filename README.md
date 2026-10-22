@@ -35,7 +35,7 @@ Estensione: `code --install-extension swapdeck-vscode-<piattaforma>-<versione>.v
 Avvisi attesi, perché i pacchetti non sono firmati con certificati dei produttori dei sistemi:
 
 - **Windows SmartScreen:** «Windows ha protetto il PC» → «Ulteriori informazioni» → «Esegui comunque».
-- **macOS Gatekeeper:** l'app è di «sviluppatore non identificato». Tasto destro sull'app → «Apri» → conferma; oppure Impostazioni di Sistema → Privacy e sicurezza → «Apri comunque».
+- **macOS Gatekeeper:** l'app è di «sviluppatore non identificato». Al primo avvio macOS la blocca: Impostazioni di Sistema → Privacy e sicurezza → «Apri comunque» (da macOS 15 il tasto destro → «Apri» non basta più); oppure `xattr -dr com.apple.quarantine /Applications/SwapDeck.app`.
 - **Linux:** rendi eseguibile l'AppImage (`chmod +x`). Il `.deb` richiede `sudo` solo per `dpkg`; l'AppImage no.
 
 Aggiornamenti automatici: spenti di default finché il repo è privato; si scarica a mano la nuova release. Su Linux il `.deb` si aggiorna comunque a mano.
