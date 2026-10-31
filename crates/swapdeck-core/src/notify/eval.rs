@@ -557,12 +557,14 @@ impl Eval<'_> {
             return;
         };
         let target = ctx.preview.and_then(|p| p.target).map(|t| self.name(t));
+        // Soglie effettive dell'attiva (F22: anche il suo massimo).
+        let limits = er.thresholds(a.number);
         for (win, w, t) in [
-            (Win::FiveHour, u.five_hour.as_ref(), er.five_hour_threshold),
+            (Win::FiveHour, u.five_hour.as_ref(), limits.five_hour),
             (
                 Win::SevenDay,
                 u.seven_day.as_ref(),
-                er.seven_day_threshold.unwrap_or(100.0),
+                limits.seven_day_limit(),
             ),
         ] {
             let Some(w) = w else { continue };

@@ -499,6 +499,35 @@ fn engine_state_explains_candidate_and_list_warnings() {
     assert!(v.get("warnings").is_none(), "nessun avviso: {v}");
 }
 
+/// F22: massimi per utenza salvati con le regole; `engine state` porta le soglie effettive.
+#[test]
+fn engine_state_carries_account_limits_and_effective_thresholds() {
+    let env = Env::new();
+    let rules = r#"{"primary":6,"reserves":[1,3],"accountLimits":{"1":{"fiveHour":70},"3":{"sevenDay":120}}}"#;
+    let (code, v) = env.run_stdin(&["engine", "rules", "set", "-"], rules);
+    assert_eq!(code, 2, "massimo fuori da 1–100 rifiutato: {v}");
+    let rules = r#"{"primary":6,"reserves":[1,3],"accountLimits":{"1":{"fiveHour":70}}}"#;
+    let (code, v) = env.run_stdin(&["engine", "rules", "set", "-"], rules);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(
+        v["rules"]["accountLimits"],
+        json!({"1": {"fiveHour": 70.0}})
+    );
+    let (code, v) = env.run(&["engine", "state"]);
+    assert_eq!(code, 0, "{v}");
+    let all = v["thresholds"].as_array().expect("soglie effettive");
+    let one = all.iter().find(|t| t["number"] == 1).unwrap();
+    assert_eq!(
+        (one["fiveHour"].as_f64(), &one["fiveHourCapped"]),
+        (Some(70.0), &json!(true))
+    );
+    let six = all.iter().find(|t| t["number"] == 6).unwrap();
+    assert_eq!(
+        (six["fiveHour"].as_f64(), &six["fiveHourCapped"]),
+        (Some(95.0), &json!(false))
+    );
+}
+
 #[test]
 fn notifications_get_set_and_poll_single_sender() {
     let env = Env::new();

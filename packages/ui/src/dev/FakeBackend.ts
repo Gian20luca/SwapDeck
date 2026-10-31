@@ -54,6 +54,7 @@ import {
   checkEditable,
   checkList,
   fakeCandidate,
+  fakeThresholds,
   seedProfiles,
 } from './fakeProfiles.js';
 import { defaultNotifications, patchNotifications } from './fakeNotifications.js';
@@ -349,7 +350,12 @@ export class FakeBackend implements Backend, SetupBackend, ReloginBackend {
       const candidate = fakeCandidate(rules, this.list.accounts);
       if (candidate) view.candidate = candidate;
     }
-    return { rules, view, conflicts: structuredClone(this.conflicts) };
+    return {
+      rules,
+      view,
+      conflicts: structuredClone(this.conflicts),
+      thresholds: fakeThresholds(rules, this.list.accounts),
+    };
   }
 
   async getEngineState(): Promise<EngineState> {

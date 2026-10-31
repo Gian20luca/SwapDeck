@@ -93,6 +93,7 @@ impl PresetKind {
             dry_run: base.dry_run,
             first_enable_confirmed: base.first_enable_confirmed,
             ignored_conflicts: base.ignored_conflicts.clone(),
+            account_limits: base.account_limits.clone(),
             order: Some(
                 base.configured_order()
                     .into_iter()
@@ -201,6 +202,7 @@ fn carry_globals(rules: &mut EngineRules, from: &EngineRules) {
     rules.dry_run = from.dry_run;
     rules.first_enable_confirmed = from.first_enable_confirmed;
     rules.ignored_conflicts.clone_from(&from.ignored_conflicts);
+    rules.account_limits.clone_from(&from.account_limits);
 }
 
 /// Stesse impostazioni di mappa, a meno delle parti comuni e dei valori che il criterio non
@@ -440,7 +442,8 @@ impl EngineProfiles {
     }
 
     /// Controlla che `rules` (nuove regole attive) non modifichi un preset attivo: per un
-    /// preset cambiano solo le parti comuni (motore acceso, osservazione, conflitti ignorati).
+    /// preset cambiano solo le parti comuni (motore acceso, osservazione, conflitti ignorati,
+    /// massimi per utenza).
     /// Le mappe devono essere già normalizzate.
     pub fn check_editable(&self, rules: &EngineRules) -> Result<(), String> {
         match self.active() {

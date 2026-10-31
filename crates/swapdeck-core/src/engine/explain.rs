@@ -52,6 +52,15 @@ fn levels(ctx: &Ctx<'_>, a: Option<&Account>) -> String {
     )
 }
 
+/// «, al suo massimo dei 7 giorni (80%)» quando decide il massimo dell'utenza (F22).
+fn own_max(capped: bool, window: &str, t: f64) -> String {
+    if capped {
+        format!(", al suo massimo {window} ({}%)", pct(t))
+    } else {
+        String::new()
+    }
+}
+
 /// Perché l'utenza va lasciata: «5h di X al 95%», «7d di X al 98%», «X chiede un nuovo login».
 fn trigger(ctx: &Ctx<'_>, number: u32) -> String {
     let name = label(ctx, number);
@@ -64,11 +73,20 @@ fn trigger(ctx: &Ctx<'_>, number: u32) -> String {
     if let Some(u) = limit_usage(a) {
         let p5 = effective_pct(u.five_hour.as_ref(), ctx.now);
         let p7 = effective_pct(u.seven_day.as_ref(), ctx.now);
-        if p5 >= ctx.rules.five_hour_threshold {
-            return format!("5h di {name} al {}%", pct(p5));
+        let t = ctx.rules.thresholds(number);
+        if p5 >= t.five_hour {
+            return format!(
+                "5h di {name} al {}%{}",
+                pct(p5),
+                own_max(t.five_hour_capped, "delle 5 ore", t.five_hour)
+            );
         }
-        if p7 >= ctx.rules.seven_day_limit() {
-            return format!("7d di {name} al {}%", pct(p7));
+        if p7 >= t.seven_day_limit() {
+            return format!(
+                "7d di {name} al {}%{}",
+                pct(p7),
+                own_max(t.seven_day_capped, "dei 7 giorni", t.seven_day_limit())
+            );
         }
     }
     format!("{name} al limite")

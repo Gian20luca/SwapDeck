@@ -6,12 +6,15 @@ import type { Account } from '@swapdeck/types';
 import {
   flowRows,
   fromDraft,
+  fromLimitDraft,
   materialize,
   missingAccounts,
   moveRow,
   setIncluded,
   toDraft,
+  toLimitDraft,
   validateRules,
+  withAccountLimit,
 } from './engineRules.js';
 import { mergeEvents } from './historyEvents.js';
 
@@ -157,5 +160,29 @@ describe('historyEvents', () => {
       ['decision', 20],
       ['switch', 10],
     ]);
+  });
+});
+
+describe('massimo per utenza (F22)', () => {
+  it('campi: vuoto = vale la mappa, valori 1–100 come le soglie della mappa', () => {
+    expect(toLimitDraft(undefined)).toEqual({ fiveHour: '', sevenDay: '' });
+    expect(toLimitDraft({ sevenDay: 80 })).toEqual({ fiveHour: '', sevenDay: '80' });
+    expect(fromLimitDraft({ fiveHour: ' ', sevenDay: '' })).toEqual({ limit: null, errors: {} });
+    expect(fromLimitDraft({ fiveHour: '85', sevenDay: '' }).limit).toEqual({ fiveHour: 85 });
+    for (const bad of ['0', '100.5', '-3', 'x'])
+      expect(fromLimitDraft({ fiveHour: '50', sevenDay: bad }).errors).toEqual({
+        sevenDay: 'rules.err.threshold',
+      });
+  });
+
+  it('sostituisce o toglie il massimo di una sola utenza', () => {
+    const base = rules({ accountLimits: { 1: { fiveHour: 85 } } });
+    expect(withAccountLimit(base, 3, { sevenDay: 70 }).accountLimits).toEqual({
+      1: { fiveHour: 85 },
+      3: { sevenDay: 70 },
+    });
+    const none = withAccountLimit(base, 1, null);
+    expect('accountLimits' in none).toBe(false);
+    expect(none).toEqual(rules());
   });
 });

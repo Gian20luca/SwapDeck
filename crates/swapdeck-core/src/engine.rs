@@ -13,6 +13,8 @@ mod criteria;
 mod explain;
 pub mod profiles;
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -125,6 +127,51 @@ pub struct EngineRules {
     pub headroom_model: Option<String>,
     /// Conflitti noti da ignorare (`Conflict::id`, senza distinzione di maiuscole).
     pub ignored_conflicts: Vec<String>,
+    /// Massimo per utenza (F22), chiave = numero di cswap come in `order` ed `excluded`. Comune
+    /// a tutte le mappe come `enabled` (preset compresi): è un tetto sulle soglie della mappa,
+    /// vale il più basso ([`Self::thresholds`]). Assente = soglie della mappa.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    #[ts(as = "Option<BTreeMap<u32, AccountLimit>>", optional)]
+    pub account_limits: BTreeMap<u32, AccountLimit>,
+}
+
+/// Massimo di un'utenza sulle 5 ore e sui 7 giorni, in percentuale (vuoto = vale la mappa).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AccountLimit {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub five_hour: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub seven_day: Option<f64>,
+}
+
+impl AccountLimit {
+    fn is_empty(&self) -> bool {
+        self.five_hour.is_none() && self.seven_day.is_none()
+    }
+}
+
+/// Soglie effettive di un'utenza (F22): il più basso tra la soglia della mappa attiva e il
+/// massimo dell'utenza. Unica fonte per motore, spiegazioni, preavviso e trattini delle barre.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct EffectiveThresholds {
+    pub number: u32,
+    pub five_hour: f64,
+    /// `null` = solo il blocco al 100% (mappa senza soglia 7d e utenza senza massimo 7d).
+    pub seven_day: Option<f64>,
+    /// Decide il massimo dell'utenza (più basso della soglia della mappa).
+    pub five_hour_capped: bool,
+    pub seven_day_capped: bool,
+}
+
+impl EffectiveThresholds {
+    /// Soglia 7d usata nei confronti: 100 se non c'è.
+    pub fn seven_day_limit(&self) -> f64 {
+        self.seven_day.unwrap_or(100.0)
+    }
 }
 
 impl Default for EngineRules {
@@ -147,6 +194,7 @@ impl Default for EngineRules {
             score_weights: None,
             headroom_model: None,
             ignored_conflicts: Vec::new(),
+            account_limits: BTreeMap::new(),
         }
     }
 }
@@ -163,6 +211,7 @@ impl<'de> Deserialize<'de> for EngineRules {
             rules.order = None;
         }
         rules.sync_order();
+        rules.account_limits.retain(|_, l| !l.is_empty());
         Ok(rules)
     }
 }
@@ -172,6 +221,7 @@ impl Serialize for EngineRules {
     fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         let mut rules = self.clone();
         rules.sync_order();
+        rules.account_limits.retain(|_, l| !l.is_empty());
         Self::serialize(&rules, s)
     }
 }
@@ -271,7 +321,8 @@ impl EngineRules {
             .iter()
             .chain(&self.reserves)
             .chain(self.order.iter().flatten())
-            .chain(&self.excluded);
+            .chain(&self.excluded)
+            .chain(self.account_limits.keys());
         if numbers.clone().any(|n| *n == 0) {
             out.push("i numeri degli account partono da 1".to_owned());
         }
@@ -281,6 +332,7 @@ impl EngineRules {
                 .order
                 .as_ref()
                 .is_some_and(|o| o.len() > MAX_RULE_ACCOUNTS + 1)
+            || self.account_limits.len() > MAX_RULE_ACCOUNTS
         {
             out.push(format!("al massimo {MAX_RULE_ACCOUNTS} account per elenco"));
         }
@@ -316,6 +368,11 @@ impl EngineRules {
         if self.seven_day_threshold.is_some_and(|v| !pct_ok(v)) {
             out.push("soglia 7d fuori da 1–100".to_owned());
         }
+        for (n, l) in &self.account_limits {
+            if l.five_hour.is_some_and(|v| !pct_ok(v)) || l.seven_day.is_some_and(|v| !pct_ok(v)) {
+                out.push(format!("massimo dell'utenza {n} fuori da 1–100"));
+            }
+        }
         if !(self.return_hysteresis.is_finite() && (0.0..=50.0).contains(&self.return_hysteresis)) {
             out.push("isteresi fuori da 0–50".to_owned());
         }
@@ -328,8 +385,27 @@ impl EngineRules {
         out
     }
 
-    fn seven_day_limit(&self) -> f64 {
-        self.seven_day_threshold.unwrap_or(100.0)
+    /// Soglie effettive dell'utenza `number` (F22): per ogni finestra il più basso tra la soglia
+    /// della mappa e il massimo dell'utenza; sui 7 giorni una mappa senza soglia vale 100 (solo
+    /// il blocco). Un massimo non valido (fuori da 0–100, NaN) non abbassa nulla: le regole non
+    /// valide sospendono comunque il motore ([`Self::validate`]).
+    pub fn thresholds(&self, number: u32) -> EffectiveThresholds {
+        let own = self
+            .account_limits
+            .get(&number)
+            .copied()
+            .unwrap_or_default();
+        let lower =
+            |own: Option<f64>, map: f64| own.filter(|o| o.is_finite() && *o > 0.0 && *o < map);
+        let five = lower(own.five_hour, self.five_hour_threshold);
+        let seven = lower(own.seven_day, self.seven_day_threshold.unwrap_or(100.0));
+        EffectiveThresholds {
+            number,
+            five_hour: five.unwrap_or(self.five_hour_threshold),
+            seven_day: seven.or(self.seven_day_threshold),
+            five_hour_capped: five.is_some(),
+            seven_day_capped: seven.is_some(),
+        }
     }
 
     fn weights(&self) -> ScoreWeights {
@@ -693,6 +769,38 @@ pub struct EngineState {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     #[ts(as = "Option<Vec<String>>", optional)]
     pub warnings: Vec<String>,
+    /// Soglie effettive delle utenze della lista di cswap (F22, [`EngineRules::thresholds`]),
+    /// per i trattini delle barre; vuoto se la lista non è nota.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(as = "Option<Vec<EffectiveThresholds>>", optional)]
+    pub thresholds: Vec<EffectiveThresholds>,
+}
+
+impl EngineState {
+    /// Stato con gli avvisi e le soglie effettive che si vedono solo con la lista di cswap.
+    pub fn new(
+        rules: EngineRules,
+        view: Option<EngineView>,
+        conflicts: Vec<Conflict>,
+        list: Option<&ListResponse>,
+    ) -> Self {
+        let warnings = list.map(|l| rules.list_warnings(l)).unwrap_or_default();
+        let thresholds = list
+            .map(|l| {
+                l.accounts
+                    .iter()
+                    .map(|a| rules.thresholds(a.number))
+                    .collect()
+            })
+            .unwrap_or_default();
+        Self {
+            rules,
+            view,
+            conflicts,
+            warnings,
+            thresholds,
+        }
+    }
 }
 
 impl EngineRules {
@@ -794,6 +902,22 @@ impl<'a> Ctx<'a> {
                 },
             ),
         };
+        // Con un massimo dell'utenza basso l'isteresi (punti assoluti) porterebbe la soglia a zero
+        // o sotto e il ritorno non scatterebbe mai: lì il margine vale al più metà del massimo.
+        // Senza massimo decisivo i margini restano quelli di sempre.
+        let t = self.rules.thresholds(a.number);
+        let margins = (
+            if t.five_hour_capped {
+                margins.0.min(t.five_hour / 2.0)
+            } else {
+                margins.0
+            },
+            if t.seven_day_capped {
+                margins.1.min(t.seven_day_limit() / 2.0)
+            } else {
+                margins.1
+            },
+        );
         left.and_then(|l| l.reset_at).is_none_or(|r| self.now >= r) && self.eligible(a, margins)
     }
 
@@ -1044,7 +1168,8 @@ fn at_limit(a: &Account, rules: &EngineRules, now: i64, hard: bool) -> bool {
     let (t5, t7) = if hard {
         (100.0, 100.0)
     } else {
-        (rules.five_hour_threshold, rules.seven_day_limit())
+        let t = rules.thresholds(a.number);
+        (t.five_hour, t.seven_day_limit())
     };
     effective_pct(u.five_hour.as_ref(), now) >= t5 || effective_pct(u.seven_day.as_ref(), now) >= t7
 }
@@ -1053,31 +1178,34 @@ fn at_limit(a: &Account, rules: &EngineRules, now: i64, hard: bool) -> bool {
 type Margins = (f64, f64);
 const NO_MARGIN: Margins = (0.0, 0.0);
 
-fn below(u: &Usage, rules: &EngineRules, now: i64, (m5, m7): Margins) -> bool {
-    effective_pct(u.five_hour.as_ref(), now) < rules.five_hour_threshold - m5
-        && effective_pct(u.seven_day.as_ref(), now) < rules.seven_day_limit() - m7
+/// Sotto le soglie effettive `t` dell'utenza meno i margini.
+fn below(u: &Usage, t: EffectiveThresholds, now: i64, (m5, m7): Margins) -> bool {
+    effective_pct(u.five_hour.as_ref(), now) < t.five_hour - m5
+        && effective_pct(u.seven_day.as_ref(), now) < t.seven_day_limit() - m7
 }
 
-/// Account su cui il motore può cambiare: abilitato, non escluso, dati freschi, sotto soglia.
+/// Account su cui il motore può cambiare: abilitato, non escluso, dati freschi, sotto le sue
+/// soglie effettive (una riserva oltre il proprio massimo non si sceglie).
 fn eligible(a: &Account, rules: &EngineRules, now: i64, margins: Margins) -> bool {
     !a.is_disabled()
         && !rules.excluded.contains(&a.number)
         && fresh(a, rules, now)
         && a.usage
             .as_ref()
-            .is_some_and(|u| below(u, rules, now, margins))
+            .is_some_and(|u| below(u, rules.thresholds(a.number), now, margins))
 }
 
-/// Finestre dell'account oltre le soglie del motore.
+/// Finestre dell'account oltre le sue soglie effettive.
 fn limiting_windows(a: &Account, rules: &EngineRules, now: i64) -> Vec<LimitWindow> {
     let Some(u) = limit_usage(a) else {
         return Vec::new();
     };
+    let t = rules.thresholds(a.number);
     let mut out = Vec::new();
-    if effective_pct(u.five_hour.as_ref(), now) >= rules.five_hour_threshold {
+    if effective_pct(u.five_hour.as_ref(), now) >= t.five_hour {
         out.push(LimitWindow::FiveHour);
     }
-    if effective_pct(u.seven_day.as_ref(), now) >= rules.seven_day_limit() {
+    if effective_pct(u.seven_day.as_ref(), now) >= t.seven_day_limit() {
         out.push(LimitWindow::SevenDay);
     }
     out
@@ -1086,9 +1214,10 @@ fn limiting_windows(a: &Account, rules: &EngineRules, now: i64) -> Vec<LimitWind
 /// Reset più lontano tra le finestre al limite (quando l'utenza torna utilizzabile).
 fn limiting_reset(a: &Account, rules: &EngineRules, now: i64) -> Option<i64> {
     let u = limit_usage(a)?;
+    let t = rules.thresholds(a.number);
     [
-        (u.five_hour.as_ref(), rules.five_hour_threshold),
-        (u.seven_day.as_ref(), rules.seven_day_limit()),
+        (u.five_hour.as_ref(), t.five_hour),
+        (u.seven_day.as_ref(), t.seven_day_limit()),
     ]
     .into_iter()
     .filter_map(|(w, t)| w.filter(|w| effective_pct(Some(w), now) >= t))
@@ -1098,5 +1227,7 @@ fn limiting_reset(a: &Account, rules: &EngineRules, now: i64) -> Option<i64> {
 
 #[cfg(test)]
 mod flow_tests;
+#[cfg(test)]
+mod limit_tests;
 #[cfg(test)]
 pub(crate) mod tests;

@@ -1,4 +1,13 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
+import type { EngineRules } from '@swapdeck/types';
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react';
 import { useI18n } from '../../i18n/index.js';
 import { displayUsage } from '../../lib/account.js';
 import type { FlowRow } from '../../lib/engineRules.js';
@@ -15,6 +24,14 @@ export interface FlowListProps {
    */
   onMove: (number: number, to: number) => void;
   onToggle: (number: number, included: boolean) => void;
+  /** Massimi per utenza (F22, `EngineRules.accountLimits` salvati): «· max 5h N%» nella riga. */
+  limits?: EngineRules['accountLimits'];
+  /** Apre o chiude il riquadro del massimo dell'utenza (rotellina); senza, niente rotellina. */
+  onLimit?: (number: number) => void;
+  /** Rotellina spenta (salvataggio in corso); vale anche con la lista in sola lettura. */
+  limitDisabled?: boolean;
+  /** Riquadro del massimo aperto sotto la riga dell'utenza `number`. */
+  limitPanel?: { number: number; panel: ReactNode } | null;
 }
 
 function pct(value: number | null | undefined): string {
@@ -26,7 +43,17 @@ function pct(value: number | null | undefined): string {
  * maniglia) e da tastiera (Spazio prende e lascia, frecce spostano, Esc annulla), con gli annunci
  * per gli screen reader in una regione `aria-live`; interruttore includi/escludi.
  */
-export function FlowList({ rows, nameOf, disabled, onMove, onToggle }: FlowListProps) {
+export function FlowList({
+  rows,
+  nameOf,
+  disabled,
+  onMove,
+  onToggle,
+  limits,
+  onLimit,
+  limitDisabled,
+  limitPanel,
+}: FlowListProps) {
   const { t } = useI18n();
   const helpId = useId();
   const items = useRef(new Map<number, HTMLLIElement>());
@@ -124,6 +151,9 @@ export function FlowList({ rows, nameOf, disabled, onMove, onToggle }: FlowListP
           const name = nameOf(row.number);
           const usage = row.account ? displayUsage(row.account)?.usage : undefined;
           const isGrabbed = grabbed?.number === row.number || dragging === row.number;
+          const limit = limits?.[row.number];
+          const hasLimit = limit?.fiveHour !== undefined || limit?.sevenDay !== undefined;
+          const open = limitPanel?.number === row.number;
           return (
             <li
               key={row.number}
@@ -134,6 +164,7 @@ export function FlowList({ rows, nameOf, disabled, onMove, onToggle }: FlowListP
               className="sd-flow__item"
               data-grabbed={isGrabbed}
               data-included={row.included}
+              data-open={open}
               data-testid={`flow-row-${row.number}`}
             >
               <Tooltip text={t('flow.handle.tip')}>
@@ -168,6 +199,10 @@ export function FlowList({ rows, nameOf, disabled, onMove, onToggle }: FlowListP
                 </span>
                 <span className="sd-flow__usage">
                   5h {pct(usage?.fiveHour?.pct)} · 7d {pct(usage?.sevenDay?.pct)}
+                  {limit?.fiveHour !== undefined &&
+                    ` · ${t('flow.limit.max5h', { pct: pct(limit.fiveHour) })}`}
+                  {limit?.sevenDay !== undefined &&
+                    ` · ${t('flow.limit.max7d', { pct: pct(limit.sevenDay) })}`}
                 </span>
               </span>
               <Tooltip text={t('flow.include.tip')}>
@@ -181,6 +216,22 @@ export function FlowList({ rows, nameOf, disabled, onMove, onToggle }: FlowListP
                   onChange={(event) => onToggle(row.number, event.target.checked)}
                 />
               </Tooltip>
+              {onLimit && (
+                <Tooltip text={t('flow.limit.tip')}>
+                  <button
+                    type="button"
+                    className="sd-flow__gear"
+                    aria-label={t('flow.limit', { name })}
+                    aria-expanded={open}
+                    data-set={hasLimit}
+                    disabled={limitDisabled}
+                    onClick={() => onLimit(row.number)}
+                  >
+                    {'\u2699\uFE0E'}
+                  </button>
+                </Tooltip>
+              )}
+              {open && limitPanel.panel}
             </li>
           );
         })}

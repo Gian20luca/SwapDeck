@@ -75,6 +75,21 @@ export const itFlow = {
   'flow.include': 'Includi {name}',
   'flow.include.tip':
     'Acceso: il motore può usare questa utenza. Spento: non la sceglie mai e, se è attiva, non la tocca.',
+  'flow.limit': 'Massimo per {name}',
+  'flow.limit.tip': 'Massimo per questa utenza',
+  'flow.limit.placeholder': 'Vuoto: vale la mappa',
+  'flow.limit.hint':
+    'Vale per tutte le mappe; si usa il più basso tra questo valore e la soglia della mappa.',
+  'flow.limit.fiveHour.tip':
+    'Il motore lascia questa utenza a questa percentuale delle 5 ore, se è più bassa della soglia della mappa. Vuoto: vale la mappa.',
+  'flow.limit.sevenDay.tip':
+    'Il motore lascia questa utenza a questa percentuale dei 7 giorni, se è più bassa della soglia della mappa. Vuoto: vale la mappa.',
+  'flow.limit.save.tip': 'Salva il massimo di questa utenza (campi vuoti: lo toglie).',
+  'flow.limit.cancel.tip': 'Chiude senza salvare.',
+  'flow.limit.saved': 'Massimo di {name} salvato.',
+  'flow.limit.removed': 'Massimo di {name} tolto.',
+  'flow.limit.max5h': 'max 5h {pct}',
+  'flow.limit.max7d': 'max 7d {pct}',
   'flow.active': 'attiva',
   'flow.missing': 'non esiste in cswap',
   'flow.missingWarn': 'La mappa cita utenze che non esistono in cswap: {list}. Il motore le salta.',

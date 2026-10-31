@@ -59,3 +59,37 @@ describe('withTargetNames', () => {
     expect(withTargetNames(none, accounts).fiveHour.targetName).toBeUndefined();
   });
 });
+
+describe('engineMarks: soglie effettive per utenza (F22)', () => {
+  const thresholds = [
+    { number: 6, fiveHour: 85, sevenDay: 98, fiveHourCapped: true, sevenDayCapped: false },
+    { number: 1, fiveHour: 95, sevenDay: 80, fiveHourCapped: false, sevenDayCapped: true },
+  ];
+  const withThresholds = (rules: Partial<EngineState['rules']>): EngineState => ({
+    ...state({ enabled: true, ...rules }, run),
+    thresholds,
+  });
+
+  it('il trattino dell’attiva usa la soglia effettiva calcolata dal motore', () => {
+    const marks = engineMarks(withThresholds({}), 6);
+    expect([marks.fiveHour.pct, marks.sevenDay?.pct]).toEqual([85, 98]);
+  });
+
+  it('7d della mappa spenta: il trattino c’è se l’utenza ha un massimo 7d', () => {
+    const s = withThresholds({ sevenDayThreshold: null });
+    s.thresholds = [
+      { ...thresholds[1]!, sevenDay: 80 },
+      { ...thresholds[0]!, sevenDay: null },
+    ];
+    expect(engineMarks(s, 1).sevenDay?.pct).toBe(80);
+    expect(engineMarks(s, 6).sevenDay).toBeNull();
+  });
+
+  it('senza attiva o senza soglie del motore: quelle della mappa', () => {
+    expect(engineMarks(withThresholds({ fiveHourThreshold: 90 })).fiveHour.pct).toBe(90);
+    expect(engineMarks(withThresholds({ fiveHourThreshold: 90 }), 3).fiveHour.pct).toBe(90);
+    expect(engineMarks(state({ enabled: true, fiveHourThreshold: 90 }, run), 6).fiveHour.pct).toBe(
+      90,
+    );
+  });
+});

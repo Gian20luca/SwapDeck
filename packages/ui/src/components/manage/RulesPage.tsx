@@ -1,5 +1,6 @@
 import type {
   Account,
+  AccountLimit,
   EngineProfiles,
   EngineRules,
   ProfileCommand,
@@ -24,6 +25,7 @@ import {
   setIncluded,
   toDraft,
   validateRules,
+  withAccountLimit,
   type RulesDraft,
   type RulesErrors,
 } from '../../lib/engineRules.js';
@@ -33,6 +35,7 @@ import { useLoad } from '../../lib/useLoad.js';
 import { ConfirmDialog } from '../ConfirmDialog.js';
 import { InfoTip, WithInfo } from '../InfoTip.js';
 import { Tooltip } from '../Tooltip.js';
+import { AccountLimitForm } from './AccountLimitForm.js';
 import { FlowList } from './FlowList.js';
 import { MapNameForm, MapSelector, profileLabel } from './MapSelector.js';
 import {
@@ -139,6 +142,8 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(initialNotice);
   const [cloning, setCloning] = useState(false);
+  /** Utenza con il riquadro «Massimo per questa utenza» aperto (F22). */
+  const [limitFor, setLimitFor] = useState<number | null>(null);
   /** Prima accensione da confermare: da «Accendi» o dal salvataggio con «Motore acceso». */
   const [firstOn, setFirstOn] = useState<'turnOn' | 'save' | null>(null);
   const boxId = useId();
@@ -209,8 +214,8 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
   }
 
   /** Salva; con `keepDraft` la bozza resta com'è, salvo l'elenco dei conflitti ignorati. */
-  async function persist(next: EngineRules, doneText: string, keepDraft = false) {
-    if (!backend.setEngineRules) return;
+  async function persist(next: EngineRules, doneText: string, keepDraft = false): Promise<boolean> {
+    if (!backend.setEngineRules) return false;
     setSaving(true);
     setNotice(null);
     try {
@@ -224,11 +229,13 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
         patch({ ignoredConflicts });
       } else adopt(saved, profiles);
       setNotice({ tone: 'info', text: doneText });
+      return true;
     } catch (error) {
       setNotice({
         tone: 'danger',
         text: t('common.actionFailed', { message: errorMessage(error) }),
       });
+      return false;
     } finally {
       setSaving(false);
     }
@@ -289,6 +296,19 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
     await persist(
       { ...rulesNow, ignoredConflicts: next },
       t(ignore ? 'rules.conflict.ignored' : 'rules.conflict.unignored'),
+      true,
+    );
+  }
+
+  /**
+   * Massimo di un'utenza (F22): comune a tutte le mappe, si salva subito sulle regole salvate
+   * (anche con un preset attivo) senza toccare la bozza.
+   */
+  function saveLimit(n: number, limit: AccountLimit | null): Promise<boolean> {
+    const name = nameOf(n);
+    return persist(
+      withAccountLimit(rulesNow, n, limit),
+      t(limit ? 'flow.limit.saved' : 'flow.limit.removed', { name }),
       true,
     );
   }
@@ -516,6 +536,26 @@ function RulesEditor({ data, accounts, accountsKnown, onSaved, initialNotice }: 
                 )
               }
               onToggle={(n, included) => setDraft((d) => setIncluded(d, accounts, n, included))}
+              limits={rulesNow.accountLimits}
+              onLimit={(n) => setLimitFor((open) => (open === n ? null : n))}
+              limitDisabled={busy}
+              limitPanel={
+                limitFor === null
+                  ? null
+                  : {
+                      number: limitFor,
+                      panel: (
+                        <AccountLimitForm
+                          key={limitFor}
+                          name={nameOf(limitFor)}
+                          initial={rulesNow.accountLimits?.[limitFor]}
+                          busy={busy}
+                          onSave={(limit) => saveLimit(limitFor, limit)}
+                          onCancel={() => setLimitFor(null)}
+                        />
+                      ),
+                    }
+              }
             />
             {errors.order && (
               <span className="sd-field-error" role="alert">

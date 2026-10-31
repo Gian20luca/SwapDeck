@@ -1,21 +1,22 @@
-import type { Account } from '@swapdeck/types';
+import type { Account, EngineState } from '@swapdeck/types';
 import { useEffect, useMemo, useState } from 'react';
 import { useBackend } from '../backend/context.js';
 import { engineMarks, withTargetNames, type EngineMarks } from './engineMarks.js';
 
 /**
  * Soglie del motore dal Backend; rilette a ogni aggiornamento dello stato. `null` se l'host non le
- * offre. Con `accounts` i trattini portano anche il nome dell'utenza di destinazione.
+ * offre. Con `accounts` i trattini usano le soglie effettive dell'utenza attiva (F22) e portano il
+ * nome dell'utenza di destinazione.
  */
 export function useEngineMarks(accounts?: readonly Account[]): EngineMarks | null {
   const backend = useBackend();
-  const [marks, setMarks] = useState<EngineMarks | null>(null);
+  const [state, setState] = useState<EngineState | null>(null);
   useEffect(() => {
     if (!backend.getEngineState) return;
     let alive = true;
     const load = () => {
       backend.getEngineState?.().then(
-        (state) => alive && setMarks(engineMarks(state)),
+        (next) => alive && setState(next),
         () => {},
       );
     };
@@ -26,8 +27,9 @@ export function useEngineMarks(accounts?: readonly Account[]): EngineMarks | nul
       off();
     };
   }, [backend]);
-  return useMemo(
-    () => (marks && accounts ? withTargetNames(marks, accounts) : marks),
-    [marks, accounts],
-  );
+  return useMemo(() => {
+    if (!state) return null;
+    const marks = engineMarks(state, accounts?.find((a) => a.active)?.number);
+    return accounts ? withTargetNames(marks, accounts) : marks;
+  }, [state, accounts]);
 }

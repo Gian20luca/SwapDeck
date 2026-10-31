@@ -75,6 +75,20 @@ export const enFlow: Record<keyof typeof itFlow, string> = {
   'flow.include': 'Include {name}',
   'flow.include.tip':
     'On: the engine may use this account. Off: it never picks it and, if it is active, leaves it alone.',
+  'flow.limit': 'Maximum for {name}',
+  'flow.limit.tip': 'Maximum for this account',
+  'flow.limit.placeholder': 'Empty: the map applies',
+  'flow.limit.hint': 'Applies to every map; the lower of this value and the map threshold is used.',
+  'flow.limit.fiveHour.tip':
+    'The engine leaves this account at this 5-hour percentage, if it is lower than the map threshold. Empty: the map applies.',
+  'flow.limit.sevenDay.tip':
+    'The engine leaves this account at this 7-day percentage, if it is lower than the map threshold. Empty: the map applies.',
+  'flow.limit.save.tip': 'Saves the maximum of this account (empty fields remove it).',
+  'flow.limit.cancel.tip': 'Closes without saving.',
+  'flow.limit.saved': 'Maximum of {name} saved.',
+  'flow.limit.removed': 'Maximum of {name} removed.',
+  'flow.limit.max5h': 'max 5h {pct}',
+  'flow.limit.max7d': 'max 7d {pct}',
   'flow.active': 'active',
   'flow.missing': 'not in cswap',
   'flow.missingWarn':

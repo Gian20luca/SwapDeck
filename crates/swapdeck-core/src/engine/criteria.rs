@@ -140,7 +140,6 @@ fn missing_data(ctx: &Ctx<'_>) -> String {
 fn by_criterion(ctx: &Ctx<'_>, cands: &[(usize, &Account)]) -> Option<(u32, String)> {
     let now = ctx.now;
     let rules = ctx.rules;
-    let (t5, t7) = (rules.five_hour_threshold, rules.seven_day_limit());
     let p5 = |a: &Account| effective_pct(win5(a), now);
     let p7 = |a: &Account| effective_pct(win7(a), now);
     let asc2 = |x: &(f64, f64), y: &(f64, f64)| x.0.total_cmp(&y.0).then(x.1.total_cmp(&y.1));
@@ -151,7 +150,11 @@ fn by_criterion(ctx: &Ctx<'_>, cands: &[(usize, &Account)]) -> Option<(u32, Stri
         ReserveCriterion::LowestWeekly => best_by(cands, |a| Some((p7(a), p5(a))), asc2)
             .map(|(a, k)| (a.number, format!("settimanale più bassa ({}%)", pct(k.0)))),
         ReserveCriterion::Best => {
-            let margin = |a: &Account| (t5 - p5(a)).min(t7 - p7(a));
+            // Margine sulle soglie effettive di ciascuna (F22: massimo dell'utenza compreso).
+            let margin = |a: &Account| {
+                let t = rules.thresholds(a.number);
+                (t.five_hour - p5(a)).min(t.seven_day_limit() - p7(a))
+            };
             best_by(cands, |a| Some(margin(a)), |x, y| y.total_cmp(x)).map(|(a, m)| {
                 (
                     a.number,
@@ -252,14 +255,12 @@ fn score(ctx: &Ctx<'_>, a: &Account) -> Option<f64> {
     let u = a.usage.as_ref()?;
     let margin = |w: Option<&UsageWindow>, t: f64| w.map(|w| (t - effective_pct(Some(w), now)) / t);
     let week = live_week(a, now);
+    let t = rules.thresholds(a.number);
     let factors = [
-        (
-            w.five_hour,
-            margin(u.five_hour.as_ref(), rules.five_hour_threshold),
-        ),
+        (w.five_hour, margin(u.five_hour.as_ref(), t.five_hour)),
         (
             w.seven_day,
-            margin(u.seven_day.as_ref(), rules.seven_day_limit()),
+            margin(u.seven_day.as_ref(), t.seven_day_limit()),
         ),
         (
             w.reset,

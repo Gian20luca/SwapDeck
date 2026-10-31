@@ -163,13 +163,37 @@ pub(crate) fn run_cases(rules: &EngineRules, cases: Vec<Case>) {
             list: &l,
             conflicts: &[],
         };
+        let mem = loaded(c.mem, rules);
         assert_eq!(
-            decide(obs, rules, &loaded(c.mem, rules), NOW),
+            decide(obs, rules, &mem, NOW),
             c.expect,
             "scenario: {}",
             c.name
         );
+        // F22: massimi non più bassi della mappa su tutte le utenze non cambiano nulla
+        // (decisione, motivo e candidato), in ogni scenario.
+        let neutral = with_neutral_limits(rules, &l);
+        assert_eq!(
+            evaluate(obs, &neutral, &mem, NOW),
+            evaluate(obs, rules, &mem, NOW),
+            "scenario con massimi neutri: {}",
+            c.name
+        );
     }
+}
+
+/// `rules` con un massimo per ogni utenza di `l` che non ne ha uno, uguale alla soglia della mappa sulle 5 ore e
+/// al 100% sui 7 giorni: la soglia della mappa resta quella che decide.
+pub(crate) fn with_neutral_limits(rules: &EngineRules, l: &ListResponse) -> EngineRules {
+    let mut out = rules.clone();
+    for a in &l.accounts {
+        out.account_limits.entry(a.number).or_insert(AccountLimit {
+            // Una soglia della mappa non valida non deve aggiungere un massimo non valido.
+            five_hour: Some(rules.five_hour_threshold).filter(|t| *t > 0.0 && *t <= 100.0),
+            seven_day: Some(100.0),
+        });
+    }
+    out
 }
 
 #[test]

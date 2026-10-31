@@ -1,4 +1,10 @@
-import type { Account, EngineRules, ReserveCriterion, ScoreWeights } from '@swapdeck/types';
+import type {
+  Account,
+  AccountLimit,
+  EngineRules,
+  ReserveCriterion,
+  ScoreWeights,
+} from '@swapdeck/types';
 import type { MessageKey } from '../i18n/index.js';
 
 /** I 9 criteri di scelta della riserva, nell'ordine dell'interfaccia. */
@@ -245,4 +251,51 @@ export function validateRules(rules: EngineRules): RulesErrors {
   if (rules.reserveCriterion === 'model-headroom' && !(rules.headroomModel ?? '').trim())
     errors.model = 'rules.err.model';
   return errors;
+}
+
+/** Campi del riquadro «Massimo per questa utenza» (F22): testo dei campi, vuoto = vale la mappa. */
+export interface LimitDraft {
+  fiveHour: string;
+  sevenDay: string;
+}
+
+export function toLimitDraft(limit: AccountLimit | undefined): LimitDraft {
+  const text = (v: number | undefined) => (v === undefined ? '' : String(v));
+  return { fiveHour: text(limit?.fiveHour), sevenDay: text(limit?.sevenDay) };
+}
+
+/**
+ * Massimo dai campi, con la validazione delle soglie della mappa (1–100); `limit` è `null` se
+ * i campi sono vuoti (massimo tolto).
+ */
+export function fromLimitDraft(draft: LimitDraft): {
+  limit: AccountLimit | null;
+  errors: Partial<Record<'fiveHour' | 'sevenDay', MessageKey>>;
+} {
+  const errors: Partial<Record<'fiveHour' | 'sevenDay', MessageKey>> = {};
+  const limit: AccountLimit = {};
+  const read = (key: 'fiveHour' | 'sevenDay') => {
+    const text = draft[key].trim();
+    if (text === '') return;
+    const value = Number(text);
+    if (pctOk(value)) limit[key] = value;
+    else errors[key] = 'rules.err.threshold';
+  };
+  read('fiveHour');
+  read('sevenDay');
+  const empty = limit.fiveHour === undefined && limit.sevenDay === undefined;
+  return { limit: empty ? null : limit, errors };
+}
+
+/** Regole con il massimo dell'utenza `number` sostituito (`null` = tolto). */
+export function withAccountLimit(
+  rules: EngineRules,
+  number: number,
+  limit: AccountLimit | null,
+): EngineRules {
+  const limits = { ...(rules.accountLimits ?? {}) };
+  if (limit) limits[number] = limit;
+  else delete limits[number];
+  const { accountLimits: _old, ...rest } = rules;
+  return Object.keys(limits).length > 0 ? { ...rest, accountLimits: limits } : rest;
 }

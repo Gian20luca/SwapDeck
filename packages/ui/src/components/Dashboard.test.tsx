@@ -259,3 +259,23 @@ describe('Dashboard: aggiornamento e storico', () => {
     expect(screen.queryByRole('button', { name: /storico/i })).toBeNull();
   });
 });
+
+describe('Dashboard: massimo per utenza (F22)', () => {
+  it('il trattino del motore sulla barra dell’attiva è alla soglia effettiva (massimo più basso)', async () => {
+    renderDashboard(
+      fake({ rules: { enabled: true, primary: 6, accountLimits: { 6: { fiveHour: 70 } } } }),
+    );
+    await cards();
+    expect(await screen.findByRole('note', { name: 'Soglia del motore: 70%' })).toBeInTheDocument();
+    // 7d: decide la mappa (98).
+    expect(screen.getByRole('note', { name: 'Soglia del motore: 98%' })).toBeInTheDocument();
+  });
+
+  it('massimo più alto della mappa: il trattino resta alla soglia della mappa', async () => {
+    renderDashboard(
+      fake({ rules: { enabled: true, primary: 6, accountLimits: { 6: { fiveHour: 99 } } } }),
+    );
+    await cards();
+    expect(await screen.findByRole('note', { name: 'Soglia del motore: 95%' })).toBeInTheDocument();
+  });
+});

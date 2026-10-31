@@ -61,6 +61,12 @@ Con 2–3 account di prova caricati. Motore **spento** all'inizio. Le regole son
 | 3.16 | Ferma `cswap auto` | Il motore riprende da solo (notifica «motore ripreso») | [ ] |
 | 3.17 | `ignoredConflicts` con l'id del conflitto | Il motore non si sospende più per quel conflitto | [ ] |
 | 3.18 | Un solo motore: apri una seconda istanza o `swapdeck-cli headless` | Esce con codice **3** (lock occupato) o resta in osservazione | [ ] |
+| 3.19 | **Massimo per utenza** (F22): rotellina dell'utenza attiva, «Soglia sulle 5 ore» sotto il suo consumo attuale e sopra quello di una riserva, Salva | Nella riga «· max 5h N%» e rotellina evidenziata; il trattino 5h della barra dell'attiva si sposta a N; entro un giro cambia account e il motivo dice «al suo massimo delle 5 ore (N%)» | [ ] |
+| 3.20 | Massimo **più alto** della soglia della mappa (es. 99 con mappa 95) | Nessun effetto: trattino e cambio alla soglia della mappa, motivo senza «massimo» | [ ] |
+| 3.21 | Massimo su un preset in sola lettura (Eco), poi cambio di mappa | Si salva anche sul preset; il massimo resta su tutte le mappe e nella riga | [ ] |
+| 3.22 | Riserva con un massimo sotto il suo consumo | «Adesso andrebbe a» non la propone e il motore non la sceglie; con tutte le utenze oltre il proprio massimo resta sull'attiva e manda «nessuna riserva disponibile» | [ ] |
+| 3.23 | Ritorno alla principale con massimo 7d (mappa con 7 giorni spenta) | Il trattino 7d compare al massimo; si torna solo sotto massimo meno isteresi | [ ] |
+| 3.24 | Preavviso di cambio con il massimo | Il preavviso arriva rispetto al massimo (non alla soglia della mappa); campi svuotati + Salva tolgono il massimo | [ ] |
 
 ## 4. Comandi che scrivono, dall'app
 

@@ -1,5 +1,6 @@
 // Generato da swapdeck-core (ts-rs): non modificare a mano. Rigenera con `pnpm gen:types`.
 export type * from './Account.js';
+export type * from './AccountLimit.js';
 export type * from './AccountRef.js';
 export type * from './ActionOutcome.js';
 export type * from './ActiveAccount.js';
@@ -26,6 +27,7 @@ export type * from './DailySummaryRule.js';
 export type * from './Decision.js';
 export type * from './DecisionRecord.js';
 export type * from './DirectoryMapping.js';
+export type * from './EffectiveThresholds.js';
 export type * from './EngineMemory.js';
 export type * from './EngineProfiles.js';
 export type * from './EngineRules.js';

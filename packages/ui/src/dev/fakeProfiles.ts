@@ -1,6 +1,7 @@
 import type {
   Account,
   Candidate,
+  EffectiveThresholds,
   EngineProfiles,
   EngineRules,
   PresetKind,
@@ -59,6 +60,7 @@ function settings(rules: EngineRules): string {
     dryRun: _d,
     firstEnableConfirmed: _f,
     ignoredConflicts: _i,
+    accountLimits: _l,
     ...rest
   } = rules;
   // Una sola forma della lista: esclusi fuori da `order` e in ordine di numero.
@@ -157,7 +159,37 @@ export function applyProfile(
       break;
     }
   }
+  // Massimi per utenza (F22): comuni a tutte le mappe, come in `carry_globals`.
+  const now = next.profiles.find((p) => p.id === next.activeId);
+  if (now) {
+    if (activeRules.accountLimits)
+      now.rules.accountLimits = structuredClone(activeRules.accountLimits);
+    else delete now.rules.accountLimits;
+  }
   return next;
+}
+
+/**
+ * Soglie effettive finte per utenza (specchio di `EngineRules::thresholds`, solo per l'anteprima):
+ * il più basso tra mappa e massimo dell'utenza.
+ */
+export function fakeThresholds(
+  rules: EngineRules,
+  accounts: readonly Account[],
+): EffectiveThresholds[] {
+  return accounts.map(({ number }) => {
+    const own = rules.accountLimits?.[number];
+    const map7 = rules.sevenDayThreshold ?? 100;
+    const five = own?.fiveHour !== undefined && own.fiveHour < rules.fiveHourThreshold;
+    const seven = own?.sevenDay !== undefined && own.sevenDay < map7;
+    return {
+      number,
+      fiveHour: five ? own.fiveHour! : rules.fiveHourThreshold,
+      sevenDay: seven ? own.sevenDay! : rules.sevenDayThreshold,
+      fiveHourCapped: five,
+      sevenDayCapped: seven,
+    };
+  });
 }
 
 /** Candidato finto: la prima utenza inclusa, diversa dall'attiva e senza limiti. */

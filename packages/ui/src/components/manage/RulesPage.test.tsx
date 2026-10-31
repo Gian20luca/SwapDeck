@@ -106,10 +106,15 @@ describe('RulesPage: flusso a lista', () => {
     expect(save.mock.calls[0]![0]).toMatchObject({ order: [6, 1, 2, 3, 5], excluded: [2, 5] });
   });
 
-  it('nessun «Usa ora» nelle righe: solo maniglia, nome, % e interruttore', async () => {
+  it('nessun «Usa ora» nelle righe: solo maniglia, nome, %, interruttore e rotellina del massimo', async () => {
     await setup({ rules: { primary: 6, reserves: [1, 3] } });
     const row = screen.getByTestId('flow-row-1');
-    expect(within(row).getAllByRole('button')).toHaveLength(1);
+    // F22: oltre alla maniglia c'è la rotellina «Massimo per questa utenza».
+    expect(
+      within(row)
+        .getAllByRole('button')
+        .map((b) => b.getAttribute('aria-label')),
+    ).toEqual(['Sposta alias1, posizione 2 di 5', 'Massimo per alias1']);
     expect(within(row).getByRole('switch')).toBeInTheDocument();
     expect(within(row).getByText(/5h .* · 7d /)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Usa ora/ })).toBeNull();
@@ -578,5 +583,106 @@ describe('RulesPage: avvisi dalla lista di cswap', () => {
     });
     renderWith(<RulesPage />, backend);
     expect(await screen.findByText(/«Ghost» sconosciuto/)).toBeInTheDocument();
+  });
+});
+
+describe('RulesPage: massimo per utenza (F22)', () => {
+  const panel = () => screen.getByRole('group', { name: 'Massimo per alias1' });
+
+  it('la rotellina apre il riquadro; Salva salva subito il solo massimo e lo mostra nella riga', async () => {
+    const { backend, save, user } = await setup({ rules: { primary: 6, reserves: [1, 3] } });
+    const gear = screen.getByRole('button', { name: 'Massimo per alias1' });
+    expect(gear).toHaveAttribute('data-set', 'false');
+    // Una modifica in corso alla mappa non viene salvata col massimo.
+    await user.clear(screen.getByLabelText('Soglia sulle 5 ore (%)'));
+    await user.type(screen.getByLabelText('Soglia sulle 5 ore (%)'), '90');
+    await user.click(gear);
+    expect(gear).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      within(panel()).getByText(
+        'Vale per tutte le mappe; si usa il più basso tra questo valore e la soglia della mappa.',
+      ),
+    ).toBeInTheDocument();
+    const seven = within(panel()).getByLabelText('Soglia sui 7 giorni (%)');
+    expect(seven).toHaveAttribute('placeholder', 'Vuoto: vale la mappa');
+    const before = (await backend.getEngineState()).rules;
+    await user.type(seven, '80');
+    await user.click(within(panel()).getByRole('button', { name: 'Salva' }));
+    expect(await screen.findByText('Massimo di alias1 salvato.')).toBeInTheDocument();
+    expect(save.mock.calls[0]![0]).toEqual({ ...before, accountLimits: { 1: { sevenDay: 80 } } });
+    expect(screen.queryByRole('group', { name: 'Massimo per alias1' })).toBeNull();
+    const row = screen.getByTestId('flow-row-1');
+    expect(within(row).getByText(/5h .* · 7d .* · max 7d 80%$/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Massimo per alias1' })).toHaveAttribute(
+      'data-set',
+      'true',
+    );
+    // La bozza della mappa resta com'era.
+    expect(screen.getByLabelText('Soglia sulle 5 ore (%)')).toHaveValue(90);
+  });
+
+  it('Invio nel riquadro salva il solo massimo, non la mappa', async () => {
+    const { backend, save, user } = await setup({ rules: { primary: 6, reserves: [1, 3] } });
+    await user.clear(screen.getByLabelText('Soglia sulle 5 ore (%)'));
+    await user.type(screen.getByLabelText('Soglia sulle 5 ore (%)'), '90');
+    await user.click(screen.getByRole('button', { name: 'Massimo per alias1' }));
+    const before = (await backend.getEngineState()).rules;
+    await user.type(within(panel()).getByLabelText('Soglia sui 7 giorni (%)'), '80{Enter}');
+    expect(await screen.findByText('Massimo di alias1 salvato.')).toBeInTheDocument();
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save.mock.calls[0]![0]).toEqual({ ...before, accountLimits: { 1: { sevenDay: 80 } } });
+    expect(screen.getByLabelText('Soglia sulle 5 ore (%)')).toHaveValue(90);
+  });
+
+  it('stessa validazione delle soglie della mappa; Annulla chiude senza salvare', async () => {
+    const { save, user } = await setup({ rules: { primary: 6, reserves: [1, 3] } });
+    await user.click(screen.getByRole('button', { name: 'Massimo per alias1' }));
+    await user.type(within(panel()).getByLabelText('Soglia sulle 5 ore (%)'), '120');
+    expect(within(panel()).getByText('La soglia va da 1 a 100.')).toBeInTheDocument();
+    expect(within(panel()).getByRole('button', { name: 'Salva' })).toBeDisabled();
+    await user.click(within(panel()).getByRole('button', { name: 'Annulla' }));
+    expect(screen.queryByRole('group', { name: 'Massimo per alias1' })).toBeNull();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it('campi svuotati: il massimo si toglie', async () => {
+    const { save, user } = await setup({
+      rules: {
+        primary: 6,
+        reserves: [1, 3],
+        accountLimits: { 1: { fiveHour: 85 }, 3: { sevenDay: 70 } },
+      },
+    });
+    const row = screen.getByTestId('flow-row-1');
+    expect(within(row).getByText(/ · max 5h 85%$/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Massimo per alias1' }));
+    const five = within(panel()).getByLabelText('Soglia sulle 5 ore (%)');
+    expect(five).toHaveValue(85);
+    await user.clear(five);
+    await user.click(within(panel()).getByRole('button', { name: 'Salva' }));
+    expect(await screen.findByText('Massimo di alias1 tolto.')).toBeInTheDocument();
+    expect(save.mock.calls[0]![0].accountLimits).toEqual({ 3: { sevenDay: 70 } });
+    expect(within(screen.getByTestId('flow-row-1')).queryByText(/max/)).toBeNull();
+  });
+
+  it('funziona anche con un preset in sola lettura e resta cambiando mappa', async () => {
+    const { backend, save, user } = await setup({ rules: { primary: 6, reserves: [1, 3] } });
+    await user.selectOptions(screen.getByLabelText('Mappa attiva'), 'eco');
+    await screen.findByText('Mappa attiva: Eco.');
+    expect(screen.getByRole('button', { name: 'Sposta alias1, posizione 2 di 5' })).toBeDisabled();
+    const gear = screen.getByRole('button', { name: 'Massimo per alias1' });
+    expect(gear).toBeEnabled();
+    const before = (await backend.getEngineState()).rules;
+    await user.click(gear);
+    await user.type(within(panel()).getByLabelText('Soglia sulle 5 ore (%)'), '70');
+    await user.click(within(panel()).getByRole('button', { name: 'Salva' }));
+    expect(await screen.findByText('Massimo di alias1 salvato.')).toBeInTheDocument();
+    expect(save.mock.calls[0]![0]).toEqual({ ...before, accountLimits: { 1: { fiveHour: 70 } } });
+    await user.selectOptions(screen.getByLabelText('Mappa attiva'), 'personal');
+    await screen.findByText(/Mappa attiva: Personale/);
+    expect((await backend.getEngineState()).rules.accountLimits).toEqual({ 1: { fiveHour: 70 } });
+    expect(
+      within(screen.getByTestId('flow-row-1')).getByText(/ · max 5h 70%$/),
+    ).toBeInTheDocument();
   });
 });

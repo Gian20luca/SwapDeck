@@ -835,16 +835,7 @@ fn engine_state(paths: &AppPaths) -> Res<EngineState> {
         ),
         (None, None) => None,
     };
-    let warnings = list
-        .as_ref()
-        .map(|list| rules.list_warnings(list))
-        .unwrap_or_default();
-    Ok(EngineState {
-        rules,
-        view,
-        conflicts,
-        warnings,
-    })
+    Ok(EngineState::new(rules, view, conflicts, list.as_ref()))
 }
 
 /// Valida e salva le regole; il motore in esecuzione (`headless`) le rilegge al giro dopo.

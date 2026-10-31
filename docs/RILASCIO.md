@@ -3,6 +3,10 @@
 Workflow: `.github/workflows/release.yml`. Produce installer, `swapdeck-cli`, `.vsix` per piattaforma,
 firme dell'updater e `latest.json`, e li mette in una release **in bozza**: la pubblicazione resta manuale.
 
+## Novità 0.2.3
+
+- **Massimo per utenza**: nella lista della scheda Regole la rotellina accanto a ogni utenza fissa un massimo sulle 5 ore e/o sui 7 giorni, valido per tutte le mappe. Il motore usa il più basso tra il massimo e la soglia della mappa (per esempio 100% sulla propria utenza e 80% su quelle dei colleghi con una mappa a 95%: le altre si lasciano all'80%). Nella riga compare «· max 7d 80%» e la rotellina è evidenziata; il trattino sulle barre, «Adesso andrebbe a», il preavviso e i motivi usano la soglia effettiva.
+
 ## Novità 0.2.2
 
 - **Rifai login** per un'utenza già registrata con login scaduto o in scadenza: SwapDeck mette in pausa il motore, salva l'utenza attiva, avvia `claude auth login` e mostra il link con «Copia link»; la persona accede e rimanda il codice, che si incolla in «Codice». Se l'email collegata è quella giusta l'utenza si aggiorna e torna attiva quella di prima, altrimenti nulla cambia. Attesa massima 5 minuti, sempre «Annulla». Percorso di Claude Code facoltativo in Impostazioni → Avanzate.

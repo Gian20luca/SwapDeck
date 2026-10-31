@@ -88,6 +88,7 @@ Cambia account al posto tuo. È **spento di default**.
 | `minSwitchGapSecs`      | pausa minima tra due cambi                                            | 300             |
 | `maxUsageAgeSecs`       | età massima di un consumo per fidarsene                               | 900             |
 | `ignoredConflicts`      | id dei conflitti da ignorare (vedi sotto), senza maiuscole/minuscole  | vuoto           |
+| `accountLimits`         | massimo per utenza sulle 5 ore e sui 7 giorni (vedi sotto)            | vuoto           |
 
 L'intervallo di controllo non sta in `engine` ma in cima alla config: `pollIntervalSeconds` (default e minimo 60, in secondi).
 
@@ -115,6 +116,8 @@ I 9 criteri di `reserveCriterion` (nome nella scheda Regole e valore in config).
 | Sicura                 | Ritmo sicuro                 | 95    | 98       | 10                   |
 
 In tutti il ritorno alla principale è acceso, la pausa tra due cambi è di 300 s e i consumi valgono per 900 s. La scheda mostra anche «Adesso andrebbe a» (l'utenza che il motore sceglierebbe se l'attiva superasse la soglia ora) e gli avvisi sulla lista, per esempio un modello che nessuna utenza riporta.
+
+**Massimo per utenza.** Nella lista della scheda Regole la rotellina accanto all'interruttore di un'utenza apre «Soglia sulle 5 ore (%)» e «Soglia sui 7 giorni (%)» di quella sola utenza. È un tetto, comune a tutte le mappe (preset compresi): il motore usa il più basso tra il massimo e la soglia della mappa (mappa 95 e massimo 85 → 85; mappa 50 e massimo 85 → 50); campo vuoto = vale la mappa, e con la 7 giorni della mappa spenta vale il massimo, se c'è. Vale per l'uscita dall'attiva, la scelta della riserva (una riserva oltre il proprio massimo non si sceglie), i criteri a margine, il ritorno alla principale (massimo meno isteresi), «Adesso andrebbe a», il preavviso e il trattino sulle barre; il motivo lo dice («al suo massimo dei 7 giorni (80%)»). Se tutte le utenze sono oltre il proprio massimo il motore resta sull'attiva con «nessuna riserva disponibile». In config: `engine.accountLimits`, per esempio `{"1": {"sevenDay": 80}}` (chiave = numero dell'utenza, valori 1–100).
 
 Se la riserva scelta è al limite si passa alla successiva. L'isteresi vale solo sulle finestre che hanno fatto lasciare il principale (5 ore, 7 giorni o entrambe). Le regole stanno nella sezione `engine` di `config.json`, l'app e il processo headless le rileggono a ogni giro, e si leggono/scrivono anche dalla scheda «Regole» o con `swapdeck-cli config get|set`.
 

@@ -19,13 +19,18 @@ export interface EngineMark {
 /** Trattini dell'account attivo. Il motore decide solo sulle 5 ore e sui 7 giorni: i limiti per modello non hanno soglia. */
 export interface EngineMarks {
   fiveHour: EngineMark;
-  /** `null` se `sevenDayThreshold` è spenta (solo il blocco al 100%). */
+  /** `null` se la soglia 7d è spenta (solo il blocco al 100%) e l'utenza non ha un massimo 7d. */
   sevenDay: EngineMark | null;
 }
 
-/** Soglie e modo dalle regole e dallo stato del motore (letti dal Backend, mai fissi nel codice). */
-export function engineMarks(state: EngineState): EngineMarks {
+/**
+ * Soglie e modo dalle regole e dallo stato del motore (letti dal Backend, mai fissi nel codice).
+ * Con `active` le soglie sono quelle effettive dell'utenza attiva calcolate dal motore
+ * (`EngineState.thresholds`: anche il suo massimo, F22); senza, quelle della mappa.
+ */
+export function engineMarks(state: EngineState, active?: number | null): EngineMarks {
   const { rules, view } = state;
+  const own = state.thresholds?.find((t) => t.number === active);
   const suspended = view?.suspended ?? null;
   let mode: MarkMode = 'active';
   let reason: SuspendReason | null = null;
@@ -41,9 +46,11 @@ export function engineMarks(state: EngineState): EngineMarks {
     reason,
     target: view?.candidate?.number ?? null,
   });
+  const fiveHour = own ? own.fiveHour : rules.fiveHourThreshold;
+  const sevenDay = own ? own.sevenDay : rules.sevenDayThreshold;
   return {
-    fiveHour: make(rules.fiveHourThreshold),
-    sevenDay: rules.sevenDayThreshold === null ? null : make(rules.sevenDayThreshold),
+    fiveHour: make(fiveHour),
+    sevenDay: sevenDay === null ? null : make(sevenDay),
   };
 }
 

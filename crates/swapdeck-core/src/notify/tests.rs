@@ -986,3 +986,32 @@ fn earlier_available_to_the_first_is_a_return() {
         assert_eq!(kinds(&h.with(&input, NOW)), [expect]);
     }
 }
+
+/// F22: il preavviso usa la soglia effettiva dell'attiva (il suo massimo, se più basso).
+#[test]
+fn switch_preview_uses_the_account_maximum() {
+    let mut rules = only(&["preview"]);
+    rules.switch_preview.points_before = 5.0;
+    rules.switch_preview.minutes_before = 0;
+    let ok = idle(IdleReason::BelowThreshold);
+    let l = two(76.0, 0.0);
+    // Mappa a 90: 14 punti, nessun preavviso.
+    let er = engine_rules();
+    assert!(
+        H::new(rules.clone())
+            .with(&engine_input(&l, &er, &ok, None), NOW)
+            .is_empty()
+    );
+    // Massimo dell'utenza 1 a 80: 4 punti, preavviso con la soglia 80.
+    let mut capped = engine_rules();
+    capped.account_limits.insert(
+        1,
+        crate::engine::AccountLimit {
+            five_hour: Some(80.0),
+            seven_day: None,
+        },
+    );
+    let out = H::new(rules).with(&engine_input(&l, &capped, &ok, None), NOW);
+    assert_eq!(kinds(&out), [NotificationKind::SwitchPreview]);
+    assert!(out[0].body.it.contains("80%"), "{}", out[0].body.it);
+}

@@ -96,6 +96,39 @@
   color: var(--sd-accent);
   cursor: grabbing;
 }
+/* Rotellina del massimo per utenza (F22): accesa se l'utenza ha un massimo. */
+.sd-flow__gear {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--sd-muted);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  padding: 6px 3px;
+  cursor: pointer;
+}
+.sd-flow__gear:disabled {
+  cursor: default;
+}
+.sd-flow__gear[data-set='true'],
+.sd-flow__gear[aria-expanded='true'] {
+  color: var(--sd-accent);
+}
+/* Riquadro del massimo aperto: va a capo sotto la riga, che resta su una linea. */
+.sd-flow__item[data-open='true'] {
+  flex-wrap: wrap;
+}
+.sd-flow__item[data-open='true'] > .sd-flow__main {
+  flex-basis: 0;
+}
+.sd-flow__limit {
+  flex: 1 0 100%;
+  display: grid;
+  gap: 6px;
+  padding: 6px 2px 2px;
+  border-top: 1px solid var(--sd-border);
+}
 .sd-flow__main {
   display: grid;
   flex: 1 1 auto;
