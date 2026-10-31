@@ -11,7 +11,7 @@ use std::process::{Child, ChildStdin};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
-use crate::cswap::locate::{exe_name, find_in, is_executable};
+use crate::cswap::locate::{exe_name, find_in, is_executable, system_bin_dirs};
 use crate::cswap::process;
 use crate::cswap::{CSWAP_OVERRIDE_ENV, CswapError, CswapErrorKind, SecretToken};
 use crate::redact::{redact, strip_control};
@@ -25,9 +25,6 @@ pub const MAX_CODE_CHARS: usize = 4096;
 /// Righe d'errore (redatte, senza URL) tenute per il messaggio di un login non riuscito.
 const ERROR_TAIL_LINES: usize = 3;
 
-/// Cartelle di Homebrew su macOS (un'app avviata dal Finder non eredita il `PATH` della shell).
-const HOMEBREW_BIN_DIRS: [&str; 2] = ["/opt/homebrew/bin", "/usr/local/bin"];
-
 /// Variabile delle prove: percorso del finto Claude Code, letta solo con `SWAPDECK_CSWAP`.
 pub const CLAUDE_TEST_ENV: &str = "SWAPDECK_CLAUDE";
 
@@ -36,6 +33,8 @@ pub const CLAUDE_TEST_ENV: &str = "SWAPDECK_CLAUDE";
 pub struct ClaudeSearch {
     pub path: Option<OsString>,
     pub home: Option<PathBuf>,
+    /// Cartelle fisse dell'OS dopo `~/.local/bin` (Homebrew su macOS); vuote nei test.
+    pub system_bin_dirs: Vec<PathBuf>,
     /// `SWAPDECK_CSWAP` impostata (prove con il finto cswap): vale solo [`CLAUDE_TEST_ENV`],
     /// mai l'impostazione né la ricerca, così una prova non avvia mai il Claude Code reale.
     pub fake_cswap: bool,
@@ -49,6 +48,7 @@ impl ClaudeSearch {
         Self {
             path: std::env::var_os("PATH"),
             home: directories::BaseDirs::new().map(|d| d.home_dir().to_path_buf()),
+            system_bin_dirs: system_bin_dirs(),
             fake_cswap: std::env::var_os(CSWAP_OVERRIDE_ENV).is_some_and(|v| !v.is_empty()),
             test_claude: std::env::var_os(CLAUDE_TEST_ENV)
                 .filter(|v| !v.is_empty())
@@ -90,9 +90,7 @@ pub fn locate_claude(configured: Option<&str>, search: &ClaudeSearch) -> Option<
             if let Some(home) = &search.home {
                 dirs.push(home.join(".local").join("bin"));
             }
-            if cfg!(target_os = "macos") {
-                dirs.extend(HOMEBREW_BIN_DIRS.iter().map(PathBuf::from));
-            }
+            dirs.extend(search.system_bin_dirs.iter().cloned());
             find_in(dirs, &name)
         })
         .or_else(|| {
@@ -397,6 +395,7 @@ mod tests {
         let mut s = ClaudeSearch {
             path: Some(std::env::join_paths([PathBuf::from("rel"), in_path.clone()]).unwrap()),
             home: Some(home.clone()),
+            system_bin_dirs: Vec::new(),
             fake_cswap: false,
             test_claude: None,
         };

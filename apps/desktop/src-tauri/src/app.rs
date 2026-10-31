@@ -360,7 +360,9 @@ pub fn run(api: Arc<dyn CswapApi>) {
                 app.manage(ConfigWatchStop(stop));
             }
             windows::apply_saved_theme(&handle);
-            if !start_hidden {
+            if start_hidden {
+                windows::set_dock_visible(&handle, false);
+            } else {
                 windows::show_main(&handle);
             }
             // Solo per le prove di sviluppo (screenshot senza cliccare il menu).
@@ -378,6 +380,9 @@ pub fn run(api: Arc<dyn CswapApi>) {
         RunEvent::ExitRequested {
             api, code: None, ..
         } => api.prevent_exit(),
+        // macOS: clic sull'icona nel Dock o app riaperta dal Finder mentre è già in esecuzione.
+        #[cfg(target_os = "macos")]
+        RunEvent::Reopen { .. } => windows::show_main(app),
         RunEvent::Exit => {
             // «Rifai login» in corso: annulla (Claude Code chiuso, ritorno a P) e attesa breve.
             relogin_cmd::shutdown(relogin_cmd::EXIT_WAIT);
