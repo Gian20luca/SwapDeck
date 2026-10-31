@@ -82,11 +82,13 @@ const host = /host: (\S+)/.exec(execFileSync('rustc', ['-vV'], { encoding: 'utf8
 const gnullvm = host?.endsWith('-gnullvm') ?? false;
 const hasCli = existsSync(join(repo, 'apps', 'cli', 'Cargo.toml'));
 
-// Cartella di uscita: si svuota (mai seguendo un collegamento), tranne `linux/` di `dist:linux`.
+// Cartella di uscita: si svuota (mai seguendo un collegamento), tranne `linux/` di `dist:linux` e
+// `condivisione/` (zip e guide da mandare ai colleghi).
 if (existsSync(out)) {
   if (lstatSync(out).isSymbolicLink()) throw new Error(`${out} è un collegamento: non lo tocco`);
   for (const name of readdirSync(out))
-    if (name !== 'linux') rmSync(join(out, name), { recursive: true, force: true });
+    if (name !== 'linux' && name !== 'condivisione')
+      rmSync(join(out, name), { recursive: true, force: true });
 } else {
   mkdirSync(out);
 }

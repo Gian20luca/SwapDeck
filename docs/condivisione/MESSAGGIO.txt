@@ -1,0 +1,27 @@
+Ciao a tutti,
+
+vi passo SwapDeck, un'app che ho fatto per chi usa Claude Code con più account.
+
+Cosa fa:
+- mostra in un colpo d'occhio i limiti di tutti i vostri account Claude (5 ore e 7 giorni), con ora del reset, ritmo di consumo e stima di quando finireste;
+- cambia account con un clic, per tutte le sessioni aperte;
+- se volete, cambia account da sola quando quello in uso sta per finire i limiti, secondo regole che scegliete voi (di default è spenta);
+- per ogni account potete fissare un massimo (per esempio 80% settimanale sugli account dei colleghi), così non lo consuma oltre;
+- avvisa con le notifiche: limiti vicini, reset, login in scadenza;
+- rifà il login di un account scaduto anche se è di un'altra persona: le mandate un link, lei vi rimanda un codice e SwapDeck fa il resto;
+- mostra quali progetti e sessioni consumano di più.
+
+Gira nell'area di notifica (con un mini-widget sempre visibile) e c'è anche come estensione di VS Code. Si appoggia a cswap (claude-swap): se non l'avete, lo installa da sola.
+
+Non servono permessi di amministratore e tutto resta sul vostro PC.
+
+Come iniziare:
+1. Prendete lo zip del vostro sistema: SwapDeck-0.2.3-windows.zip oppure SwapDeck-0.2.3-linux.zip (la versione per Mac arriverà più avanti).
+2. Estraetelo e seguite LEGGIMI.md (installazione passo passo).
+3. COME-FUNZIONA.md spiega come si usa.
+
+Su Windows, al primo avvio compare «Windows ha protetto il PC», perché l'installer non è firmato: «Ulteriori informazioni» → «Esegui comunque».
+
+Consiglio: per i primi giorni accendete il cambio automatico in «Solo osservazione», così vedete cosa farebbe senza che cambi niente.
+
+Per problemi: nell'app, Strumenti → Diagnostica → «Copia diagnostica», e mandatemela.
