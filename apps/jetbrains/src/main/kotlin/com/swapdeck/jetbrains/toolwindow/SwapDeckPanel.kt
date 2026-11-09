@@ -23,6 +23,7 @@ import org.cef.handler.CefLifeSpanHandlerAdapter
 import org.cef.handler.CefLoadHandlerAdapter
 import org.cef.handler.CefRequestHandlerAdapter
 import org.cef.handler.CefResourceHandler
+import org.cef.handler.CefResourceHandlerAdapter
 import org.cef.handler.CefResourceRequestHandler
 import org.cef.handler.CefResourceRequestHandlerAdapter
 import org.cef.misc.BoolRef
@@ -180,7 +181,10 @@ class SwapDeckPanel(project: Project) : Disposable {
     }
 
     /** Risposta già pronta in memoria. */
-    private class BytesResourceHandler(private val resource: PanelResource) : CefResourceHandler {
+    // Dall'adattatore e non dall'interfaccia: dalla 2026.x `CefResourceHandler` ha anche `open`,
+    // `read` e `skip` astratti (AbstractMethodError, Plugin Verifier). Le versioni dell'adattatore
+    // rimandano a `processRequest` e `readResponse`, gli unici metodi della 2024.3.
+    private class BytesResourceHandler(private val resource: PanelResource) : CefResourceHandlerAdapter() {
         private var offset = 0
 
         override fun processRequest(request: CefRequest?, callback: CefCallback): Boolean {

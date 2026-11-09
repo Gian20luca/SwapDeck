@@ -1,13 +1,12 @@
 package com.swapdeck.jetbrains.bridge
 
-import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
-import com.intellij.openapi.extensions.PluginId
 import com.intellij.util.messages.Topic
 import com.swapdeck.jetbrains.SwapDeckLifecycle
+import com.swapdeck.jetbrains.cli.PluginInfo
 import com.swapdeck.jetbrains.cli.SwapDeckCli
 import com.swapdeck.jetbrains.engine.EnginePause
 import com.swapdeck.jetbrains.engine.EngineService
@@ -59,7 +58,7 @@ class IdeBridgeHost : BridgeHost {
         /** `<IDE> <versione>, plugin <versione>`: `diagnostics --client` e riga d'avvio nel log. */
         val CLIENT_INFO: String by lazy {
             val ide = ApplicationInfo.getInstance().fullApplicationName
-            val plugin = PluginManagerCore.getPlugin(PluginId.getId(SwapDeckCli.PLUGIN_ID))?.version ?: "?"
+            val plugin = PluginInfo.version
             "$ide, plugin $plugin"
         }
     }

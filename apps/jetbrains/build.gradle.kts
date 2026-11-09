@@ -1,4 +1,5 @@
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
@@ -48,6 +49,9 @@ kotlin {
         // Il compilatore la segnala come deprecata: si tace l'avviso finché il minimo resta 243.
         apiVersion.set(KotlinVersion.KOTLIN_2_0)
         freeCompilerArgs.add("-Xsuppress-version-warnings")
+        // Metodi predefiniti delle interfacce della piattaforma (es. `ToolWindowFactory.getIcon`) non
+        // ricopiati nelle classi: altrimenti il Plugin Verifier li conta come uso di API interne.
+        jvmDefault.set(JvmDefaultMode.NO_COMPATIBILITY)
     }
 }
 
@@ -80,7 +84,16 @@ val buildWebview = tasks.register<Exec>("buildWebview") {
     outputs.dir(webviewOut)
 }
 
+// Versione del plugin letta a runtime da `PluginInfo` (senza le API interne del gestore dei plugin).
+val pluginInfo = tasks.register<WriteProperties>("pluginInfo") {
+    destinationFile = layout.buildDirectory.file("generated/pluginInfo/plugin.properties")
+    property("version", providers.gradleProperty("pluginVersion"))
+}
+
 tasks.processResources {
+    from(pluginInfo) {
+        into("swapdeck")
+    }
     from(buildWebview) {
         include("index.html", "main.js", "main.css")
         into("webview")

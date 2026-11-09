@@ -1,11 +1,9 @@
 package com.swapdeck.jetbrains.cli
 
-import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
-import com.intellij.openapi.extensions.PluginId
 import com.swapdeck.jetbrains.SwapDeckLifecycle
 import com.swapdeck.jetbrains.settings.SwapDeckSettings
 import kotlinx.serialization.json.JsonElement
@@ -23,8 +21,7 @@ class SwapDeckCli : CliCaller, Disposable {
         SwapDeckLifecycle.ensure()
     }
 
-    private val pluginDir: Path? =
-        PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))?.pluginPath
+    private val pluginDir: Path? = PluginInfo.directory
 
     private val runner = CliRunner(executable = ::executable)
 
@@ -47,7 +44,6 @@ class SwapDeckCli : CliCaller, Disposable {
     override fun dispose() = runner.close()
 
     companion object {
-        const val PLUGIN_ID = "com.swapdeck.jetbrains"
         private val LOG = logger<SwapDeckCli>()
 
         fun getInstance(): SwapDeckCli = service()
