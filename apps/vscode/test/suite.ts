@@ -87,7 +87,7 @@ const tests: Array<[string, (api: SwapDeckApi) => Promise<void>]> = [
         rules: Record<string, unknown>;
       };
       execFileSync(cli, ['engine', 'rules', 'set', '-'], {
-        // Prima accensione già confermata: il dialogo modale (unit test in firstEnable.test.ts) non si apre.
+        // Prima accensione già confermata: il dialogo modale non si apre (regola nel Rust, `engine enable`).
         input: JSON.stringify({
           ...state.rules,
           order: [6, 3],

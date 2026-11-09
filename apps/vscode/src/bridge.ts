@@ -3,7 +3,6 @@ import type {
   ActionOutcome,
   Confirmation,
   CswapAction,
-  HistoryRecord,
   ListResponse,
   ReloginEvent,
   ReloginOutcome,
@@ -179,23 +178,6 @@ function optionalInt(value: unknown, name: string): number | undefined {
   return value;
 }
 
-/** Campioni dello storico nel formato della UI (`HistoryPoint`). */
-export function toHistoryPoints(records: HistoryRecord[]): HistoryPoint[] {
-  const points: HistoryPoint[] = [];
-  for (const r of records) {
-    if (r.type !== 'sample') continue;
-    points.push({
-      ts: r.ts,
-      account: r.account,
-      fiveHourPct: r.fiveHourPct,
-      sevenDayPct: r.sevenDayPct,
-      fiveHourExpectedPct: null,
-      sevenDayExpectedPct: r.sevenDayExpectedPct,
-    });
-  }
-  return points;
-}
-
 function stateList(state: CliState): ListResponse {
   if (state.list) return state.list;
   throw new CliError(state.error ?? { kind: 'failed', message: 'lista non disponibile' });
@@ -368,7 +350,9 @@ export function createRequestHandler(deps: BridgeDeps) {
         const args = ['history', '--from', String(since ?? nowSec - DEFAULT_HISTORY_SECONDS)];
         args.push('--to', String(nowSec));
         if (account !== undefined) args.push('--account', String(account));
-        return toHistoryPoints(await deps.cli<HistoryRecord[]>(args));
+        // Punti dei grafici già pronti (e sfoltiti) dalla CLI, come nell'app.
+        args.push('--points');
+        return deps.cli<HistoryPoint[]>(args);
       }
       case 'listMappings':
         return deps.cli(['mappings']);

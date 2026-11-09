@@ -1,6 +1,6 @@
-import type { HistoryRecord } from '@swapdeck/types';
+import type { HistoryPoint } from '@swapdeck/types';
 import { describe, expect, it, vi } from 'vitest';
-import { createRequestHandler, describeAction, toHistoryPoints } from './bridge.js';
+import { createRequestHandler, describeAction } from './bridge.js';
 import type { CliRunner, RunOptions } from './cli.js';
 import type { CliState } from './generated/index.js';
 import { cliState, fixtureList } from './testing.js';
@@ -115,36 +115,8 @@ describe('createRequestHandler', () => {
     expect(onOutcome).toHaveBeenCalledWith(outcome);
   });
 
-  it('getHistory: intervallo di default di 7 giorni e filtro', async () => {
-    const sample: HistoryRecord = {
-      type: 'sample',
-      ts: 1,
-      account: 3,
-      active: true,
-      status: 'ok',
-      fiveHourPct: 10,
-      sevenDayPct: 20,
-      fiveHourResetsAt: null,
-      sevenDayResetsAt: null,
-      sevenDayExpectedPct: 15,
-      fetchedAt: null,
-    };
-    const other = { type: 'switch', ts: 2, from: 3, to: 6 } as unknown as HistoryRecord;
-    const records = [sample, other];
-    const { handle, calls } = setup({ history: records });
-    const points = await handle('getHistory', { account: 3 });
-    const from = String(1_000_000 - 7 * 86400);
-    expect(calls[0]!.args).toEqual([
-      'history',
-      '--from',
-      from,
-      '--to',
-      '1000000',
-      '--account',
-      '3',
-    ]);
-    expect(points).toEqual(toHistoryPoints(records));
-    expect(points).toEqual([
+  it('getHistory: intervallo di default di 7 giorni, filtro e punti dalla CLI', async () => {
+    const points: HistoryPoint[] = [
       {
         ts: 1,
         account: 3,
@@ -153,6 +125,19 @@ describe('createRequestHandler', () => {
         fiveHourExpectedPct: null,
         sevenDayExpectedPct: 15,
       },
+    ];
+    const { handle, calls } = setup({ history: points });
+    const from = String(1_000_000 - 7 * 86400);
+    await expect(handle('getHistory', { account: 3 })).resolves.toEqual(points);
+    expect(calls[0]!.args).toEqual([
+      'history',
+      '--from',
+      from,
+      '--to',
+      '1000000',
+      '--account',
+      '3',
+      '--points',
     ]);
   });
 

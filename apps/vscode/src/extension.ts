@@ -9,6 +9,7 @@ import type {
   EngineProfiles,
   EngineRules,
   EngineState,
+  IdeStatus,
   ListResponse,
   Notification,
   NotifyPoll,
@@ -31,8 +32,7 @@ import {
   toCswapError,
 } from './cli.js';
 import { DEACTIVATE_GRACE_MS, EngineProcess, shouldRetryEngine } from './engine.js';
-import { rulesToStart, type FirstEnableAnswer } from './firstEnable.js';
-import type { CliState } from './generated/index.js';
+import type { CliState, EngineEnable } from './generated/index.js';
 import { fromPoll, langOf, messageOf, parseEngineEvent, shouldPoll } from './notifications.js';
 import {
   DashboardPanel,
@@ -44,18 +44,15 @@ import {
 import { preferredLocaleOf, suspensionOf, type PickParams } from './protocol.js';
 import { Refresher } from './refresher.js';
 import { SyncWatcher } from './sync.js';
-import {
-  accountLabel,
-  colorThresholds,
-  engineView,
-  statusModel,
-  type Translate,
-} from './statusBar.js';
+import { accountLabel, errorStatus, statusArgs, statusModel, type Translate } from './statusBar.js';
 
 const SECTION = 'swapdeck';
 const MIN_INTERVAL_SECONDS = 15;
 /** Al ritorno del focus sulla finestra si rilegge solo se l'ultima lettura è più vecchia. */
 const FOCUS_REFRESH_AFTER_MS = 10_000;
+
+/** Risposta al dialogo della prima accensione; `undefined` = annullato. */
+type FirstEnableAnswer = 'on' | 'observe' | undefined;
 
 /** API restituita da `activate`, usata solo dai test dell'estensione. */
 export interface SwapDeckApi {
@@ -156,15 +153,46 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     },
   });
 
-  const render = () => {
-    const s = settings();
-    const model = statusModel(
-      state,
-      colorThresholds(s.thresholds),
-      engineView(state, engine.pid),
-      t,
-      (ms) => new Date(ms).toLocaleTimeString(),
-    );
+  /** Riepilogo della barra di stato (`ide status`) e la richiesta da cui viene. */
+  let summary: IdeStatus | undefined;
+  let summaryFor: { state: CliState; args: string } | undefined;
+  let summaryJob: Promise<void> = Promise.resolve();
+
+  /**
+   * Chiede alla CLI il riepilogo per lo stato attuale, le soglie e il PID del motore di questa
+   * finestra, poi ridisegna. Stessa richiesta = stessa attesa; una risposta superata si scarta.
+   */
+  function updateStatus(): Promise<void> {
+    const current = state;
+    if (!current) {
+      summary = undefined;
+      summaryFor = undefined;
+      paint();
+      return Promise.resolve();
+    }
+    const args = statusArgs(settings().thresholds, engine.pid);
+    const key = args.join(' ');
+    if (summaryFor?.state === current && summaryFor.args === key) return summaryJob;
+    const mine = { state: current, args: key };
+    summaryFor = mine;
+    summaryJob = cli<IdeStatus>(args, { stdin: JSON.stringify(current) })
+      .catch((error: unknown) => {
+        const info = toCswapError(error);
+        output.warn(`ide status: ${info.message}`);
+        return errorStatus(info);
+      })
+      .then((next) => {
+        if (summaryFor !== mine) return;
+        summary = next;
+        paint();
+      });
+    return summaryJob;
+  }
+
+  const render = () => void updateStatus();
+
+  const paint = () => {
+    const model = statusModel(summary, t, (ms) => new Date(ms).toLocaleTimeString());
     status.text = model.text;
     status.tooltip = model.tooltip;
     status.backgroundColor =
@@ -363,7 +391,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     render();
     return next;
   });
-  const refresh = () => refresher.refresh();
+  /** Rilettura dello stato; si risolve con la barra di stato già aggiornata. */
+  const refresh = async (): Promise<CliState> => {
+    const next = await refresher.refresh();
+    await updateStatus();
+    return next;
+  };
 
   const schedule = () => {
     clearTimeout(timer);
@@ -399,7 +432,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
       };
       void pollNotifications(outcome.list);
       hub.post({ type: 'state', list: outcome.list });
-      render();
+      await updateStatus();
     } else {
       await refresh();
     }
@@ -573,27 +606,33 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
 
   /**
    * «Avvia/Ferma motore» come «Accendi» e «Motore acceso» della scheda Regole: `engine.enabled`
-   * delle regole (condivise con le altre finestre e con l'app), riletto subito prima di scriverlo.
-   * Il processo del motore resta acceso (storico e notifiche); avviando, lo si accende se era spento.
-   * La prima accensione chiede conferma con un dialogo modale (Accendi / Solo osservazione /
-   * Annulla), come la scheda Regole; annullando non cambia nulla.
+   * delle regole (condivise con le altre finestre e con l'app), scritto dalla CLI sotto il lock
+   * della config (`engine enable|disable`). Il processo del motore resta acceso (storico e
+   * notifiche); avviando, lo si accende se era spento. Alla prima accensione la CLI risponde
+   * `needsConfirmation`: dialogo modale (Accendi / Solo osservazione / Annulla) come la scheda
+   * Regole, poi `--confirm`; annullando non cambia nulla.
    */
   const setEngine = async (enabled: boolean) => {
-    let last: EngineRules | undefined;
-    const readRules = async () => (last = (await cli<EngineState>(['engine', 'state'])).rules);
-    let next: EngineRules | null;
+    let rules: EngineRules;
     try {
-      next = enabled
-        ? await rulesToStart(readRules, askFirstEnable)
-        : { ...(await readRules()), enabled: false };
-      if (!next) return;
-      if (enabled && !settings().engineEnabled) {
-        await vscode.workspace
-          .getConfiguration(SECTION)
-          .update('engine.enabled', true, vscode.ConfigurationTarget.Global);
-      }
-      if (JSON.stringify(next) !== JSON.stringify(last)) {
-        await cli(['engine', 'rules', 'set', '-'], { stdin: JSON.stringify(next) });
+      if (enabled) {
+        let result = await cli<EngineEnable>(['engine', 'enable']);
+        if (result.kind === 'needsConfirmation') {
+          const answer = await askFirstEnable();
+          if (!answer) return;
+          const args = ['engine', 'enable', '--confirm'];
+          if (answer === 'observe') args.push('--observe');
+          result = await cli<EngineEnable>(args);
+        }
+        if (result.kind !== 'enabled') return;
+        rules = result.state.rules;
+        if (!settings().engineEnabled) {
+          await vscode.workspace
+            .getConfiguration(SECTION)
+            .update('engine.enabled', true, vscode.ConfigurationTarget.Global);
+        }
+      } else {
+        rules = (await cli<EngineState>(['engine', 'disable'])).rules;
       }
     } catch (error) {
       const info = toCswapError(error);
@@ -606,7 +645,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
     void vscode.window.showInformationMessage(
       !enabled
         ? t('SwapDeck: engine off, no automatic switches')
-        : next.dryRun
+        : rules.dryRun
           ? t('SwapDeck: engine on in observe-only mode, it never switches')
           : t('SwapDeck: engine on, it switches accounts by the rules'),
     );

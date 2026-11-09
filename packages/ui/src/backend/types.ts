@@ -11,6 +11,7 @@ import type {
   EngineState,
   EngineView,
   HistoryEvents,
+  HistoryPoint,
   ListResponse,
   NotificationConfig,
   ProfileCommand,
@@ -28,23 +29,8 @@ import type {
 
 export type Unsubscribe = () => void;
 
-/**
- * Un punto dello storico dei consumi per un account.
- *
- * NOTA: lo storico (JSONL, step 2) non ha ancora un tipo generato dal Rust. Questo è il formato che
- * la UI si aspetta dal `Backend`; quando `@swapdeck/types` esporterà il tipo dello storico va
- * sostituito con quello (e il FakeBackend adattato).
- */
-export interface HistoryPoint {
-  /** Istante in secondi Unix. */
-  ts: number;
-  account: number;
-  fiveHourPct: number | null;
-  sevenDayPct: number | null;
-  /** Consumo atteso al ritmo lineare della finestra, quando è noto. */
-  fiveHourExpectedPct: number | null;
-  sevenDayExpectedPct: number | null;
-}
+/** Un punto dello storico dei consumi per un account (generato dal Rust, `history_points`). */
+export type { HistoryPoint };
 
 export interface HistoryQuery {
   /** Solo questo account; senza, tutti. */

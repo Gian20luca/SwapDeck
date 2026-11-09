@@ -21,14 +21,6 @@ export function cliState(list: ListResponse | null, running = false): CliState {
 export const fmt = (message: string, ...args: Array<string | number>) =>
   message.replace(/\{(\d+)\}/g, (_, i: string) => String(args[Number(i)]));
 
-/** Copia profonda con l'uso dell'account attivo cambiato. */
-export function withActiveUsage(list: ListResponse, five: number, seven: number): ListResponse {
-  const copy = structuredClone(list);
-  const active = copy.accounts.find((a) => a.active)!;
-  active.usage = { ...active.usage, fiveHour: { pct: five }, sevenDay: { pct: seven } };
-  return copy;
-}
-
 export function withActive(list: ListResponse, number: number): ListResponse {
   const copy = structuredClone(list);
   for (const a of copy.accounts) a.active = a.number === number;
