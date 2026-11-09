@@ -1,23 +1,25 @@
 /**
- * Sincronia fra finestre di VS Code (anche istanze diverse) sulla stessa cartella di SwapDeck.
+ * Sincronia fra finestre di VS Code (anche istanze diverse), IDE JetBrains e app sulla stessa
+ * cartella di SwapDeck.
  *
  * Ogni finestra osserva la cartella della config: `config.json` (regole, mappe, preferenze,
- * notifiche, scritti dalla CLI) e il segnale `vscode-sync.json`, che una finestra riscrive dopo
- * una propria azione che non tocca la config (cambio di account, azioni di cswap, cambi del
- * motore). Gli eventi sono raggruppati (`debounceMs`) e fanno rileggere lo stato; il polling
- * resta come rete di sicurezza (watcher non disponibile, cartella che non esiste ancora).
+ * notifiche, scritti dalla CLI) e il segnale `ide-sync.json`, che un host riscrive dopo una
+ * propria azione che non tocca la config (cambio di account, azioni di cswap, cambi del motore).
+ * Nome, formato e scrittura atomica del segnale sono descritti in `packages/host/README.md`.
+ * Gli eventi sono raggruppati (`debounceMs`) e fanno rileggere lo stato; il polling resta come
+ * rete di sicurezza (watcher non disponibile, cartella che non esiste ancora).
  */
+import {
+  CONFIG_FILE,
+  MAX_SIGNAL_BYTES,
+  SYNC_DEBOUNCE_MS,
+  SYNC_FILE,
+  isSyncSignalName,
+  type SyncSignal,
+} from '@swapdeck/host';
 import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import { basename, join } from 'node:path';
-
-/** Segnale scritto dalle finestre: `{ source, at }`, nessun dato dell'utente. */
-export const SYNC_FILE = 'vscode-sync.json';
-/** File della config di SwapDeck (`config::CONFIG_FILE` del core). */
-export const CONFIG_FILE = 'config.json';
-export const SYNC_DEBOUNCE_MS = 750;
-/** Il segnale è piccolo: oltre questa dimensione non si legge (file estraneo). */
-const MAX_SIGNAL_BYTES = 4096;
 
 export interface SyncOptions {
   /** Cartella della config (da `swapdeck-cli config get`, campo `path`). */
@@ -35,7 +37,8 @@ export interface SyncOptions {
 export function isSyncEvent(filename: string | null | undefined): boolean {
   if (filename === null || filename === undefined) return true;
   const name = basename(filename);
-  return name === CONFIG_FILE || name === SYNC_FILE;
+  // Anche `vscode-sync.json` delle finestre non aggiornate (`LEGACY_SYNC_FILES`).
+  return name === CONFIG_FILE || isSyncSignalName(name);
 }
 
 export class SyncWatcher {
@@ -103,7 +106,7 @@ export class SyncWatcher {
     if (this.disposed) return;
     const target = join(this.opts.dir, SYNC_FILE);
     const tmp = join(this.opts.dir, `.${SYNC_FILE}.${randomBytes(6).toString('hex')}.tmp`);
-    const body = JSON.stringify({ source: this.source, at: Date.now() });
+    const body = JSON.stringify({ source: this.source, at: Date.now() } satisfies SyncSignal);
     try {
       await fs.promises.writeFile(tmp, body, { flag: 'wx', mode: 0o600 });
       try {

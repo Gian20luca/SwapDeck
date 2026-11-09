@@ -81,6 +81,9 @@ importers:
 
   apps/vscode:
     devDependencies:
+      '@swapdeck/host':
+        specifier: workspace:*
+        version: link:../../packages/host
       '@swapdeck/types':
         specifier: workspace:*
         version: link:../../packages/types
@@ -117,6 +120,31 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.3.1(react@19.3.1)
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.12(@types/node@22.20.5)(@vitest/coverage-v8@4.1.12)(jsdom@26.1.0)(vite@6.4.4(@types/node@22.20.5))
+
+  packages/host:
+    dependencies:
+      '@swapdeck/types':
+        specifier: workspace:*
+        version: link:../types
+      '@swapdeck/ui':
+        specifier: workspace:*
+        version: link:../ui
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.5
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.3.0(@types/react@19.3.0)
       typescript:
         specifier: 'catalog:'
         version: 7.0.2

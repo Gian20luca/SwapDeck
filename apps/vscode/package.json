@@ -171,6 +171,7 @@
     "gen:types": "node scripts/gen-types.mjs"
   },
   "devDependencies": {
+    "@swapdeck/host": "workspace:*",
     "@swapdeck/types": "workspace:*",
     "@swapdeck/ui": "workspace:*",
     "@types/node": "catalog:",

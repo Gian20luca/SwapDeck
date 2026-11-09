@@ -1,4 +1,23 @@
-/** Richieste del webview tradotte in comandi di `swapdeck-cli` (lato extension host). */
+/**
+ * Richieste del webview tradotte in comandi di `swapdeck-cli` (lato extension host). Metodi, `kind`
+ * ammessi e limiti vengono da `protocol.json` di `@swapdeck/host`, lo stesso letto dal plugin JetBrains.
+ */
+import {
+  ACTION_KINDS,
+  CONFIG_KEY,
+  DEFAULT_HISTORY_SECONDS,
+  MAX_COPY_CHARS,
+  MAX_RELOGIN_CODE_CHARS,
+  PICK_LIMITS,
+  SAFE_CLAUDE_ARGS,
+  USAGE_GROUPS,
+  USAGE_WINDOWS,
+  VERSION,
+  isRequestMethod,
+  type PickParams,
+  type ProgressEvent,
+  type RequestMethod,
+} from '@swapdeck/host';
 import type {
   ActionOutcome,
   Confirmation,
@@ -19,18 +38,6 @@ import {
   type StdinChannel,
 } from './cli.js';
 import type { CliState } from './generated/index.js';
-import {
-  isRequestMethod,
-  type PickParams,
-  type ProgressEvent,
-  type RequestMethod,
-} from './protocol.js';
-
-const DAY_SECONDS = 24 * 3600;
-const DEFAULT_HISTORY_SECONDS = 7 * DAY_SECONDS;
-const CONFIG_KEY = /^[A-Za-z0-9_.-]{1,100}$/;
-/** Versione di claude-swap (PEP 440, solo caratteri sicuri). */
-const VERSION = /^[0-9][0-9A-Za-z.+-]{0,63}$/;
 
 export interface BridgeDeps {
   cli: CliRunner;
@@ -65,45 +72,6 @@ export interface BridgeDeps {
   now?: () => number;
 }
 
-/** Testo massimo copiato negli appunti su richiesta del webview. */
-export const MAX_COPY_CHARS = 1_000_000;
-
-/** Tutti i `kind` di `CswapAction`: un `kind` fuori elenco è `invalidUsage` già nell'host. */
-export const ACTION_KINDS = [
-  'switch',
-  'add',
-  'addToken',
-  'remove',
-  'disable',
-  'enable',
-  'setAlias',
-  'swap',
-  'move',
-  'map',
-  'unmap',
-  'configSet',
-  'configUnset',
-  'export',
-  'import',
-  'unclaimedPurge',
-  'purge',
-  'upgrade',
-  'run',
-  'autoStart',
-  'autoStop',
-] as const satisfies ReadonlyArray<CswapAction['kind']>;
-
-// Errore di compilazione se il Rust aggiunge un `kind` che manca qui.
-type MissingKind = Exclude<CswapAction['kind'], (typeof ACTION_KINDS)[number]>;
-const allKindsListed: [MissingKind] extends [never] ? true : MissingKind = true;
-void allKindsListed;
-
-/**
- * Argomenti di `claude` ammessi per `run` dal webview: solo flag senza valore e senza effetti sui
- * permessi (il comando si apre in un terminale dell'utente).
- */
-export const SAFE_CLAUDE_ARGS: ReadonlySet<string> = new Set(['--continue', '--verbose']);
-
 function invalid(message: string): CliError {
   return new CliError({ kind: 'invalidUsage', message });
 }
@@ -134,23 +102,27 @@ function checkedAction(value: unknown): CswapAction {
 /** Opzioni del selettore: solo testi, estensioni semplici; il webview non è fidato. */
 export function checkedPick(params: Record<string, unknown>): PickParams {
   const out: PickParams = {};
-  for (const key of ['title', 'defaultPath'] as const) {
+  for (const key of PICK_LIMITS.textFields) {
     const value = params[key];
     if (value === undefined) continue;
-    if (typeof value !== 'string' || value.length > 1000) throw invalid(`${key} non valido`);
+    if (typeof value !== 'string' || value.length > PICK_LIMITS.textMaxLength) {
+      throw invalid(`${key} non valido`);
+    }
     out[key] = value;
   }
   const filters = params['filters'];
   if (filters !== undefined) {
-    if (!Array.isArray(filters) || filters.length > 10) throw invalid('filtri non validi');
+    if (!Array.isArray(filters) || filters.length > PICK_LIMITS.maxFilters) {
+      throw invalid('filtri non validi');
+    }
     out.filters = filters.map((f: unknown) => {
       const name = (f as { name?: unknown } | null)?.name;
       const extensions = (f as { extensions?: unknown } | null)?.extensions;
       if (
         typeof name !== 'string' ||
-        name.length > 100 ||
+        name.length > PICK_LIMITS.filterNameMaxLength ||
         !Array.isArray(extensions) ||
-        !extensions.every((e) => typeof e === 'string' && /^[A-Za-z0-9]{1,10}$/.test(e))
+        !extensions.every((e) => typeof e === 'string' && PICK_LIMITS.extension.test(e))
       ) {
         throw invalid('filtri non validi');
       }
@@ -167,8 +139,6 @@ function plainObject(value: unknown, name: string): Record<string, unknown> {
   }
   return value as Record<string, unknown>;
 }
-
-const USAGE_GROUPS: readonly string[] = ['project', 'session', 'agent', 'model'];
 
 function optionalInt(value: unknown, name: string): number | undefined {
   if (value === undefined || value === null) return undefined;
@@ -302,7 +272,11 @@ export function createRequestHandler(deps: BridgeDeps) {
       case 'submitReloginCode': {
         const code = params['code'];
         // Una riga, lunghezza limitata; il valore va solo su stdin della CLI, mai nei log.
-        if (typeof code !== 'string' || code.length > 4096 || /[\r\n]/.test(code)) {
+        if (
+          typeof code !== 'string' ||
+          code.length > MAX_RELOGIN_CODE_CHARS ||
+          /[\r\n]/.test(code)
+        ) {
           throw invalid('codice non valido');
         }
         return reloginWrite({ code });
@@ -392,7 +366,7 @@ export function createRequestHandler(deps: BridgeDeps) {
         // Lettura a budget: ogni chiamata dura pochi secondi, la UI richiama finché c'è `partial`.
         const query = plainObject(params['query'], 'richiesta dei consumi');
         const window = query['window'];
-        if (window !== '5h' && window !== '7d' && window !== 'custom') {
+        if (typeof window !== 'string' || !(USAGE_WINDOWS as readonly string[]).includes(window)) {
           throw invalid('finestra non valida');
         }
         const groupBy = query['groupBy'];

@@ -1,3 +1,5 @@
+import type { HostMessage, ViewSettings } from '@swapdeck/host';
+import { MessageBackend } from '@swapdeck/host/backend';
 import {
   BackendProvider,
   I18nProvider,
@@ -8,14 +10,12 @@ import {
 import '@swapdeck/ui/styles.css';
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import type { HostMessage, ViewSettings } from '../protocol.js';
 import { EngineBanner } from './EngineBanner.js';
-import { VsCodeBackend } from './VsCodeBackend.js';
 import { readState } from './viewState.js';
 import './webview.css';
 
 const vscode = acquireVsCodeApi();
-const backend = new VsCodeBackend(
+const backend = new MessageBackend(
   (message) => vscode.postMessage(message),
   (handler) => {
     const listener = (event: MessageEvent<HostMessage>) => handler(event.data);

@@ -3,16 +3,16 @@
  * (`SidebarView`) e la scheda dell'editor (`DashboardPanel`). Stesso HTML, CSP con nonce, risorse
  * solo da `out/webview` e stesso gestore delle richieste (`WebviewHub`).
  */
-import { randomBytes } from 'node:crypto';
-import * as vscode from 'vscode';
-import { toCswapError } from './cli.js';
 import {
   viewLocale,
   type ProgressEvent,
   type HostMessage,
   type ViewSettings,
   type WebviewMessage,
-} from './protocol.js';
+} from '@swapdeck/host';
+import { randomBytes } from 'node:crypto';
+import * as vscode from 'vscode';
+import { toCswapError } from './cli.js';
 
 /** `signal` si interrompe quando il webview che ha fatto la richiesta si chiude o si scarica. */
 export type RequestHandler = (

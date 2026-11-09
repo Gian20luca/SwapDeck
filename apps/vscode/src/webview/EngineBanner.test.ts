@@ -1,9 +1,16 @@
+import { suspensionOf } from '@swapdeck/host';
 import { translate, type Translate } from '@swapdeck/ui';
 import { describe, expect, it } from 'vitest';
-import { suspensionOf } from '../protocol.js';
+import type { EngineStatus } from '../generated/index.js';
 import { suspensionLine } from './EngineBanner.js';
 
-const engine = { enabled: true, dryRun: false, pollIntervalSeconds: 60, running: true, lock: null };
+const engine: EngineStatus = {
+  enabled: true,
+  dryRun: false,
+  pollIntervalSeconds: 60,
+  running: true,
+  lock: null,
+};
 
 describe('riga «motore sospeso»', () => {
   it('dal campo della CLI, solo se c’è', () => {

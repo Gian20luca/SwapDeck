@@ -1,13 +1,13 @@
 import { BackendError } from '@swapdeck/ui';
 import { describe, expect, it } from 'vitest';
-import type { EngineSuspension, HostMessage, WebviewMessage } from '../protocol.js';
-import { VsCodeBackend } from './VsCodeBackend.js';
+import type { EngineSuspension, HostMessage, WebviewMessage } from './protocol.js';
+import { MessageBackend } from './MessageBackend.js';
 
 function setup() {
   const sent: WebviewMessage[] = [];
   let handler: ((m: HostMessage) => void) | undefined;
   let unsubscribed = false;
-  const backend = new VsCodeBackend(
+  const backend = new MessageBackend(
     (m) => sent.push(m),
     (h) => {
       handler = h;
@@ -22,7 +22,7 @@ function setup() {
 
 const list = { schemaVersion: 1, activeAccountNumber: 3, accounts: [] };
 
-describe('VsCodeBackend', () => {
+describe('MessageBackend', () => {
   it('inoltra le richieste e risolve con la risposta dello stesso id', async () => {
     const { backend, sent, reply } = setup();
     const a = backend.listAccounts({ refresh: true });
@@ -175,7 +175,7 @@ describe('VsCodeBackend', () => {
   });
 
   it('postMessage che lancia diventa BackendError', async () => {
-    const backend = new VsCodeBackend(
+    const backend = new MessageBackend(
       () => {
         throw new Error('chiuso');
       },
@@ -187,7 +187,7 @@ describe('VsCodeBackend', () => {
   });
 });
 
-describe('VsCodeBackend: SetupBackend', () => {
+describe('MessageBackend: SetupBackend', () => {
   it('inoltra le richieste di setup e l’avanzamento della stessa richiesta', async () => {
     const { backend, sent, reply } = setup();
     const events: unknown[] = [];

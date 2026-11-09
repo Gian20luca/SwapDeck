@@ -1,6 +1,7 @@
 /**
- * Messaggi tra il webview (VsCodeBackend) e l'extension host. Il webview non esegue nulla: chiede,
- * e l'host valida il metodo e lancia `swapdeck-cli`.
+ * Messaggi tra il pannello (`MessageBackend`) e l'host (extension host di VS Code, plugin JetBrains).
+ * Il pannello non esegue nulla: chiede, e l'host valida il metodo e lancia `swapdeck-cli`. Elenchi
+ * e limiti stanno in `protocol.json`, letto anche dagli host che non sono in TypeScript.
  */
 import type {
   AppPreferences,
@@ -14,49 +15,16 @@ import type {
   SuspendReason,
   UsageQuery,
 } from '@swapdeck/types';
-import type { EngineStatus } from './generated/index.js';
+import protocol from '../protocol.json' with { type: 'json' };
 
-/** Metodi del `Backend` inoltrati all'host. */
-export const REQUEST_METHODS = [
-  'listAccounts',
-  'getStatus',
-  'getConfig',
-  'getConfigValue',
-  'getHistory',
-  'confirmationFor',
-  'runAction',
-  'listMappings',
-  'getEngineState',
-  'setEngineRules',
-  'getEngineProfiles',
-  'applyEngineProfile',
-  'getNotificationSettings',
-  'setNotificationSettings',
-  'getPreferences',
-  'setPreferences',
-  'getHistoryEvents',
-  'getUsageBreakdown',
-  'pickOpenFile',
-  'pickSaveFile',
-  'pickFolder',
-  'diagnoseSetup',
-  'installCswap',
-  'upgradeCswap',
-  'checkCswapUpdate',
-  'dismissCswapUpdate',
-  'getDiagnostics',
-  'openLogsFolder',
-  'copyText',
-  'reloginAccounts',
-  'startRelogin',
-  'submitReloginCode',
-  'cancelRelogin',
-] as const;
+/** Metodi del `Backend` inoltrati all'host (`requestMethods` di `protocol.json`). */
+export const REQUEST_METHODS: readonly RequestMethod[] = protocol.requestMethods as RequestMethod[];
 
 /** Evento di avanzamento di una richiesta lunga: setup di cswap o «Rifai login». */
 export type ProgressEvent = SetupProgress | ReloginEvent;
 
-export type RequestMethod = (typeof REQUEST_METHODS)[number];
+/** Nomi dei metodi, dai parametri qui sotto; `protocol.test.ts` controlla che coincidano col JSON. */
+export type RequestMethod = RequestParams['method'];
 
 export interface HistoryParams {
   account?: number;
@@ -107,7 +75,7 @@ export type RequestParams =
 /** Webview → host. */
 export type WebviewMessage = ({ type: 'request'; id: number } & RequestParams) | { type: 'ready' };
 
-/** Impostazioni di presentazione decise dall'host (lingua di SwapDeck o di VS Code, tema di VS Code). */
+/** Impostazioni di presentazione decise dall'host (lingua di SwapDeck o dell'IDE, tema dell'IDE). */
 export interface ViewSettings {
   locale: 'it' | 'en';
   theme: 'light' | 'dark';
@@ -118,12 +86,12 @@ export function preferredLocaleOf(language: unknown): ViewSettings['locale'] | u
   return language === 'it' || language === 'en' ? language : undefined;
 }
 
-/** Lingua delle viste: quella scelta in SwapDeck, altrimenti quella di VS Code. */
+/** Lingua delle viste: quella scelta in SwapDeck, altrimenti quella dell'IDE (`it…` o inglese). */
 export function viewLocale(
   preferred: ViewSettings['locale'] | undefined,
-  vscodeLanguage: string,
+  hostLanguage: string,
 ): ViewSettings['locale'] {
-  return preferred ?? (vscodeLanguage.toLowerCase().startsWith('it') ? 'it' : 'en');
+  return preferred ?? (hostLanguage.toLowerCase().startsWith('it') ? 'it' : 'en');
 }
 
 /** Motore in esecuzione sospeso (`swapdeck-cli state`): riga sopra le schede. */
@@ -132,8 +100,14 @@ export interface EngineSuspension {
   detail: string[];
 }
 
+/** Campi di `EngineStatus` (`swapdeck-cli state`) che servono alla riga «motore sospeso». */
+export interface EngineSuspensionSource {
+  suspended?: SuspendReason;
+  suspendDetail?: string[];
+}
+
 /** Sospensione da mostrare, decisa dal Rust (`engine.suspended` c'è solo se chiede attenzione). */
-export function suspensionOf(engine: EngineStatus | undefined): EngineSuspension | null {
+export function suspensionOf(engine: EngineSuspensionSource | undefined): EngineSuspension | null {
   if (!engine?.suspended) return null;
   return { reason: engine.suspended, detail: engine.suspendDetail ?? [] };
 }

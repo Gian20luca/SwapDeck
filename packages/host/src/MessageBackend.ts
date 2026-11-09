@@ -45,7 +45,7 @@ import type {
   RequestParams,
   ViewSettings,
   WebviewMessage,
-} from '../protocol.js';
+} from './protocol.js';
 
 export type PostFn = (message: WebviewMessage) => void;
 export type SubscribeFn = (handler: (message: HostMessage) => void) => Unsubscribe;
@@ -57,9 +57,13 @@ interface Pending {
   progress?: (event: ProgressEvent) => void;
 }
 
-/** `Backend` del webview di VS Code: ogni chiamata è un messaggio all'extension host. */
-export class VsCodeBackend implements Backend, SetupBackend, ReloginBackend {
-  /** Le conferme le impone l'extension host (`bridge.ts`) con i dialoghi modali di VS Code. */
+/**
+ * `Backend` del pannello ospitato in un IDE: ogni chiamata è un messaggio all'host. Non sa come i
+ * messaggi viaggiano: `post` li manda (es. `acquireVsCodeApi().postMessage` in VS Code, il ponte
+ * JCEF in JetBrains) e `subscribe` consegna le risposte dell'host.
+ */
+export class MessageBackend implements Backend, SetupBackend, ReloginBackend {
+  /** Le conferme le impone l'host (es. `bridge.ts` di VS Code) con i suoi dialoghi modali. */
   readonly hostConfirms = true;
   private nextId = 1;
   private readonly pending = new Map<number, Pending>();
@@ -78,7 +82,7 @@ export class VsCodeBackend implements Backend, SetupBackend, ReloginBackend {
     this.unsubscribe = subscribe((message) => this.receive(message));
   }
 
-  /** Avvisa l'host che il webview è pronto a ricevere stato e impostazioni. */
+  /** Avvisa l'host che il pannello è pronto a ricevere stato e impostazioni. */
   ready(): void {
     this.post({ type: 'ready' });
   }
@@ -170,7 +174,7 @@ export class VsCodeBackend implements Backend, SetupBackend, ReloginBackend {
     return this.request({ method: 'getEngineState', params: {} });
   }
 
-  /** Salvate nella config: il motore avviato dall'estensione le rilegge al giro dopo. */
+  /** Salvate nella config: il motore avviato dall'host le rilegge al giro dopo. */
   setEngineRules(rules: EngineRules): Promise<EngineState> {
     return this.request({ method: 'setEngineRules', params: { rules } });
   }
@@ -219,7 +223,7 @@ export class VsCodeBackend implements Backend, SetupBackend, ReloginBackend {
     return result;
   }
 
-  /** Selettori nativi di VS Code (`showOpenDialog`/`showSaveDialog` nell'host); `null` se annullati. */
+  /** Selettori nativi dell'IDE (nell'host); `null` se annullati. */
   pickOpenFile(options: PickOptions = {}): Promise<string | null> {
     return this.request({ method: 'pickOpenFile', params: pickParams(options) });
   }
@@ -306,7 +310,7 @@ export class VsCodeBackend implements Backend, SetupBackend, ReloginBackend {
     return () => this.engineListeners.delete(listener);
   }
 
-  /** Lingua e tema di VS Code, inviati dall'host all'avvio e quando cambiano. */
+  /** Lingua e tema dell'IDE, inviati dall'host all'avvio e quando cambiano. */
   onViewSettings(listener: (settings: ViewSettings) => void): Unsubscribe {
     this.viewListeners.add(listener);
     return () => this.viewListeners.delete(listener);

@@ -117,7 +117,7 @@ const tests: Array<[string, (api: SwapDeckApi) => Promise<void>]> = [
       await api.refresh();
       await waitFor('watcher attivo', () => api.syncWatching());
       await api.signalSync();
-      const signal = path.join(process.env['SWAPDECK_HOME']!, 'config', 'vscode-sync.json');
+      const signal = path.join(process.env['SWAPDECK_HOME']!, 'config', 'ide-sync.json');
       assert.ok(existsSync(signal));
     },
   ],

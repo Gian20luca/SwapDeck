@@ -1,0 +1,90 @@
+{
+  "$comment": "Fonte unica delle regole del protocollo pannello ↔ host, letta da VS Code (bridge.ts via @swapdeck/host) e dal plugin JetBrains. Vedi packages/host/README.md.",
+  "version": 1,
+  "requestMethods": [
+    "listAccounts",
+    "getStatus",
+    "getConfig",
+    "getConfigValue",
+    "getHistory",
+    "confirmationFor",
+    "runAction",
+    "listMappings",
+    "getEngineState",
+    "setEngineRules",
+    "getEngineProfiles",
+    "applyEngineProfile",
+    "getNotificationSettings",
+    "setNotificationSettings",
+    "getPreferences",
+    "setPreferences",
+    "getHistoryEvents",
+    "getUsageBreakdown",
+    "pickOpenFile",
+    "pickSaveFile",
+    "pickFolder",
+    "diagnoseSetup",
+    "installCswap",
+    "upgradeCswap",
+    "checkCswapUpdate",
+    "dismissCswapUpdate",
+    "getDiagnostics",
+    "openLogsFolder",
+    "copyText",
+    "reloginAccounts",
+    "startRelogin",
+    "submitReloginCode",
+    "cancelRelogin"
+  ],
+  "actionKinds": [
+    "switch",
+    "add",
+    "addToken",
+    "remove",
+    "disable",
+    "enable",
+    "setAlias",
+    "swap",
+    "move",
+    "map",
+    "unmap",
+    "configSet",
+    "configUnset",
+    "export",
+    "import",
+    "unclaimedPurge",
+    "purge",
+    "upgrade",
+    "run",
+    "autoStart",
+    "autoStop"
+  ],
+  "safeClaudeArgs": ["--continue", "--verbose"],
+  "limits": {
+    "configKeyPattern": "^[A-Za-z0-9_.-]{1,100}$",
+    "versionPattern": "^[0-9][0-9A-Za-z.+-]{0,63}$",
+    "reloginCodeMaxLength": 4096,
+    "copyTextMaxLength": 1000000,
+    "pick": {
+      "textFields": ["title", "defaultPath"],
+      "textMaxLength": 1000,
+      "maxFilters": 10,
+      "filterNameMaxLength": 100,
+      "extensionPattern": "^[A-Za-z0-9]{1,10}$"
+    },
+    "usage": {
+      "windows": ["5h", "7d", "custom"],
+      "groupBy": ["project", "session", "agent", "model"]
+    }
+  },
+  "defaults": {
+    "historySeconds": 604800
+  },
+  "sync": {
+    "file": "ide-sync.json",
+    "legacyFiles": ["vscode-sync.json"],
+    "configFile": "config.json",
+    "debounceMs": 750,
+    "maxSignalBytes": 4096
+  }
+}

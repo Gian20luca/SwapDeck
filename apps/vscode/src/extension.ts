@@ -2,6 +2,7 @@
  * Estensione SwapDeck: vista nella barra delle attività con l'app completa (anche in una scheda),
  * barra di stato, cambio rapido, notifiche, motore e sincronia fra le finestre di VS Code.
  */
+import { preferredLocaleOf, suspensionOf, type PickParams } from '@swapdeck/host';
 import type {
   ActionOutcome,
   Confirmation,
@@ -41,7 +42,6 @@ import {
   SidebarView,
   WebviewHub,
 } from './panel.js';
-import { preferredLocaleOf, suspensionOf, type PickParams } from './protocol.js';
 import { Refresher } from './refresher.js';
 import { SyncWatcher } from './sync.js';
 import { accountLabel, errorStatus, statusArgs, statusModel, type Translate } from './statusBar.js';

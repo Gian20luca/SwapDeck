@@ -1,8 +1,8 @@
+import type { EngineSuspension } from '@swapdeck/host';
+import type { MessageBackend } from '@swapdeck/host/backend';
 import type { SuspendReason } from '@swapdeck/types';
 import { useI18n, type MessageKey, type Translate } from '@swapdeck/ui';
 import { useEffect, useState } from 'react';
-import type { EngineSuspension } from '../protocol.js';
-import type { VsCodeBackend } from './VsCodeBackend.js';
 
 const SUSPEND_KEYS = {
   disabled: 'history.suspend.disabled',
@@ -22,7 +22,7 @@ export function suspensionLine(suspended: EngineSuspension, t: Translate): strin
  * Riga «motore sospeso» sopra le schede, come nell'app desktop: motivo e dettagli (per esempio
  * gli id dei conflitti) dall'ultimo `swapdeck-cli state`. Niente se il motore non è sospeso.
  */
-export function EngineBanner({ backend }: { backend: Pick<VsCodeBackend, 'onEngineSuspension'> }) {
+export function EngineBanner({ backend }: { backend: Pick<MessageBackend, 'onEngineSuspension'> }) {
   const { t } = useI18n();
   const [suspended, setSuspended] = useState<EngineSuspension | null>(null);
   useEffect(() => backend.onEngineSuspension(setSuspended), [backend]);
