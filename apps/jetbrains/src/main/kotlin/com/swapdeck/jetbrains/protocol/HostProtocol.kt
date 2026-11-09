@@ -14,6 +14,22 @@ data class ProtocolLists(
 )
 
 /**
+ * Segnale di sincronia tra gli host (sezione `sync` di `protocol.json`, formato in
+ * `packages/host/README.md`).
+ */
+@Serializable
+data class SyncRules(
+    /** Segnale scritto dopo le proprie azioni (`ide-sync.json`). */
+    val file: String,
+    /** Nomi vecchi ancora osservati, mai scritti (`vscode-sync.json`). */
+    val legacyFiles: List<String>,
+    /** Config comune (`config.json`). */
+    val configFile: String,
+    val debounceMs: Long,
+    val maxSignalBytes: Int,
+)
+
+/**
  * Elenchi e limiti del protocollo del pannello (`packages/host/protocol.json`, copiato nel jar dalla
  * build in `swapdeck/protocol.json`). Fonte unica con l'estensione VS Code: il ponte li legge da qui.
  */
@@ -33,6 +49,9 @@ object HostProtocol {
 
     /** Metodi, `kind` delle azioni e argomenti di `claude` ammessi. */
     val lists: ProtocolLists by lazy { format.decodeFromString(ProtocolLists.serializer(), text) }
+
+    /** Segnale di sincronia (`sync`). */
+    val sync: SyncRules by lazy { format.decodeFromJsonElement(SyncRules.serializer(), json.getValue("sync")) }
 
     /** Metodi che il pannello può chiedere (`requestMethods`). */
     val requestMethods: Set<String> by lazy { lists.requestMethods.toSet() }

@@ -22,5 +22,12 @@
                 icon="/icons/swapdeck.svg"
                 factoryClass="com.swapdeck.jetbrains.toolwindow.SwapDeckToolWindowFactory"/>
     <notificationGroup id="SwapDeck" displayType="BALLOON" key="notification.group.name"/>
+    <!-- Avvio di stato, motore e sincronia (servizi dell'applicazione, uno per processo IDE). -->
+    <postStartupActivity implementation="com.swapdeck.jetbrains.SwapDeckStartup"/>
   </extensions>
+
+  <applicationListeners>
+    <listener class="com.swapdeck.jetbrains.state.SwapDeckActivationListener"
+              topic="com.intellij.openapi.application.ApplicationActivationListener"/>
+  </applicationListeners>
 </idea-plugin>

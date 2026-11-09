@@ -184,11 +184,11 @@ class CliRunnerTest {
         assertTrue(waitUntil { seen.size == 1 })
         assertTrue(channel!!.write("codice\n"))
         assertTrue(waitUntil { seen.size == 2 })
-        assertTrue(channel!!.write("quit\n"))
+        assertTrue(channel.write("quit\n"))
         val value = future.get(10, TimeUnit.SECONDS)
         assertEquals(listOf("primo", "codice", "quit"), seen.toList())
         assertEquals(JsonPrimitive(true), value.jsonObject["finished"])
-        assertFalse(channel!!.write("tardi\n"), "dopo l'uscita il canale è chiuso")
+        assertFalse(channel.write("tardi\n"), "dopo l'uscita il canale è chiuso")
     }
 
     @Test
