@@ -3,6 +3,7 @@
 
 pub mod applog;
 pub mod autostart;
+pub mod childenv;
 pub mod config;
 pub mod conflicts;
 pub mod cswap;

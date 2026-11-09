@@ -299,6 +299,7 @@ pub fn open_folder(dir: &Path) -> std::io::Result<()> {
         "xdg-open"
     };
     let mut cmd = std::process::Command::new(program);
+    crate::childenv::sanitize(&mut cmd);
     cmd.arg(dir)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())

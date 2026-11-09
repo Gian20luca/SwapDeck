@@ -26,7 +26,9 @@ pub fn open(cmd: &CommandSpec) -> Res<()> {
 pub fn open(cmd: &CommandSpec) -> Res<()> {
     use std::process::{Command, Stdio};
     for term in ["x-terminal-emulator", "xterm"] {
-        let spawned = Command::new(term)
+        let mut command = Command::new(term);
+        swapdeck_core::childenv::sanitize(&mut command);
+        let spawned = command
             .arg("-e")
             .arg(&cmd.program)
             .args(&cmd.args)

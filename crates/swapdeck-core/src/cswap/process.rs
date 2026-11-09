@@ -41,6 +41,7 @@ impl RawOutput {
 /// Prepara il comando con l'ambiente e le opzioni comuni.
 pub(crate) fn command(program: &Path, args: &[OsString]) -> Command {
     let mut cmd = Command::new(program);
+    crate::childenv::sanitize(&mut cmd);
     cmd.args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

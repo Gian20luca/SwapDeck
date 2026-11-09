@@ -468,6 +468,7 @@ struct Captured {
 /// `None` se non parte o scade.
 fn run_capture(program: &Path, args: &[&str], timeout: Duration) -> Option<Captured> {
     let mut cmd = Command::new(program);
+    crate::childenv::sanitize(&mut cmd);
     cmd.args(args)
         .env("LC_ALL", "C")
         .env("LANG", "C")
