@@ -44,15 +44,15 @@ CSP della pagina: `default-src 'none'`, script solo con il nonce, stile, font e 
 
 Progetto Gradle a sé (Kotlin DSL) dentro il monorepo. Serve un JDK 21; il wrapper scarica Gradle e la piattaforma.
 
-| File                                                     | Cosa                                                                                                                                                                        |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `settings.gradle.kts`, `build.gradle.kts`                | Kotlin JVM (target 21, `apiVersion` 2.0 come la libreria standard della 2024.3), kotlinx.serialization, IntelliJ Platform Gradle Plugin 2.x                                 |
-| `gradle.properties`                                      | `pluginVersion` (uguale a `Cargo.toml`), piattaforma per compilare (IntelliJ IDEA Community 2024.3.x), `pluginSinceBuild` 243                                               |
-| `gradle/wrapper/`, `gradlew`, `gradlew.bat`              | wrapper Gradle                                                                                                                                                              |
-| `src/main/resources/META-INF/plugin.xml`                 | id `com.swapdeck.jetbrains`, dipendenza da `com.intellij.modules.platform`, Terminal facoltativo (`swapdeck-terminal.xml`), tool window, notifiche                          |
-| `src/main/resources/messages/SwapDeckBundle*.properties` | testi in inglese e italiano (`SwapDeckBundle`)                                                                                                                              |
-| `src/main/kotlin/com/swapdeck/jetbrains/`                | `SwapDeckBundle`, `toolwindow/` (per ora un segnaposto), `protocol/HostProtocol` (legge `swapdeck/protocol.json` dal jar), `cli/` (`CliRunner`, `SwapDeckCli`), `settings/` |
-| `src/test/kotlin/`                                       | JUnit 5: stesse chiavi nelle due lingue, `protocol.json` nel jar con i 33 metodi                                                                                            |
+| File                                                     | Cosa                                                                                                                                                                                                     |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `settings.gradle.kts`, `build.gradle.kts`                | Kotlin JVM (target 21, `apiVersion` 2.0 come la libreria standard della 2024.3), kotlinx.serialization, IntelliJ Platform Gradle Plugin 2.x                                                              |
+| `gradle.properties`                                      | `pluginVersion` (uguale a `Cargo.toml`), piattaforma per compilare (IntelliJ IDEA Community 2024.3.x), `pluginSinceBuild` 243                                                                            |
+| `gradle/wrapper/`, `gradlew`, `gradlew.bat`              | wrapper Gradle                                                                                                                                                                                           |
+| `src/main/resources/META-INF/plugin.xml`                 | id `com.swapdeck.jetbrains`, dipendenza da `com.intellij.modules.platform`, Terminal facoltativo (`swapdeck-terminal.xml`), tool window, notifiche                                                       |
+| `src/main/resources/messages/SwapDeckBundle*.properties` | testi in inglese e italiano (`SwapDeckBundle`)                                                                                                                                                           |
+| `src/main/kotlin/com/swapdeck/jetbrains/`                | `SwapDeckBundle`, `toolwindow/` (per ora un segnaposto), `protocol/HostProtocol` (legge `swapdeck/protocol.json` dal jar), `cli/` (`CliRunner`, `SwapDeckCli`), `settings/`, `engine/` (`EngineService`) |
+| `src/test/kotlin/`                                       | JUnit 5: stesse chiavi nelle due lingue, `protocol.json` nel jar con i 33 metodi                                                                                                                         |
 
 Nella build:
 
