@@ -13,6 +13,9 @@
 
   <depends>com.intellij.modules.platform</depends>
   <depends optional="true" config-file="swapdeck-terminal.xml">org.jetbrains.plugins.terminal</depends>
+  <!-- JCEF: dalla 2026.x è un plugin a parte (com.intellij.modules.jcef) e le sue classi si vedono
+       solo dichiarandolo; nella 2024.3 sta nel nucleo e la dipendenza, assente, viene ignorata. -->
+  <depends optional="true" config-file="swapdeck-jcef.xml">com.intellij.modules.jcef</depends>
 
   <resource-bundle>messages.SwapDeckBundle</resource-bundle>
 

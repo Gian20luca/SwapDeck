@@ -26,14 +26,14 @@ class SwapDeckToolWindowFactory : ToolWindowFactory, DumbAware {
         // Dopo l'installazione l'avvio dei progetti già aperti non gira: lo stato parte anche da qui.
         if (!app.isUnitTestMode) app.executeOnPooledThread { StateService.getInstance().start() }
 
-        val panel = if (JBCefApp.isSupported()) {
-            try {
-                SwapDeckPanel(project)
-            } catch (e: Exception) {
-                LOG.warn("pannello JCEF non creato", e)
-                null
-            }
-        } else {
+        // Anche gli Error (NoClassDefFoundError se JCEF manca o è disattivato): mai una tool window vuota.
+        val panel = try {
+            if (JBCefApp.isSupported()) SwapDeckPanel(project) else null
+        } catch (e: Exception) {
+            LOG.warn("pannello JCEF non creato", e)
+            null
+        } catch (e: LinkageError) {
+            LOG.warn("JCEF non disponibile per il plugin", e)
             null
         }
         val component: JComponent = panel?.component ?: message()

@@ -1,0 +1,5 @@
+<!-- Dipendenza facoltativa da JCEF (com.intellij.modules.jcef, IDE 2026.x): serve solo a rendere
+     visibili le classi com.intellij.ui.jcef al plugin. Il pannello resta registrato in plugin.xml,
+     così senza JCEF la tool window mostra il messaggio invece di restare vuota. -->
+<idea-plugin>
+</idea-plugin>
