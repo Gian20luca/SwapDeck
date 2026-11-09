@@ -9,5 +9,5 @@
     "types": ["node"],
     "paths": { "@swapdeck/types": ["../../packages/types/src/index.ts"] }
   },
-  "include": ["webview"]
+  "include": ["webview", "test"]
 }

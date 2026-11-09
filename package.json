@@ -17,7 +17,9 @@
     "dist:local": "node scripts/dist-local.mjs",
     "dist:linux": "node scripts/dist-linux.mjs",
     "check:tauri": "node scripts/check-tauri-versions.mjs",
-    "gen:types": "pnpm --filter @swapdeck/types gen:types && pnpm --filter swapdeck-vscode gen:types"
+    "gen:types": "pnpm --filter @swapdeck/types gen:types && pnpm --filter swapdeck-vscode gen:types",
+    "jetbrains:build": "pnpm --filter swapdeck-jetbrains gradle:build",
+    "jetbrains:test": "pnpm --filter swapdeck-jetbrains gradle:test"
   },
   "devDependencies": {
     "prettier": "catalog:"

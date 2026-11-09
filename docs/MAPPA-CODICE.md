@@ -6,7 +6,7 @@ Struttura iniziale (step 0). Ogni step aggiorna la sezione che tocca.
 
 | File | Ruolo |
 |---|---|
-| `package.json` | script `build`, `test`, `lint` (Prettier, typecheck e `lint:apps`), `lint:apps`, `format`, `test:rust`, `lint:rust`, `gen:types`, `dist:local` |
+| `package.json` | script `build`, `test`, `lint` (Prettier, typecheck e `lint:apps`), `lint:apps`, `format`, `test:rust`, `lint:rust`, `gen:types`, `dist:local`, `jetbrains:build` e `jetbrains:test` (Gradle, serve un JDK 21) |
 | `scripts/check-app-isolation.mjs` | `pnpm lint:apps`: `apps/vscode` e `apps/jetbrains` non si riferiscono l'una all'altra (stringhe di import, dipendenze e percorsi nei file di build che puntano all'altra app o al suo pacchetto); passa anche se `apps/jetbrains` non c'è |
 | `pnpm-workspace.yaml` | pacchetti, catalogo delle versioni, override di Vite, script di installazione ammessi |
 | `tsconfig.base.json` | opzioni TypeScript strict condivise |
@@ -86,7 +86,7 @@ e `tsconfig.build.json` (emissione in `dist/`, test esclusi).
 | `@swapdeck/ui` | `packages/ui` | React 19 + Vite 6: dashboard, mini-widget, grafici uPlot, i18n, tema (vedi sotto) |
 | `@swapdeck/host` | `packages/host` | parte comune agli host delle IDE: protocollo pannello ↔ host, `protocol.json`, `MessageBackend`, segnale `ide-sync.json` (vedi sotto) |
 | `swapdeck-vscode` | `apps/vscode` | estensione VS Code (step 7, vedi sotto) |
-| `swapdeck-jetbrains` | `apps/jetbrains` | plugin per le IDE JetBrains: pannello per JCEF (vedi sotto) |
+| `swapdeck-jetbrains` | `apps/jetbrains` | plugin per le IDE JetBrains: pannello per JCEF e plugin Gradle in Kotlin (vedi sotto) |
 
 ### `packages/ui` (step 3)
 
@@ -173,3 +173,8 @@ Plugin per le IDE JetBrains (2024.3 e successive). Usa solo `packages/*` e `swap
 | `webview/tabStore.ts` | `loadState`/`saveState` (chiave `swapdeck.webview.state`, errori di `localStorage` ignorati) |
 | `webview/index.html` | pagina con CSP a nonce e segnaposto `__SWAPDECK_NONCE__`, `__SWAPDECK_LANG__` |
 | `scripts/build.mjs` | esbuild (browser, IIFE, es2022) in `out/webview/` (`main.js`, `main.css`, `index.html`); `--production` minimizza e toglie le mappe |
+| `build.gradle.kts`, `settings.gradle.kts`, `gradle.properties`, wrapper | Gradle 9.9, IntelliJ Platform Gradle Plugin 2.20, Kotlin 2.4.21 (JVM 21, `apiVersion` 2.0 per la libreria standard 2.0.21 della 2024.3), kotlinx.serialization dell'IDE (compilazione contro la 1.7.3, `compileOnly`), JUnit 5; piattaforma IntelliJ IDEA Community 2024.3.7, `since-build` 243 senza limite superiore; `pluginVersion` = `Cargo.toml` (task `checkVersion`, in `check` e prima di `buildPlugin`); `buildWebview` (Node) e `processResources` mettono `webview/` e `swapdeck/protocol.json` (da `packages/host`) nel jar |
+| `src/main/resources/META-INF/plugin.xml` | id `com.swapdeck.jetbrains`, `com.intellij.modules.platform`, Terminal facoltativo (`swapdeck-terminal.xml`, vuoto), tool window «SwapDeck» (`icons/swapdeck.svg`), gruppo di notifiche «SwapDeck», `resource-bundle` |
+| `src/main/kotlin/com/swapdeck/jetbrains/` | `SwapDeckBundle` (`DynamicBundle` su `messages/SwapDeckBundle*.properties`, inglese e italiano), `toolwindow/SwapDeckToolWindowFactory` (segnaposto), `protocol/HostProtocol` (`protocol.json` dal jar: JSON intero e `ProtocolLists` con metodi, `kind` e argomenti di `claude`) |
+| `src/test/kotlin/`, `test/version.test.ts` | JUnit 5: stesse chiavi nelle due lingue, `protocol.json` con i 33 metodi; vitest: versione = `Cargo.toml` |
+| `scripts/gradle.mjs` | `pnpm gradle:build` / `gradle:test` (radice: `jetbrains:build`, `jetbrains:test`): `gradlew` o `gradlew.bat`. `pnpm build` e `pnpm test` della radice non chiedono Java |

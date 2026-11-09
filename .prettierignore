@@ -14,3 +14,7 @@ apps/vscode/src/generated/
 .vscode-test/
 out-test/
 apps/vscode/bin/
+apps/jetbrains/build/
+apps/jetbrains/.gradle/
+apps/jetbrains/.intellijPlatform/
+apps/jetbrains/.kotlin/

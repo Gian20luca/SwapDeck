@@ -8,7 +8,9 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "gradle:build": "node scripts/gradle.mjs --no-daemon buildPlugin",
+    "gradle:test": "node scripts/gradle.mjs --no-daemon test"
   },
   "devDependencies": {
     "@swapdeck/host": "workspace:*",

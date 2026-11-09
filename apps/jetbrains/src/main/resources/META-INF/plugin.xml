@@ -1,0 +1,26 @@
+<idea-plugin>
+  <id>com.swapdeck.jetbrains</id>
+  <name>SwapDeck</name>
+  <vendor>SwapDeck</vendor>
+  <!-- version, since-build e until-build li scrive Gradle (gradle.properties). -->
+
+  <description><![CDATA[
+    <p>Monitor and manage your <code>cswap</code> Claude accounts from the IDE: usage, switching,
+    directory maps, automatic switching engine and notifications.</p>
+    <p>Monitor e gestione degli account Claude di <code>cswap</code> dall'IDE: consumi, cambio
+    account, mappe delle cartelle, motore di cambio automatico e notifiche.</p>
+  ]]></description>
+
+  <depends>com.intellij.modules.platform</depends>
+  <depends optional="true" config-file="swapdeck-terminal.xml">org.jetbrains.plugins.terminal</depends>
+
+  <resource-bundle>messages.SwapDeckBundle</resource-bundle>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <toolWindow id="SwapDeck"
+                anchor="right"
+                icon="/icons/swapdeck.svg"
+                factoryClass="com.swapdeck.jetbrains.toolwindow.SwapDeckToolWindowFactory"/>
+    <notificationGroup id="SwapDeck" displayType="BALLOON" key="notification.group.name"/>
+  </extensions>
+</idea-plugin>
