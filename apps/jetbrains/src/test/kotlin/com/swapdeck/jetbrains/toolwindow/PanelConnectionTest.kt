@@ -50,6 +50,13 @@ class PanelConnectionTest {
     }
 
     @Test
+    fun `messaggio troppo lungo - scartato prima del ponte`() {
+        connection.fromPage("""{"type":"ready","x":"${"x".repeat(com.swapdeck.jetbrains.bridge.BridgeSession.MAX_MESSAGE_CHARS)}"}""")
+        assertTrue(received.isEmpty())
+        assertFalse(connection.isLive)
+    }
+
+    @Test
     fun `senza stato solo view`() {
         state = null
         connection.fromPage("""{"type":"ready"}""")

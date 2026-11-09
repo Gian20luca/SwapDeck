@@ -1,6 +1,7 @@
 package com.swapdeck.jetbrains.bridge
 
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.diagnostic.logger
 import com.swapdeck.jetbrains.cli.CliException
 import com.swapdeck.jetbrains.cli.CswapError
 import com.swapdeck.jetbrains.cli.unwrap
@@ -44,8 +45,12 @@ class BridgeSession internal constructor(
         return true
     }
 
-    /** Come [receive], dal testo JSON del pannello; un testo non JSON si ignora (`false`). */
+    /**
+     * Come [receive], dal testo JSON del pannello; un testo non JSON o più lungo di
+     * [MAX_MESSAGE_CHARS] si ignora (`false`) senza leggerlo.
+     */
     fun receive(text: String, send: (JsonObject) -> Unit): Boolean {
+        if (text.length > MAX_MESSAGE_CHARS) return false
         val message = try {
             Json.parseToJsonElement(text)
         } catch (e: Exception) {
@@ -87,11 +92,27 @@ class BridgeSession internal constructor(
     override fun dispose() = scope.abort()
 
     companion object {
-        /** Errore per il pannello: quello della CLI, `cancelled` per un annullamento, altrimenti `failed`. */
+        /**
+         * Lunghezza massima (in caratteri) di un messaggio del pannello: sopra il testo più lungo che
+         * il protocollo ammette (`copyText`, un milione di caratteri) con margine per il JSON e gli
+         * escape. Oltre si scarta prima di leggerlo.
+         */
+        const val MAX_MESSAGE_CHARS: Int = 4 * 1024 * 1024
+
+        private val LOG = logger<BridgeSession>()
+
+        /**
+         * Errore per il pannello: quello della CLI, `cancelled` per un annullamento, altrimenti
+         * `failed` con un messaggio generico (il dettaglio, che può avere percorsi locali, va solo nel
+         * log dell'IDE).
+         */
         fun errorOf(error: Throwable): CswapError = when (val cause = error.unwrap()) {
             is CliException -> cause.error
             is CancellationException -> CswapError.of("cancelled", "operazione annullata")
-            else -> CswapError.of("failed", cause.message ?: cause.javaClass.simpleName)
+            else -> {
+                LOG.warn("richiesta del pannello non riuscita", cause)
+                CswapError.of("failed", "errore interno del plugin (dettagli nel log dell'IDE)")
+            }
         }
     }
 }

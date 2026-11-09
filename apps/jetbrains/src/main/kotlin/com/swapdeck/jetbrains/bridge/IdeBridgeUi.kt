@@ -4,6 +4,7 @@ import com.intellij.ide.actions.RevealFileAction
 import com.intellij.notification.NotificationGroupManager
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.application.ModalityState
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileChooser.FileChooser
@@ -17,6 +18,7 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
+import com.swapdeck.jetbrains.IdeText
 import com.swapdeck.jetbrains.SwapDeckBundle
 import java.awt.datatransfer.StringSelection
 import java.io.File
@@ -25,29 +27,23 @@ import java.nio.file.Path
 /**
  * [BridgeUi] con i dialoghi dell'IDE, per il pannello della finestra di [project] (`null` = nessuna
  * finestra). Si chiama dai thread del plugin: dialoghi, selettori e appunti passano all'EDT con
- * `invokeAndWait` e il thread della richiesta aspetta la risposta.
+ * `invokeAndWait` e il thread della richiesta aspetta la risposta; il comando di `run` invece con
+ * `invokeLater`, senza trattenere la risposta. I testi della CLI o del pannello passano da
+ * [IdeText] (notifiche e dialoghi sono HTML), le conferme hanno «Annulla» come predefinito.
  */
 class IdeBridgeUi(private val project: Project?) : BridgeUi {
     private val owner: Project? get() = project?.takeUnless { it.isDisposed }
 
     override fun confirmAction(description: String, confirmation: Confirmation): Boolean = onEdt {
         val label = SwapDeckBundle.message("bridge.confirm.action", description)
-        val choice = Messages.showOkCancelDialog(
-            owner,
-            label,
-            TITLE,
-            SwapDeckBundle.message("bridge.confirm.ok"),
-            Messages.getCancelButton(),
-            Messages.getWarningIcon(),
-        )
         when {
-            choice != Messages.OK -> false
+            !confirmDialog(owner, label) -> false
             confirmation !is Confirmation.Typed -> true
             else -> {
                 val word = confirmation.word
                 val typed = Messages.showInputDialog(
                     owner,
-                    SwapDeckBundle.message("bridge.confirm.typed", label, word),
+                    IdeText.dialog(SwapDeckBundle.message("bridge.confirm.typed", label, word)),
                     TITLE,
                     Messages.getWarningIcon(),
                     "",
@@ -63,42 +59,38 @@ class IdeBridgeUi(private val project: Project?) : BridgeUi {
     }
 
     override fun confirmSetup(kind: String): Boolean = onEdt {
-        val label = SwapDeckBundle.message(if (kind == "install") "bridge.setup.install" else "bridge.setup.upgrade")
-        Messages.showOkCancelDialog(
-            owner,
-            label,
-            TITLE,
-            SwapDeckBundle.message("bridge.confirm.ok"),
-            Messages.getCancelButton(),
-            Messages.getWarningIcon(),
-        ) == Messages.OK
+        confirmDialog(owner, SwapDeckBundle.message(if (kind == "install") "bridge.setup.install" else "bridge.setup.upgrade"))
     }
 
-    override fun pick(kind: PickKind, options: PickOptions): String? = onEdt {
+    override fun pick(kind: PickKind, options: PickOptions): String? {
         val extensions = options.filters.orEmpty().flatMap { it.extensions }.map { it.lowercase() }.toSet()
-        val chosen: String? = when (kind) {
+        // Percorso iniziale solo se assoluto e locale, risolto qui (thread del plugin) e non sull'EDT.
+        val default = LocalPaths.localAbsolute(options.defaultPath)?.let(::File)
+        return when (kind) {
             PickKind.SAVE_FILE -> {
-                val descriptor = FileSaverDescriptor(options.title ?: TITLE, "", *extensions.toTypedArray())
-                val default = options.defaultPath?.let(::File)
-                val baseDir = default?.takeIf { it.isAbsolute }?.parentFile?.let(::findLocal)
-                FileChooserFactory.getInstance().createSaveFileDialog(descriptor, owner)
-                    .save(baseDir, default?.name)?.file?.path
+                val baseDir = default?.parentFile?.let(::findLocalDir)
+                onEdt {
+                    val descriptor = FileSaverDescriptor(options.title ?: TITLE, "", *extensions.toTypedArray())
+                    FileChooserFactory.getInstance().createSaveFileDialog(descriptor, owner)
+                        .save(baseDir, default?.name)?.file?.path
+                }
             }
             PickKind.OPEN_FILE, PickKind.FOLDER -> {
-                var descriptor = if (kind == PickKind.FOLDER) {
-                    FileChooserDescriptorFactory.createSingleFolderDescriptor()
-                } else {
-                    FileChooserDescriptorFactory.createSingleFileDescriptor()
+                val toSelect = default?.let(::findLocal)
+                onEdt {
+                    var descriptor = if (kind == PickKind.FOLDER) {
+                        FileChooserDescriptorFactory.createSingleFolderDescriptor()
+                    } else {
+                        FileChooserDescriptorFactory.createSingleFileDescriptor()
+                    }
+                    options.title?.let { descriptor = descriptor.withTitle(it) }
+                    if (kind == PickKind.OPEN_FILE && extensions.isNotEmpty()) {
+                        descriptor = descriptor.withFileFilter { file -> file.extension?.lowercase() in extensions }
+                    }
+                    FileChooser.chooseFile(descriptor, owner, toSelect)?.let { FileUtil.toSystemDependentName(it.path) }
                 }
-                options.title?.let { descriptor = descriptor.withTitle(it) }
-                if (kind == PickKind.OPEN_FILE && extensions.isNotEmpty()) {
-                    descriptor = descriptor.withFileFilter { file -> file.extension?.lowercase() in extensions }
-                }
-                val toSelect = options.defaultPath?.let(::File)?.takeIf { it.isAbsolute }?.let(::findLocal)
-                FileChooser.chooseFile(descriptor, owner, toSelect)?.let { FileUtil.toSystemDependentName(it.path) }
             }
         }
-        chosen
     }
 
     override fun copyText(text: String) = onEdt {
@@ -109,8 +101,9 @@ class IdeBridgeUi(private val project: Project?) : BridgeUi {
         RevealFileAction.openDirectory(Path.of(dir))
     }
 
+    /** Non blocca la richiesta: terminale o dialogo arrivano dopo, sull'EDT. */
     override fun openCommand(program: String, args: List<String>) {
-        onEdt {
+        ApplicationManager.getApplication().invokeLater({
             val target = owner
             val opened = target != null && CommandRunner.EP.extensionList.any { runner ->
                 try {
@@ -121,7 +114,7 @@ class IdeBridgeUi(private val project: Project?) : BridgeUi {
                 }
             }
             if (!opened) showCommand(commandLine(program, args))
-        }
+        }, ModalityState.nonModal())
     }
 
     /** Senza plugin Terminal: il comando in un dialogo, con «Copia». */
@@ -129,7 +122,7 @@ class IdeBridgeUi(private val project: Project?) : BridgeUi {
         val copy = SwapDeckBundle.message("bridge.command.copy")
         val choice = Messages.showDialog(
             owner,
-            SwapDeckBundle.message("bridge.command.message", line),
+            IdeText.dialog(SwapDeckBundle.message("bridge.command.message", line)),
             TITLE,
             arrayOf(copy, SwapDeckBundle.message("bridge.command.close")),
             0,
@@ -140,11 +133,15 @@ class IdeBridgeUi(private val project: Project?) : BridgeUi {
 
     override fun warn(text: String) {
         NotificationGroupManager.getInstance().getNotificationGroup(NOTIFICATION_GROUP)
-            .createNotification(text, NotificationType.WARNING)
+            .createNotification(IdeText.html(text), NotificationType.WARNING)
             .notify(owner)
     }
 
-    private fun findLocal(file: File): VirtualFile? = LocalFileSystem.getInstance().findFileByIoFile(file)
+    /** File o cartella locale esistente (controllo fuori dall'EDT), altrimenti `null`. */
+    private fun findLocal(file: File): VirtualFile? =
+        if (file.exists()) ReadAction.compute<VirtualFile?, RuntimeException> { LocalFileSystem.getInstance().findFileByIoFile(file) } else null
+
+    private fun findLocalDir(dir: File): VirtualFile? = if (dir.isDirectory) findLocal(dir) else null
 
     /** Esegue [block] sull'EDT e ne restituisce l'esito (anche l'eccezione) al thread chiamante. */
     private fun <T> onEdt(block: () -> T): T {
@@ -155,9 +152,26 @@ class IdeBridgeUi(private val project: Project?) : BridgeUi {
         return result!!.getOrThrow()
     }
 
-    private companion object {
-        const val TITLE = "SwapDeck"
-        const val NOTIFICATION_GROUP = "SwapDeck"
-        val LOG = logger<IdeBridgeUi>()
+    companion object {
+        private const val TITLE = "SwapDeck"
+
+        /**
+         * Conferma modale con «Conferma» e «Annulla»: predefinito e con il fuoco è «Annulla», così un
+         * Invio dato mentre si scriveva non conferma. Il testo passa da [IdeText.dialog]. Dall'EDT.
+         */
+        fun confirmDialog(project: Project?, message: String, confirmText: String = SwapDeckBundle.message("bridge.confirm.ok")): Boolean =
+            Messages.showDialog(
+                project,
+                IdeText.dialog(message),
+                TITLE,
+                null,
+                arrayOf(confirmText, Messages.getCancelButton()),
+                1,
+                1,
+                Messages.getWarningIcon(),
+            ) == 0
+
+        private const val NOTIFICATION_GROUP = "SwapDeck"
+        private val LOG = logger<IdeBridgeUi>()
     }
 }

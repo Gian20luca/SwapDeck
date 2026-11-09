@@ -91,9 +91,17 @@ internal class BridgeValidation(private val rules: BridgeRules) {
     companion object {
         private val MAX_SAFE = BigDecimal(9_007_199_254_740_991L)
 
+        /**
+         * Lunghezza massima del testo di un numero. Un intero sicuro ne usa al più 17 (anche `-9007199254740991.0`
+         * o `9.007199254740991e15` stanno larghi); oltre si rifiuta prima di `BigDecimal`, che su testi lunghi
+         * costa un tempo quadratico (un milione di cifre ≈ 10 s sul thread che riceve i messaggi).
+         */
+        const val MAX_NUMBER_LENGTH = 32
+
         /** Intero sicuro di JavaScript (|n| ≤ 2^53 - 1, senza parte decimale), altrimenti `null`. */
         fun safeInteger(primitive: JsonPrimitive): Long? {
             if (primitive.isString || primitive.booleanOrNull != null || primitive is JsonNull) return null
+            if (primitive.content.length > MAX_NUMBER_LENGTH) return null
             val number = primitive.content.toBigDecimalOrNull() ?: return null
             if (number.abs() > MAX_SAFE) return null
             if (number.signum() != 0 && number.stripTrailingZeros().scale() > 0) return null
@@ -107,13 +115,46 @@ internal fun JsonElement?.textOrNull(): String? = (this as? JsonPrimitive)?.take
 
 internal fun JsonObject.textOrNull(key: String): String? = this[key].textOrNull()
 
-/** Descrizione breve dell'azione per il dialogo di conferma (mai il token di `addToken`). */
-fun describeAction(action: JsonObject): String {
-    fun field(key: String): String = when (val value = action[key]) {
-        null, JsonNull -> "?"
-        is JsonPrimitive -> value.content
-        else -> value.toString()
+/** Lunghezza massima di un valore del pannello nel dialogo di conferma (oltre: troncato con `…`). */
+const val DESCRIBE_MAX_VALUE_LENGTH = 120
+
+/**
+ * Valore del pannello (non fidato) come si mostra in un dialogo: caratteri di controllo (Cc),
+ * di formato (Cf: U+200E/F, U+202A–U+202E, U+2066–U+2069…) e separatori di riga o paragrafo
+ * diventano `\uXXXX` visibili, così un a capo o un cambio di direzione non travestono il
+ * bersaglio; oltre [max] caratteri si tronca con `…` (mai a metà di una coppia surrogata).
+ */
+fun displaySafe(value: String, max: Int = DESCRIBE_MAX_VALUE_LENGTH): String {
+    val out = StringBuilder()
+    var i = 0
+    while (i < value.length) {
+        if (out.length >= max) {
+            out.append('…')
+            break
+        }
+        val cp = value.codePointAt(i)
+        when (Character.getType(cp).toByte()) {
+            Character.CONTROL, Character.FORMAT, Character.LINE_SEPARATOR, Character.PARAGRAPH_SEPARATOR ->
+                out.append(String.format("\\u%04X", cp))
+            else -> out.appendCodePoint(cp)
+        }
+        i += Character.charCount(cp)
     }
+    return out.toString()
+}
+
+/**
+ * Descrizione breve dell'azione per il dialogo di conferma (mai il token di `addToken`). I valori
+ * vengono dal pannello: passano da [displaySafe].
+ */
+fun describeAction(action: JsonObject): String {
+    fun field(key: String): String = displaySafe(
+        when (val value = action[key]) {
+            null, JsonNull -> "?"
+            is JsonPrimitive -> value.content
+            else -> value.toString()
+        },
+    )
     return when (val kind = action.textOrNull("kind") ?: "?") {
         "remove", "disable", "enable", "setAlias" -> "$kind #${field("account")}"
         "swap" -> "swap #${field("a")} ↔ #${field("b")}"
@@ -127,6 +168,6 @@ fun describeAction(action: JsonObject): String {
         }
         "unclaimedPurge" -> "unclaimed --purge ${field("id")}"
         "configSet", "configUnset" -> "$kind ${field("key")}"
-        else -> kind
+        else -> displaySafe(kind)
     }
 }

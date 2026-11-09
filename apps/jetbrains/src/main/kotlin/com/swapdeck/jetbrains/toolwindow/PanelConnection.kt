@@ -1,5 +1,6 @@
 package com.swapdeck.jetbrains.toolwindow
 
+import com.swapdeck.jetbrains.bridge.BridgeSession
 import com.swapdeck.jetbrains.state.CliState
 import kotlinx.serialization.json.JsonObject
 
@@ -31,6 +32,8 @@ class PanelConnection(
     /** Messaggio del pannello (testo JSON, non fidato). */
     fun fromPage(text: String) {
         if (synchronized(lock) { closed }) return
+        // Troppo lungo: si scarta senza leggerlo (né qui né nel ponte).
+        if (text.length > BridgeSession.MAX_MESSAGE_CHARS) return
         if (receive(text, ::post)) return
         if (PanelMessages.typeOf(text) != "ready") return
         synchronized(lock) {
