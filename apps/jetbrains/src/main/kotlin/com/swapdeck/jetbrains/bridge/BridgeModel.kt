@@ -1,7 +1,7 @@
 package com.swapdeck.jetbrains.bridge
 
 import com.swapdeck.jetbrains.cli.CliException
-import com.swapdeck.jetbrains.engine.EngineResume
+import com.swapdeck.jetbrains.engine.EnginePause
 import com.swapdeck.jetbrains.state.CliState
 import kotlinx.serialization.json.JsonObject
 import java.util.concurrent.CompletableFuture
@@ -23,8 +23,11 @@ interface BridgeHost {
      */
     fun afterAction(outcome: JsonObject): CompletableFuture<*>
 
-    /** Ferma il motore di questo processo (`upgrade` o `relogin`); la ripresa lo riavvia. */
-    fun pauseEngine(why: String): CompletableFuture<EngineResume>
+    /**
+     * Ferma il motore di questo processo (`upgrade` o `relogin`): la pausa vale subito, `stopped` si
+     * completa a motore fermo, `resume` (sempre, in un `finally`) lo riavvia.
+     */
+    fun pauseEngine(why: String): EnginePause
 
     /** Dopo installazione, aggiornamento o «Rifai login»: segnale agli altri host e `configChanged`. */
     fun changed()
@@ -90,8 +93,7 @@ interface BridgeUi {
 
 /**
  * Durata di un pannello: chiuderlo ([abort]) chiama una volta sola le funzioni registrate (richieste
- * lunghe: annulla del «Rifai login», arresto dell'installazione). Registrare dopo la chiusura chiama
- * subito.
+ * lunghe: annulla del «Rifai login»). Registrare dopo la chiusura chiama subito.
  */
 class AbortScope {
     private val callbacks = LinkedHashSet<() -> Unit>()

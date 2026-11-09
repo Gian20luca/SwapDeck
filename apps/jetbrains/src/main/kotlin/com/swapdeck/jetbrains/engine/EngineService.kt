@@ -6,11 +6,14 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.util.messages.Topic
+import com.swapdeck.jetbrains.SwapDeckLifecycle
+import com.swapdeck.jetbrains.SwapDeckThreads
 import com.swapdeck.jetbrains.cli.CliEnv
 import com.swapdeck.jetbrains.cli.SwapDeckCli
 import com.swapdeck.jetbrains.settings.SwapDeckSettings
 import com.swapdeck.jetbrains.settings.SwapDeckSettingsListener
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.RejectedExecutionException
 
 /** Cambi del motore (bus dell'applicazione), dai thread del plugin. */
 interface SwapDeckEngineListener {
@@ -35,6 +38,10 @@ interface SwapDeckEngineListener {
  */
 @Service(Service.Level.APP)
 class EngineService : Disposable {
+    init {
+        SwapDeckLifecycle.ensure()
+    }
+
     private val bus get() = ApplicationManager.getApplication().messageBus
 
     /** Chiamato dopo ogni notifica del motore (lo imposta il servizio della sincronia). */
@@ -67,9 +74,18 @@ class EngineService : Disposable {
         bus.connect(this).subscribe(
             SwapDeckSettingsListener.TOPIC,
             SwapDeckSettingsListener { old, new ->
-                when {
-                    old.cliPath != new.cliPath -> controller.restart()
-                    old.engineEnabled != new.engineEnabled -> controller.sync()
+                // Il salvataggio delle impostazioni avvisa spesso dall'EDT: avvio e arresto altrove.
+                val task = when {
+                    old.cliPath != new.cliPath -> Runnable { controller.restart() }
+                    old.engineEnabled != new.engineEnabled -> Runnable { controller.sync() }
+                    else -> null
+                }
+                if (task != null) {
+                    try {
+                        SwapDeckThreads.io.execute(task)
+                    } catch (_: RejectedExecutionException) {
+                        // Plugin in chiusura.
+                    }
                 }
             },
         )
@@ -85,8 +101,11 @@ class EngineService : Disposable {
     /** Ad ogni stato letto (`engine.running` senza `problem`, altrimenti `null`). */
     fun onLockState(lockHeldElsewhere: Boolean?) = controller.onLockState(lockHeldElsewhere)
 
-    /** Pausa per l'aggiornamento di cswap (`upgrade`) o il «Rifai login» (`relogin`). */
-    fun pause(why: String): CompletableFuture<EngineResume> = controller.pause(why)
+    /**
+     * Pausa per l'aggiornamento di cswap (`upgrade`) o il «Rifai login» (`relogin`): vale subito,
+     * va sempre ripresa ([EnginePause.resume] in un `finally`).
+     */
+    fun pause(why: String): EnginePause = controller.pause(why)
 
     override fun dispose() = controller.dispose()
 

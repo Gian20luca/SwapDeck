@@ -8,7 +8,7 @@ import com.swapdeck.jetbrains.cli.CliTimeouts
 import com.swapdeck.jetbrains.cli.CswapError
 import com.swapdeck.jetbrains.cli.StdinChannel
 import com.swapdeck.jetbrains.cli.unwrap
-import com.swapdeck.jetbrains.engine.EngineResume
+import com.swapdeck.jetbrains.engine.EnginePause
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -277,17 +277,22 @@ class BridgeHandler(
 
     // --- setup di cswap ------------------------------------------------------------------------
 
-    /** Installazione o aggiornamento: conferma dell'host, eventi in streaming, poi nuova lettura. */
+    /**
+     * Installazione o aggiornamento: conferma dell'host, eventi in streaming, poi nuova lettura.
+     * Chiudere il pannello non interrompe il comando (fermare `uv tool upgrade` a metà può lasciare
+     * cswap aggiornato a metà, come in VS Code): si smette solo di inoltrare l'avanzamento
+     * ([BridgeSession]), il comando arriva in fondo e il motore riparte.
+     */
     private fun setupRun(kind: String, c: Call): JsonElement {
         if (!c.session.ui.confirmSetup(kind)) throw cancelled()
         if (c.session.scope.aborted) throw cancelled()
-        val resume: EngineResume? = if (kind == "upgrade") await(host.pauseEngine("upgrade")) else null
+        // La pausa vale subito: ripresa nel finally anche se l'attesa dell'arresto fallisce.
+        val pause: EnginePause? = if (kind == "upgrade") host.pauseEngine("upgrade") else null
         try {
-            val future = cli.run(listOf("setup", kind), CliOptions(timeoutMs = CliTimeouts.SETUP_MS, onEvent = c.progress))
-            // Pannello chiuso: il comando si interrompe (il processo termina).
-            c.session.scope.onAbort { future.cancel(true) }.use { return await(future) }
+            pause?.let { await(it.stopped) }
+            return cli(listOf("setup", kind), CliOptions(timeoutMs = CliTimeouts.SETUP_MS, onEvent = c.progress))
         } finally {
-            resume?.resume()
+            pause?.resume()
             afterChange()
         }
     }
@@ -327,9 +332,11 @@ class BridgeHandler(
             run.abandoned = true
             run.channel?.write(cancelLine)
         }
-        var resume: EngineResume? = null
+        var pause: EnginePause? = null
         try {
-            resume = await(host.pauseEngine("relogin"))
+            // La pausa vale subito: ripresa nel finally anche se l'attesa dell'arresto fallisce.
+            pause = host.pauseEngine("relogin")
+            await(pause.stopped)
             return cli(
                 listOf("relogin", "start", account.toString()),
                 CliOptions(
@@ -346,7 +353,7 @@ class BridgeHandler(
             registration.close()
             run.channel = null
             synchronized(reloginLock) { if (relogin === run) relogin = null }
-            resume?.resume()
+            pause?.resume()
             afterChange()
         }
     }

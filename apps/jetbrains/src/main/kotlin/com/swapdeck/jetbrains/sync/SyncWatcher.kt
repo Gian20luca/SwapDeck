@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import java.io.IOException
+import java.io.InterruptedIOException
 import java.nio.ByteBuffer
 import java.nio.file.AccessDeniedException
 import java.nio.file.ClosedWatchServiceException
@@ -29,6 +30,7 @@ import java.nio.file.attribute.PosixFilePermissions
 import java.security.SecureRandom
 import java.util.HexFormat
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
@@ -84,8 +86,14 @@ class SyncWatcher(
                 if (e !is NoSuchFileException) log("sync: watcher non disponibile (${e.javaClass.simpleName})")
                 return false
             }
+            try {
+                executor.execute { loop(ws) }
+            } catch (_: RejectedExecutionException) {
+                // Pool chiusi: plugin in chiusura.
+                runCatching { ws.close() }
+                return false
+            }
             service = ws
-            executor.execute { loop(ws) }
             return true
         }
     }
@@ -142,11 +150,20 @@ class SyncWatcher(
         synchronized(lock) {
             if (closed) return
             pending?.cancel(false)
-            pending = scheduler.schedule(
-                { executor.execute { if (!synchronized(lock) { closed }) onChange() } },
-                rules.debounceMs,
-                TimeUnit.MILLISECONDS,
-            )
+            pending = try {
+                scheduler.schedule(
+                    {
+                        try {
+                            executor.execute { if (!synchronized(lock) { closed }) onChange() }
+                        } catch (_: RejectedExecutionException) {
+                        }
+                    },
+                    rules.debounceMs,
+                    TimeUnit.MILLISECONDS,
+                )
+            } catch (_: RejectedExecutionException) {
+                null // pool chiusi: plugin in chiusura
+            }
         }
     }
 
@@ -215,7 +232,13 @@ class SyncWatcher(
             } catch (e: FileSystemException) {
                 val transient = windows && (e is AccessDeniedException || e.javaClass == FileSystemException::class.java)
                 if (attempt >= attempts || !transient) throw e
-                Thread.sleep(50L * attempt)
+                try {
+                    Thread.sleep(50L * attempt)
+                } catch (_: InterruptedException) {
+                    // Il chiamante cancella il temporaneo; l'interruzione resta per chi la aspetta.
+                    Thread.currentThread().interrupt()
+                    throw InterruptedIOException("sync: segnale interrotto")
+                }
                 attempt++
             }
         }

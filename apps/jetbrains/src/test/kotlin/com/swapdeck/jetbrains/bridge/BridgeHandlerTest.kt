@@ -2,7 +2,6 @@ package com.swapdeck.jetbrains.bridge
 
 import com.swapdeck.jetbrains.cli.CliTimeouts
 import com.swapdeck.jetbrains.cli.CswapError
-import com.swapdeck.jetbrains.engine.EngineResume
 import com.swapdeck.jetbrains.protocol.HostProtocol
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -416,14 +415,26 @@ class BridgeHandlerTest {
         }
 
         @Test
-        fun `pannello chiuso durante l'installazione - comando interrotto`() {
+        fun `pannello chiuso durante l'aggiornamento - il comando arriva in fondo, poi il motore riparte`() {
             val pending = CompletableFuture<JsonElement>()
             cli.respond = { _, _ -> pending }
             val running = start("upgradeCswap")
             waitFor { cli.calls.size == 1 }
             session.dispose()
-            assertTrue(pending.isCancelled)
-            assertEquals("cancelled", BridgeSession.errorOf(assertThrows { running.get(5, TimeUnit.SECONDS) }).kind)
+            assertFalse(pending.isCancelled, "uv tool upgrade non si interrompe a metà")
+            Thread.sleep(100)
+            assertFalse(running.isDone)
+            assertEquals(listOf("pause:upgrade"), host.order.toList(), "motore fermo finché il comando non finisce")
+            pending.complete(obj("""{"ok":true}"""))
+            assertEquals(obj("""{"ok":true}"""), running.get(5, TimeUnit.SECONDS))
+            assertEquals(listOf("pause:upgrade", "resume", "changed"), host.order.toList())
+        }
+
+        @Test
+        fun `attesa dell'arresto del motore fallita - motore ripreso, nessun aggiornamento`() {
+            host.pause = { why -> host.pauseWith(why, CompletableFuture.failedFuture(IllegalStateException("arresto"))) }
+            assertEquals("failed", failure("upgradeCswap").kind)
+            assertTrue(cli.calls.isEmpty())
             assertEquals(listOf("pause:upgrade", "resume", "changed"), host.order.toList())
         }
 
@@ -505,6 +516,18 @@ class BridgeHandlerTest {
             call("startRelogin", """{"account":3}""")
         }
 
+        @Test
+        fun `attesa dell'arresto del motore annullata - motore ripreso, nessun login`() {
+            host.pause = { why -> host.pauseWith(why, CompletableFuture<Unit>().apply { cancel(true) }) }
+            assertEquals("cancelled", failure("startRelogin", """{"account":2}""").kind)
+            assertTrue(cli.calls.isEmpty())
+            assertEquals(listOf("pause:relogin", "resume", "changed"), host.order.toList())
+            // Il «Rifai login» non resta occupato.
+            host.pause = { why -> host.pauseWith(why, CompletableFuture.completedFuture(Unit)) }
+            finish.complete(obj("""{"result":"ok"}"""))
+            call("startRelogin", """{"account":2}""")
+        }
+
         private fun assertInvalid2(from: BridgeSession, method: String, params: String) {
             assertEquals("invalidUsage", failure(method, params, from).kind)
         }
@@ -527,15 +550,12 @@ class BridgeHandlerTest {
             assertEquals("cancelled", failure("startRelogin", """{"account":2}""", closed).kind)
             assertTrue(cli.calls.isEmpty())
 
-            val paused = CompletableFuture<EngineResume>()
-            host.pause = { why ->
-                host.order += "pause:$why"
-                paused
-            }
+            val stopped = CompletableFuture<Unit>()
+            host.pause = { why -> host.pauseWith(why, stopped) }
             val running = start("startRelogin", """{"account":2}""")
             waitFor { host.order.isNotEmpty() }
             session.dispose()
-            paused.complete(EngineResume { host.order += "resume" })
+            stopped.complete(Unit)
             waitFor { cli.calls.size == 1 }
             assertEquals(listOf("{\"cancel\":true}\n"), channel.written.toList())
             finish.complete(obj("""{"result":"cancelled","account":2,"restored":true}"""))

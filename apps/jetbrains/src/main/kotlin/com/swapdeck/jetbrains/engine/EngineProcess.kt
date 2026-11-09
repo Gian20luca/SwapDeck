@@ -7,6 +7,7 @@ import java.io.InputStream
 import java.nio.file.Path
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Future
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
 
 /** Costanti del motore come processo figlio. */
@@ -65,23 +66,29 @@ class LineSplitter(
 /**
  * Motore come processo figlio: `swapdeck-cli headless --stop-on-stdin-eof --notify=stdout`
  * (rispetta il lock). Righe di stdout e stderr a [Events.onLine] dai thread che leggono; uscita a
- * [Events.onUnexpectedExit] o [Events.onLockBusy], mai dopo un [stop].
+ * [Events.onUnexpectedExit] o [Events.onLockBusy], mai dopo un [stop]. Ogni avvio porta l'identità
+ * `run` data da chi chiama [start], ripetuta negli eventi d'uscita: chi ascolta scarta quelli di un
+ * avvio che non è più l'ultimo.
+ *
+ * Gli eventi non arrivano mai dal thread che chiama [start] (anche l'avvio fallito passa da
+ * [executor]): chi chiama può tenere un proprio lock.
  */
 class EngineProcess(
     private val events: Events,
     private val executor: ExecutorService = SwapDeckThreads.io,
+    private val starter: (ProcessBuilder) -> Process = { it.start() },
 ) {
     interface Events {
         fun onLine(line: String)
 
-        /** Uscita non chiesta (errore, config non valida, avvio fallito: `null`). */
-        fun onUnexpectedExit(code: Int?)
+        /** Uscita non chiesta dell'avvio [run] (errore, config non valida, avvio fallito: `null`). */
+        fun onUnexpectedExit(run: Long, code: Int?)
 
-        /** Il lock è di un'altra istanza: chi ascolta resta in attesa e riprova. */
-        fun onLockBusy()
+        /** Il lock è di un'altra istanza (avvio [run]): chi ascolta resta in attesa e riprova. */
+        fun onLockBusy(run: Long)
     }
 
-    private class Run(val process: Process) {
+    private class Run(val id: Long, val process: Process) {
         @Volatile
         var stopping = false
     }
@@ -92,8 +99,8 @@ class EngineProcess(
 
     val pid: Long? get() = synchronized(this) { current?.process?.pid() }
 
-    /** Avvia il motore se non è già acceso. */
-    fun start(cliPath: Path, env: Map<String, String>) {
+    /** Avvia il motore (avvio [run]) se non è già acceso. */
+    fun start(cliPath: Path, env: Map<String, String>, run: Long = 0) {
         val failure = synchronized(this) {
             if (current != null) return
             val builder = ProcessBuilder(listOf(cliPath.toString()) + EngineDefaults.ARGS)
@@ -101,23 +108,44 @@ class EngineProcess(
                 clear()
                 putAll(env)
             }
-            try {
-                val run = Run(builder.start())
-                current = run
-                val out = executor.submit { pipeLines(run.process.inputStream) }
-                val err = executor.submit { pipeLines(run.process.errorStream) }
-                executor.execute { waitExit(run, out, err) }
-                null
+            val started = try {
+                Run(run, starter(builder))
             } catch (e: IOException) {
-                "swapdeck-cli headless: ${e.message}"
+                return@synchronized "swapdeck-cli headless: ${e.message}"
             }
+            current = started
+            try {
+                val out = executor.submit { pipeLines(started.process.inputStream) }
+                val err = executor.submit { pipeLines(started.process.errorStream) }
+                executor.execute { waitExit(started, out, err) }
+            } catch (_: RejectedExecutionException) {
+                // Pool chiusi (plugin in chiusura): niente motore.
+                started.process.destroyForcibly()
+                current = null
+                return
+            }
+            null
         } ?: return
-        events.onLine(failure)
-        events.onUnexpectedExit(null)
+        try {
+            executor.execute {
+                deliver(failure)
+                events.onUnexpectedExit(run, null)
+            }
+        } catch (_: RejectedExecutionException) {
+        }
+    }
+
+    /** Una riga a chi ascolta: un suo errore non ferma la lettura (le righe dopo arrivano lo stesso). */
+    private fun deliver(line: String) {
+        try {
+            events.onLine(line)
+        } catch (_: Exception) {
+            // Chi ascolta registra i propri errori; qui conta solo continuare a leggere.
+        }
     }
 
     private fun pipeLines(stream: InputStream) {
-        val splitter = LineSplitter(events::onLine)
+        val splitter = LineSplitter(::deliver)
         val buffer = ByteArray(8 * 1024)
         stream.use {
             while (true) {
@@ -144,12 +172,13 @@ class EngineProcess(
         runCatching { err.get(2, TimeUnit.SECONDS) }
         synchronized(this) { if (current === run) current = null }
         if (run.stopping) return
-        if (code == EngineDefaults.LOCK_BUSY_EXIT) events.onLockBusy() else events.onUnexpectedExit(code)
+        if (code == EngineDefaults.LOCK_BUSY_EXIT) events.onLockBusy(run.id) else events.onUnexpectedExit(run.id, code)
     }
 
     /**
      * Chiude stdin (il runner rilascia il lock ed esce), attende [graceMs], poi termina
-     * (`destroy`, 1 s, `destroyForcibly`). Bloccante: da un thread in background.
+     * (`destroy`, 1 s, `destroyForcibly` e attesa breve dell'uscita). Il motore risulta spento solo
+     * dopo: un nuovo avvio non convive con il vecchio. Bloccante: da un thread in background.
      */
     fun stop(graceMs: Long = EngineDefaults.STOP_GRACE_MS) {
         val run = synchronized(this) { current ?: return }.also { it.stopping = true }
@@ -161,12 +190,34 @@ class EngineProcess(
         try {
             if (!process.waitFor(graceMs, TimeUnit.MILLISECONDS)) {
                 process.destroy()
-                if (!process.waitFor(EngineDefaults.KILL_WAIT_MS, TimeUnit.MILLISECONDS)) process.destroyForcibly()
+                if (!process.waitFor(EngineDefaults.KILL_WAIT_MS, TimeUnit.MILLISECONDS)) {
+                    process.destroyForcibly()
+                    awaitExit(process, EngineDefaults.KILL_WAIT_MS)
+                }
             }
         } catch (_: InterruptedException) {
             process.destroyForcibly()
+            awaitExit(process, EngineDefaults.KILL_WAIT_MS)
             Thread.currentThread().interrupt()
         }
         synchronized(this) { if (current === run) current = null }
+    }
+
+    companion object {
+        /** Attende l'uscita al massimo [ms] anche se il thread viene interrotto (lo stato d'interruzione resta). */
+        private fun awaitExit(process: Process, ms: Long) {
+            val end = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(ms)
+            var interrupted = Thread.interrupted()
+            while (process.isAlive) {
+                val left = end - System.nanoTime()
+                if (left <= 0) break
+                try {
+                    process.waitFor(left, TimeUnit.NANOSECONDS)
+                } catch (_: InterruptedException) {
+                    interrupted = true
+                }
+            }
+            if (interrupted) Thread.currentThread().interrupt()
+        }
     }
 }

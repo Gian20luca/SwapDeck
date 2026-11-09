@@ -13,7 +13,9 @@ import java.nio.file.Path
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Future
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
@@ -43,7 +45,12 @@ object CliLimits {
  * terminazione (`destroy`, attesa, `destroyForcibly`), limite di stdout e coda di stderr.
  *
  * Thread: ogni comando usa thread di [executor] per stdin, stdout, stderr e l'attesa dell'uscita;
- * il future si completa da uno di quelli. Callback (`onEvent`) dal thread che legge stdout.
+ * il future si completa da uno di quelli. Callback (`onEvent`) dal thread che legge stdout, `channel`
+ * da un thread di [executor] dopo l'eventuale prima riga di stdin. Chi lancia o annulla un comando
+ * non si blocca mai sulla scrittura di stdin.
+ *
+ * [close] (servizio smaltito) annulla i comandi in corso, che terminano i processi; dopo, ogni
+ * comando fallisce con `cancelled` senza partire.
  */
 class CliRunner(
     private val executable: () -> Path,
@@ -52,8 +59,14 @@ class CliRunner(
     private val scheduler: ScheduledExecutorService = SwapDeckThreads.scheduler,
     private val killGraceMs: Long = CliTimeouts.KILL_GRACE_MS,
     private val maxStdoutBytes: Int = CliLimits.MAX_STDOUT_BYTES,
-) : CliCaller {
+) : CliCaller, AutoCloseable {
+    private val active: MutableSet<CompletableFuture<JsonElement>> = ConcurrentHashMap.newKeySet()
+
+    @Volatile
+    private var closed = false
+
     override fun run(args: List<String>, options: CliOptions): CompletableFuture<JsonElement> {
+        if (closed) return CompletableFuture.failedFuture(closedError())
         val file = executable()
         val result = CompletableFuture<JsonElement>()
         val builder = ProcessBuilder(listOf(file.toString()) + args)
@@ -67,9 +80,21 @@ class CliRunner(
             result.completeExceptionally(startError(file, e))
             return result
         }
+        active += result
+        result.whenComplete { _, _ -> active -= result }
         Call(process, args, options, result).begin()
+        // Chiuso mentre partiva: il comando non resta vivo.
+        if (closed) result.cancel(true)
         return result
     }
+
+    /** Annulla i comandi in corso (processi terminati) e rifiuta i successivi. */
+    override fun close() {
+        closed = true
+        active.toList().forEach { it.cancel(true) }
+    }
+
+    private fun closedError() = CliException("cancelled", "swapdeck-cli: plugin chiuso")
 
     private fun startError(file: Path, e: IOException): CliException {
         val missing = !Files.exists(file) || e.message?.contains("error=2,") == true
@@ -88,7 +113,11 @@ class CliRunner(
     ) {
         private val stdout = ByteArrayOutputStream()
         private val stderrTail = TailBuffer(CliLimits.STDERR_TAIL_BYTES)
+        /** Solo per [timers]: mai preso durante una scrittura su stdin. */
         private val lock = Any()
+
+        /** Righe intere su stdin, una alla volta (può bloccarsi finché il processo legge). */
+        private val stdinLock = Any()
         private var timers = mutableListOf<ScheduledFuture<*>>()
 
         @Volatile
@@ -100,10 +129,21 @@ class CliRunner(
         fun begin() {
             // Annullato dal chiamante, risposta troppo grande, timeout: il processo non resta vivo.
             result.whenComplete { _, error ->
-                cancelTimers()
                 channelOpen = false
+                // Prima il processo: una scrittura bloccata su stdin si sblocca quando muore.
                 if (error is CancellationException || process.isAlive) terminate()
+                cancelTimers()
             }
+            try {
+                start()
+            } catch (_: RejectedExecutionException) {
+                // Pool già chiusi (plugin in chiusura).
+                process.destroyForcibly()
+                result.completeExceptionally(closedError())
+            }
+        }
+
+        private fun start() {
             schedule(options.timeoutMs) {
                 expired = true
                 process.destroy()
@@ -120,16 +160,19 @@ class CliRunner(
                 executor.execute { writeAndClose(process.outputStream, options.stdin) }
             } else {
                 val stdin = process.outputStream
-                options.stdin?.let { writeLine(stdin, it) }
-                channel(
-                    object : StdinChannel {
-                        override fun write(text: String): Boolean = channelOpen && writeLine(stdin, text)
+                // Fuori dal thread del chiamante: la prima riga può bloccarsi se il processo non legge.
+                executor.execute {
+                    options.stdin?.let { writeLine(stdin, it) }
+                    channel(
+                        object : StdinChannel {
+                            override fun write(text: String): Boolean = channelOpen && writeLine(stdin, text)
 
-                        override fun end() {
-                            if (channelOpen) closeQuietly(stdin)
-                        }
-                    },
-                )
+                            override fun end() {
+                                if (channelOpen) closeQuietly(stdin)
+                            }
+                        },
+                    )
+                }
             }
         }
 
@@ -204,7 +247,7 @@ class CliRunner(
             }
         }
 
-        private fun writeLine(stdin: OutputStream, text: String): Boolean = synchronized(lock) {
+        private fun writeLine(stdin: OutputStream, text: String): Boolean = synchronized(stdinLock) {
             try {
                 stdin.write(text.toByteArray(Charsets.UTF_8))
                 stdin.flush()
@@ -217,13 +260,21 @@ class CliRunner(
         private fun terminate() {
             if (!process.isAlive) return
             process.destroy()
-            scheduler.schedule({ if (process.isAlive) process.destroyForcibly() }, killGraceMs, TimeUnit.MILLISECONDS)
+            try {
+                scheduler.schedule({ if (process.isAlive) process.destroyForcibly() }, killGraceMs, TimeUnit.MILLISECONDS)
+            } catch (_: RejectedExecutionException) {
+                process.destroyForcibly()
+            }
         }
 
         private fun schedule(delayMs: Long, task: () -> Unit) {
             synchronized(lock) {
                 if (result.isDone) return
-                timers += scheduler.schedule(task, delayMs, TimeUnit.MILLISECONDS)
+                try {
+                    timers += scheduler.schedule(task, delayMs, TimeUnit.MILLISECONDS)
+                } catch (_: RejectedExecutionException) {
+                    // Pool chiusi: lo smaltimento annulla comunque il comando.
+                }
             }
         }
 

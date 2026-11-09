@@ -4,6 +4,7 @@ import com.swapdeck.jetbrains.SwapDeckThreads
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /** Cosa succede al motore; chiamate dai thread del plugin (mai dall'EDT). */
@@ -23,9 +24,24 @@ interface EngineControllerEvents {
     fun changed()
 }
 
-/** Riprende il motore dopo una pausa; chiamarla più volte non cambia nulla. */
-fun interface EngineResume {
-    fun resume()
+/**
+ * Pausa del motore ([EngineController.pause]): [stopped] si completa a motore fermo, [resume] la
+ * toglie. La pausa vale da subito: chi la chiede chiama [resume] in un `finally` anche se l'attesa di
+ * [stopped] fallisce o viene annullata. Chiamare [resume] più volte non cambia nulla.
+ */
+class EnginePause(
+    val stopped: CompletableFuture<Unit>,
+    private val onResume: () -> Unit,
+) : AutoCloseable {
+    private val resumed = AtomicBoolean(false)
+
+    val isResumed: Boolean get() = resumed.get()
+
+    fun resume() {
+        if (resumed.compareAndSet(false, true)) onResume()
+    }
+
+    override fun close() = resume()
 }
 
 /**
@@ -35,7 +51,9 @@ fun interface EngineResume {
  * si mette in pausa per l'aggiornamento di cswap e il «Rifai login».
  *
  * Thread: i metodi si possono chiamare da qualunque thread; gli arresti (bloccanti fino a
- * [stopGraceMs]) girano su [executor] e i future si completano da lì.
+ * [stopGraceMs]) girano su [executor] e i future si completano da lì. Gli [events] partono sempre
+ * dopo aver lasciato il lock interno (chi ascolta può richiamare il controller o aspettare altri
+ * thread che lo fanno). Ogni avvio ha un numero: gli eventi d'uscita di un avvio superato si scartano.
  */
 class EngineController(
     private val enabled: () -> Boolean,
@@ -52,6 +70,9 @@ class EngineController(
     private var pauses = 0
     private var transition: CompletableFuture<Unit>? = null
     private var disposed = false
+
+    /** Numero dell'ultimo avvio (vedi [EngineProcess.Events]). */
+    private var generation = 0L
 
     /** Il lock è di un'altra istanza (finestra VS Code, altra IDE, app): si ritenta quando si libera. */
     @Volatile
@@ -70,25 +91,36 @@ class EngineController(
      * Durante un arresto in corso aspetta la fine; in pausa o dopo [dispose] non fa nulla.
      */
     fun sync(): CompletableFuture<Unit> {
-        synchronized(lock) {
-            transition?.let { pending -> return pending.thenCompose { sync() } }
-            if (disposed || pauses > 0) return done()
-            val wanted = enabled()
+        val after = mutableListOf<() -> Unit>()
+        // Arresto da attendere prima di riallineare; `null` = niente da attendere.
+        var waitFor: CompletableFuture<Unit>? = null
+        val idle = synchronized(lock) {
+            val pending = transition
             when {
-                wanted && !process.running -> {
-                    warned = false
-                    waitingLock = false
-                    val path = cliPath()
-                    events.log("[motore] avvio: $path headless")
-                    process.start(path, env())
+                pending != null -> waitFor = pending
+                disposed || pauses > 0 -> return done()
+                else -> {
+                    val wanted = enabled()
+                    when {
+                        wanted && !process.running -> {
+                            warned = false
+                            waitingLock = false
+                            val path = cliPath()
+                            after += { events.log("[motore] avvio: $path headless") }
+                            process.start(path, env(), ++generation)
+                        }
+                        !wanted && process.running -> {
+                            after += { events.log("[motore] arresto") }
+                            waitFor = stopAsync(stopGraceMs)
+                        }
+                        !wanted -> waitingLock = false
+                    }
                 }
-                !wanted && process.running -> {
-                    events.log("[motore] arresto")
-                    return stopAsync(stopGraceMs).thenCompose { sync() }
-                }
-                !wanted -> waitingLock = false
             }
+            waitFor == null
         }
+        after.forEach { it() }
+        if (!idle) return waitFor!!.thenCompose { sync() }
         events.changed()
         return done()
     }
@@ -107,7 +139,7 @@ class EngineController(
      */
     fun onLockState(lockHeldElsewhere: Boolean?) {
         val retry = synchronized(lock) {
-            pauses == 0 && shouldRetry(enabled(), process.running, waitingLock, lockHeldElsewhere)
+            pauses == 0 && !disposed && shouldRetry(enabled(), process.running, waitingLock, lockHeldElsewhere)
         }
         if (retry) {
             events.log("[motore] lock libero: nuovo avvio")
@@ -117,27 +149,25 @@ class EngineController(
 
     /**
      * Pausa per l'aggiornamento di cswap o il «Rifai login»: ferma il motore se acceso e impedisce
-     * avvii e nuovi tentativi finché ogni pausa non è ripresa. Il future si completa a motore fermo.
+     * avvii e nuovi tentativi finché ogni pausa non è ripresa. La pausa vale subito; il suo
+     * [EnginePause.stopped] si completa a motore fermo. Dopo [dispose] è una pausa vuota.
      */
-    fun pause(why: String): CompletableFuture<EngineResume> {
+    fun pause(why: String): EnginePause {
+        var log = false
         val stopped = synchronized(lock) {
+            if (disposed) return EnginePause(done()) {}
             pauses++
-            when {
-                process.running -> {
-                    events.log("[motore] in pausa: $why")
-                    stopAsync(stopGraceMs)
-                }
-                else -> transition ?: done()
+            if (process.running) {
+                log = true
+                stopAsync(stopGraceMs)
+            } else {
+                transition ?: done()
             }
         }
-        val resumed = AtomicBoolean(false)
-        return stopped.thenApply {
-            EngineResume {
-                if (resumed.compareAndSet(false, true)) {
-                    synchronized(lock) { pauses-- }
-                    sync()
-                }
-            }
+        if (log) events.log("[motore] in pausa: $why")
+        return EnginePause(stopped) {
+            synchronized(lock) { pauses-- }
+            sync()
         }
     }
 
@@ -147,11 +177,11 @@ class EngineController(
         process.stop(graceMs)
     }
 
-    /** Arresto su [executor]; chiamare con [lock] preso. */
+    /** Arresto su [executor]; chiamare con [lock] preso (gli eventi partono dal thread dell'arresto). */
     private fun stopAsync(graceMs: Long): CompletableFuture<Unit> {
         val future = CompletableFuture<Unit>()
         transition = future
-        executor.execute {
+        val task = Runnable {
             try {
                 process.stop(graceMs)
             } finally {
@@ -160,24 +190,44 @@ class EngineController(
                 events.changed()
             }
         }
+        try {
+            executor.execute(task)
+        } catch (_: RejectedExecutionException) {
+            // Pool chiusi (plugin in chiusura): lo smaltimento ferma il motore.
+            transition = null
+            future.complete(Unit)
+        }
         return future
     }
 
     private inner class ProcessEvents : EngineProcess.Events {
         override fun onLine(line: String) {
-            val note = NotificationRules.parseEngineEvent(line)
-            if (note != null) events.notification(note) else events.log("[motore] $line")
+            try {
+                val note = NotificationRules.parseEngineEvent(line)
+                if (note != null) events.notification(note) else events.log("[motore] $line")
+            } catch (e: Exception) {
+                // Un errore di chi ascolta non ferma le righe successive.
+                runCatching { events.warn("[motore] riga non consegnata: ${e.javaClass.simpleName}") }
+            }
         }
 
-        override fun onUnexpectedExit(code: Int?) {
-            events.warn("[motore] uscito con codice ${code ?: "segnale"}")
-            val first = synchronized(lock) { (!warned).also { warned = true } }
+        override fun onUnexpectedExit(run: Long, code: Int?) {
+            val first = synchronized(lock) {
+                // Uscita di un avvio superato: il motore attuale è un altro.
+                if (run != generation) return
+                waitingLock = false
+                (!warned).also { warned = true }
+            }
+            events.warn(if (code == null) "[motore] avvio non riuscito" else "[motore] uscito con codice $code")
             if (first) events.unexpectedExit(code)
             events.changed()
         }
 
-        override fun onLockBusy() {
-            waitingLock = true
+        override fun onLockBusy(run: Long) {
+            synchronized(lock) {
+                if (run != generation) return
+                waitingLock = true
+            }
             events.log("[motore] attivo altrove (lock occupato): riprovo quando si libera")
             events.changed()
         }

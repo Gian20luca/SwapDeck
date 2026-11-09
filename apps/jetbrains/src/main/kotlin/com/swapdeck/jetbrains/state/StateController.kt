@@ -99,7 +99,7 @@ class StateController(
             base.withList(list, clock()).also { state = it }
         }
         pollNotifications(list)
-        events.stateChanged(next)
+        isolated("stateChanged") { events.stateChanged(next) }
         return updateStatus().thenApply { next }
     }
 
@@ -119,10 +119,20 @@ class StateController(
     private fun published(next: CliState): CompletableFuture<Unit> {
         next.error?.let { events.warn("state: ${it.kind}: ${it.message}") }
         next.list?.let { pollNotifications(it) }
-        events.stateChanged(next)
-        afterRead(next)
-        engine.onLockState(next.lockHeldElsewhere)
+        // Ogni passo a sé: un errore di chi ascolta non salta motore e barra di stato.
+        isolated("stateChanged") { events.stateChanged(next) }
+        isolated("afterRead") { afterRead(next) }
+        isolated("onLockState") { engine.onLockState(next.lockHeldElsewhere) }
         return updateStatus()
+    }
+
+    /** Chiamata verso chi ascolta: un suo errore diventa un avviso e il resto continua. */
+    private inline fun isolated(what: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (e: Exception) {
+            runCatching { events.warn("$what: ${e.javaClass.simpleName}") }
+        }
     }
 
     /** Mittente unico: senza motore vivo (né il nostro né altrove) le notifiche le chiede la CLI. */
@@ -132,7 +142,9 @@ class StateController(
             if (error != null) {
                 events.warn("notifications: ${error.toCswapError().message}")
             } else {
-                (value as? JsonObject)?.let { poll -> NotificationRules.fromPoll(poll).forEach(events::notification) }
+                (value as? JsonObject)?.let { poll ->
+                    NotificationRules.fromPoll(poll).forEach { isolated("notification") { events.notification(it) } }
+                }
             }
         }
     }
@@ -162,7 +174,7 @@ class StateController(
                 }
                 .thenApply { next ->
                     val fresh = synchronized(statusLock) { (statusFor === mine).also { if (it) status = next } }
-                    if (fresh) events.statusChanged(next)
+                    if (fresh) isolated("statusChanged") { events.statusChanged(next) }
                 }
             return statusJob
         }

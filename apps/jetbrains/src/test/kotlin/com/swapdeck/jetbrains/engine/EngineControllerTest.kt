@@ -17,6 +17,7 @@ import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Collections
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 
 /** [EngineController] con [EngineProcess] reale contro finti `swapdeck-cli headless`. */
@@ -61,24 +62,33 @@ class EngineControllerTest {
         @Volatile
         var changes = 0
 
+        /** Chiamato a ogni evento (prova del lock, errori di chi ascolta). */
+        @Volatile
+        var probe: () -> Unit = {}
+
         override fun log(message: String) {
             logs += message
+            probe()
         }
 
         override fun warn(message: String) {
             warnings += message
+            probe()
         }
 
         override fun notification(notification: SwapDeckNotification) {
             notes += notification
+            probe()
         }
 
         override fun unexpectedExit(code: Int?) {
             exits += code
+            probe()
         }
 
         override fun changed() {
             changes++
+            probe()
         }
 
         fun starts() = logs.count { it.startsWith("[motore] avvio") }
@@ -98,6 +108,10 @@ class EngineControllerTest {
         enabled = true
     }
 
+    /** Eventi del processo visti dal controller (per simulare quelli di un avvio superato). */
+    @Volatile
+    private var processEvents: EngineProcess.Events? = null
+
     private fun controller(grace: Long = 5_000): EngineController = EngineController(
         enabled = { enabled },
         cliPath = { script },
@@ -109,6 +123,7 @@ class EngineControllerTest {
         },
         events = recorder,
         stopGraceMs = grace,
+        processFactory = { events -> processEvents = events; EngineProcess(events) },
     ).also { controllers += it }
 
     @AfterEach
@@ -190,6 +205,7 @@ class EngineControllerTest {
         assertTrue(waitUntil { recorder.exits.isNotEmpty() })
         assertEquals(listOf<Int?>(null), recorder.exits.toList())
         assertTrue(recorder.logs.any { it.startsWith("swapdeck-cli headless:") || it.contains("headless") })
+        assertTrue(recorder.warnings.contains("[motore] avvio non riuscito"), recorder.warnings.toString())
     }
 
     @Test
@@ -198,16 +214,102 @@ class EngineControllerTest {
         val engine = controller()
         engine.sync()
         assertTrue(waitUntil { engine.running })
-        val resume = engine.pause("upgrade").get(10, TimeUnit.SECONDS)
+        val pause = engine.pause("upgrade")
+        assertTrue(engine.paused, "la pausa vale subito, prima dell'arresto")
+        pause.stopped.get(10, TimeUnit.SECONDS)
         assertFalse(engine.running)
-        assertTrue(engine.paused)
         engine.sync().get(5, TimeUnit.SECONDS)
         assertFalse(engine.running, "in pausa non riparte")
-        resume.resume()
+        pause.resume()
         assertTrue(waitUntil { engine.running })
-        resume.resume()
+        pause.resume()
         assertFalse(engine.paused)
         assertTrue(recorder.exits.isEmpty())
+    }
+
+    @Test
+    fun `pausa - attesa dell'arresto annullata, la ripresa vale lo stesso`() {
+        script = normal
+        val engine = controller()
+        engine.sync()
+        assertTrue(waitUntil { engine.running })
+        val pause = engine.pause("relogin")
+        // Il chiamante rinuncia ad aspettare (annullato o eccezione) e riprende nel finally.
+        pause.stopped.cancel(true)
+        pause.resume()
+        assertFalse(engine.paused)
+        assertTrue(waitUntil { engine.running }, "il motore riparte")
+        assertTrue(pause.isResumed)
+    }
+
+    @Test
+    fun `eventi di un avvio superato - ignorati`() {
+        script = busy
+        val engine = controller()
+        engine.sync()
+        assertTrue(waitUntil { engine.waitingLock })
+        script = normal
+        engine.onLockState(false)
+        assertTrue(waitUntil { engine.running })
+        assertFalse(engine.waitingLock)
+        // L'uscita 3 del primo avvio arriva in ritardo, quando il secondo è già partito.
+        val stale = processEvents!!
+        stale.onLockBusy(1)
+        assertFalse(engine.waitingLock, "il lock occupato di un avvio vecchio non mette in attesa")
+        stale.onUnexpectedExit(1, 9)
+        assertTrue(recorder.exits.isEmpty(), "nessun avviso per un avvio vecchio")
+        assertTrue(engine.running)
+    }
+
+    @Test
+    fun `uscita inattesa dopo il lock occupato - fine dell'attesa`() {
+        script = busy
+        val engine = controller()
+        engine.sync()
+        assertTrue(waitUntil { engine.waitingLock })
+        // Lo stesso avvio (numero 1) risulta poi uscito per errore: niente più nuovi tentativi.
+        processEvents!!.onUnexpectedExit(1, 7)
+        assertFalse(engine.waitingLock)
+        engine.onLockState(false)
+        Thread.sleep(200)
+        assertEquals(1, recorder.starts(), "nessun riavvio a ogni lettura dello stato")
+    }
+
+    @Test
+    fun `un errore di chi ascolta le notifiche non ferma le righe dopo`() {
+        script = normal
+        val engine = controller()
+        recorder.probe = { if (recorder.notes.isNotEmpty() && recorder.logs.none { it == "[motore] giro completato" }) error("ascolto rotto") }
+        engine.sync()
+        assertTrue(waitUntil { recorder.logs.contains("[motore] giro completato") }, recorder.logs.toString())
+        assertEquals(1, recorder.notes.size)
+    }
+
+    @Test
+    fun `eventi sempre fuori dal lock del controller`() {
+        // Chi ascolta aspetta un altro thread che legge il controller: col lock preso sarebbe un deadlock.
+        lateinit var engine: EngineController
+        val blocked: MutableList<String> = Collections.synchronizedList(mutableListOf())
+        recorder.probe = {
+            try {
+                CompletableFuture.supplyAsync { engine.paused }.get(1, TimeUnit.SECONDS)
+            } catch (e: Exception) {
+                blocked += Thread.currentThread().name
+            }
+        }
+        script = dir.resolve("manca")
+        engine = controller()
+        engine.sync()
+        assertTrue(waitUntil { recorder.exits.isNotEmpty() && recorder.changes >= 2 })
+
+        script = normal
+        engine.sync().get(10, TimeUnit.SECONDS)
+        assertTrue(waitUntil { engine.running })
+        engine.pause("upgrade").also { it.stopped.get(10, TimeUnit.SECONDS) }.resume()
+        assertTrue(waitUntil { engine.running })
+        enabled = false
+        engine.sync().get(10, TimeUnit.SECONDS)
+        assertTrue(blocked.isEmpty(), "eventi col lock preso: $blocked")
     }
 
     @Test

@@ -17,9 +17,9 @@ import java.util.concurrent.CompletableFuture
  * risponde con `progress` e `response` (forma di `HostMessage` in `packages/host/src/protocol.ts`)
  * tramite la funzione `send`, che resta del chiamante (trasporto JCEF, sottotask 9).
  *
- * `send` arriva dai thread del plugin, mai dall'EDT. Dopo [dispose] (pannello chiuso) le richieste
- * lunghe si annullano («Rifai login», installazione o aggiornamento di cswap) e non si manda più
- * nulla.
+ * `send` arriva dai thread del plugin, mai dall'EDT. Dopo [dispose] (pannello chiuso) il «Rifai
+ * login» si annulla e non si manda più nulla; installazione e aggiornamento di cswap arrivano in fondo
+ * (interromperli può lasciare cswap a metà) e il motore riparte, senza più avanzamento al pannello.
  */
 class BridgeSession internal constructor(
     private val handler: BridgeHandler,
@@ -83,7 +83,7 @@ class BridgeSession internal constructor(
         }
     }
 
-    /** Pannello chiuso: annulla le richieste lunghe; le risposte successive si scartano. */
+    /** Pannello chiuso: annulla il «Rifai login»; avanzamento e risposte successive si scartano. */
     override fun dispose() = scope.abort()
 
     companion object {

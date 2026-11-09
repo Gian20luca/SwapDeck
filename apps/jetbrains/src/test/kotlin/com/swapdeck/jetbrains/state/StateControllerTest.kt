@@ -56,8 +56,12 @@ class StateControllerTest {
         val notes: MutableList<SwapDeckNotification> = Collections.synchronizedList(mutableListOf())
         val warnings: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
+        @Volatile
+        var failOnState = false
+
         override fun stateChanged(state: CliState) {
             states += state
+            if (failOnState) throw IllegalStateException("vista rotta")
         }
 
         override fun statusChanged(status: IdeStatus) {
@@ -93,6 +97,21 @@ class StateControllerTest {
     private val note = """{"kind":"threshold","severity":"info","key":"k","title":{"it":"a","en":"b"},"body":{"it":"c","en":"d"}}"""
 
     private fun active(s: CliState?) = s?.list?.get("activeAccountNumber")?.jsonPrimitive?.long
+
+    @Test
+    fun `chi ascolta lo stato fallisce - motore, sincronia e barra aggiornati lo stesso`() {
+        events.failOnState = true
+        cli.auto = { if (it.first() == "ide") status("ok") else if (it.first() == "state") state(3) else null }
+        val value = controller.refresh().get(5, TimeUnit.SECONDS)
+        assertEquals(3L, active(value))
+        assertEquals(1, reads.size, "afterRead chiamato")
+        assertEquals(listOf<Boolean?>(false), engine.lockStates, "onLockState chiamato")
+        assertEquals(listOf("ok"), events.statuses.map { it.level })
+        assertTrue(events.warnings.any { it.startsWith("stateChanged:") })
+
+        val applied = controller.afterAction(json("""{"list":{"activeAccountNumber":9,"accounts":[]}}""").jsonObject)
+        assertEquals(9L, active(applied.get(5, TimeUnit.SECONDS)))
+    }
 
     @Test
     fun `letture concorrenti condividono una sola lettura`() {

@@ -3,7 +3,7 @@ package com.swapdeck.jetbrains.bridge
 import com.swapdeck.jetbrains.cli.CliCaller
 import com.swapdeck.jetbrains.cli.CliOptions
 import com.swapdeck.jetbrains.cli.StdinChannel
-import com.swapdeck.jetbrains.engine.EngineResume
+import com.swapdeck.jetbrains.engine.EnginePause
 import com.swapdeck.jetbrains.state.CliState
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -77,10 +77,13 @@ internal class FakeHost : BridgeHost {
     val order: MutableList<String> = Collections.synchronizedList(mutableListOf())
     var preferences = 0
 
-    /** Pausa del motore: di default subito. */
-    var pause: (String) -> CompletableFuture<EngineResume> = { why ->
+    /** Pausa del motore: di default motore fermo subito. */
+    var pause: (String) -> EnginePause = { why -> pauseWith(why, CompletableFuture.completedFuture(Unit)) }
+
+    /** Pausa registrata in [order] con l'arresto [stopped]. */
+    fun pauseWith(why: String, stopped: CompletableFuture<Unit>): EnginePause {
         order += "pause:$why"
-        CompletableFuture.completedFuture(EngineResume { order += "resume" })
+        return EnginePause(stopped) { order += "resume" }
     }
 
     override var clientInfo: String? = null
@@ -97,7 +100,7 @@ internal class FakeHost : BridgeHost {
         return CompletableFuture.completedFuture(Unit)
     }
 
-    override fun pauseEngine(why: String): CompletableFuture<EngineResume> = pause(why)
+    override fun pauseEngine(why: String): EnginePause = pause(why)
 
     override fun changed() {
         order += "changed"

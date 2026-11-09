@@ -7,8 +7,9 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.extensions.PluginId
 import com.intellij.util.messages.Topic
+import com.swapdeck.jetbrains.SwapDeckLifecycle
 import com.swapdeck.jetbrains.cli.SwapDeckCli
-import com.swapdeck.jetbrains.engine.EngineResume
+import com.swapdeck.jetbrains.engine.EnginePause
 import com.swapdeck.jetbrains.engine.EngineService
 import com.swapdeck.jetbrains.state.CliState
 import com.swapdeck.jetbrains.state.StateService
@@ -43,7 +44,7 @@ class IdeBridgeHost : BridgeHost {
     /** `StateService.afterAction` manda anche il segnale di sincronia e `configChanged`. */
     override fun afterAction(outcome: JsonObject): CompletableFuture<*> = StateService.getInstance().afterAction(outcome)
 
-    override fun pauseEngine(why: String): CompletableFuture<EngineResume> = EngineService.getInstance().pause(why)
+    override fun pauseEngine(why: String): EnginePause = EngineService.getInstance().pause(why)
 
     override fun changed() {
         SyncService.getInstance().signal()
@@ -71,6 +72,10 @@ class IdeBridgeHost : BridgeHost {
  */
 @Service(Service.Level.APP)
 class BridgeService {
+    init {
+        SwapDeckLifecycle.ensure()
+    }
+
     val handler: BridgeHandler = BridgeHandler(SwapDeckCli.getInstance(), IdeBridgeHost())
 
     fun openSession(ui: BridgeUi): BridgeSession = handler.openSession(ui)

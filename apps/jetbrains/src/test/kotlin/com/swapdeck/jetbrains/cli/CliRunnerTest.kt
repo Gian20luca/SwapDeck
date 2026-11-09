@@ -1,5 +1,6 @@
 package com.swapdeck.jetbrains.cli
 
+import com.swapdeck.jetbrains.PluginThreads
 import com.swapdeck.jetbrains.testing.FakeScripts
 import com.swapdeck.jetbrains.testing.FakeScripts.waitUntil
 import kotlinx.serialization.json.JsonObject
@@ -22,7 +23,10 @@ import java.nio.file.Path
 import java.util.Collections
 import java.util.concurrent.CancellationException
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 
 /** [CliRunner] contro finti `swapdeck-cli` (script POSIX). */
 @DisabledOnOs(OS.WINDOWS)
@@ -176,13 +180,14 @@ class CliRunnerTest {
     @Test
     fun `canale interattivo su stdin`() {
         val seen = Collections.synchronizedList(mutableListOf<String>())
-        var channel: StdinChannel? = null
+        val handed = AtomicReference<StdinChannel>()
         val future = runner(interactive).run(
             listOf("relogin", "start"),
-            CliOptions(stdin = "primo\n", onEvent = { seen += it["line"]!!.jsonPrimitive.content }, channel = { channel = it }),
+            CliOptions(stdin = "primo\n", onEvent = { seen += it["line"]!!.jsonPrimitive.content }, channel = { handed.set(it) }),
         )
-        assertTrue(waitUntil { seen.size == 1 })
-        assertTrue(channel!!.write("codice\n"))
+        assertTrue(waitUntil { seen.size == 1 && handed.get() != null })
+        val channel = handed.get()
+        assertTrue(channel.write("codice\n"))
         assertTrue(waitUntil { seen.size == 2 })
         assertTrue(channel.write("quit\n"))
         val value = future.get(10, TimeUnit.SECONDS)
@@ -220,6 +225,51 @@ class CliRunnerTest {
         future.cancel(true)
         assertThrows(CancellationException::class.java) { future.get() }
         assertTrue(waitUntil { !FakeScripts.alive(pidFile) })
+    }
+
+    @Test
+    fun `stdin pieno - lancio e annullamento non si bloccano`() {
+        // Il processo non legge stdin: la prima riga (1 MB) riempie la pipe e la scrittura resta ferma.
+        val pidFile = dir.resolve("blocked.pid")
+        val options = CliOptions(stdin = "x".repeat(1_000_000) + "\n", channel = {}, env = mapOf("PID_FILE" to pidFile.toString()))
+        val launched = CompletableFuture.supplyAsync { runner(slow).run(listOf("relogin", "start"), options) }
+        val future = launched.get(3, TimeUnit.SECONDS)
+        assertTrue(waitUntil { Files.exists(pidFile) && Files.size(pidFile) > 0 })
+        Thread.sleep(200)
+        val cancelling = CompletableFuture.runAsync { future.cancel(true) }
+        cancelling.get(3, TimeUnit.SECONDS)
+        assertTrue(future.isCancelled)
+        assertTrue(waitUntil { !FakeScripts.alive(pidFile) })
+    }
+
+    @Test
+    fun `close annulla i comandi in corso e rifiuta i nuovi`() {
+        val pidFile = dir.resolve("close.pid")
+        val launches = AtomicInteger()
+        val runner = CliRunner(executable = { launches.incrementAndGet(); slow }, killGraceMs = 200)
+        val future = runner.run(listOf("state"), CliOptions(env = mapOf("PID_FILE" to pidFile.toString())))
+        assertTrue(waitUntil { Files.exists(pidFile) && Files.size(pidFile) > 0 })
+        runner.close()
+        assertTrue(future.isCancelled)
+        assertTrue(waitUntil { !FakeScripts.alive(pidFile) })
+        val error = failure(runner.run("state")) as CliException
+        assertEquals("cancelled", error.error.kind)
+        assertEquals(1, launches.get(), "dopo close nessun processo")
+    }
+
+    @Test
+    fun `pool chiusi - nessun lavoro dopo lo shutdown, comando fallito`() {
+        val threads = PluginThreads("Prova")
+        val ran = AtomicInteger()
+        threads.scheduler.schedule({ ran.incrementAndGet() }, 200, TimeUnit.MILLISECONDS)
+        threads.shutdown()
+        assertTrue(threads.isShutdown)
+        assertThrows(RejectedExecutionException::class.java) { threads.io.execute { ran.incrementAndGet() } }
+        Thread.sleep(300)
+        assertEquals(0, ran.get(), "timer annullati")
+        val runner = CliRunner(executable = { ok }, executor = threads.io, scheduler = threads.scheduler)
+        val error = failure(runner.run("state")) as CliException
+        assertEquals("cancelled", error.error.kind)
     }
 
     @Test

@@ -9,6 +9,7 @@ import com.intellij.openapi.components.serviceIfCreated
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.wm.IdeFrame
 import com.intellij.util.messages.Topic
+import com.swapdeck.jetbrains.SwapDeckLifecycle
 import com.swapdeck.jetbrains.SwapDeckThreads
 import com.swapdeck.jetbrains.cli.SwapDeckCli
 import com.swapdeck.jetbrains.engine.EngineService
@@ -20,6 +21,7 @@ import com.swapdeck.jetbrains.settings.SwapDeckSettingsListener
 import com.swapdeck.jetbrains.sync.SyncService
 import kotlinx.serialization.json.JsonObject
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -47,6 +49,10 @@ interface SwapDeckStateListener {
  */
 @Service(Service.Level.APP)
 class StateService : Disposable {
+    init {
+        SwapDeckLifecycle.ensure()
+    }
+
     private val bus get() = ApplicationManager.getApplication().messageBus
     private val started = AtomicBoolean(false)
     private var timer: ScheduledFuture<*>? = null
@@ -137,11 +143,19 @@ class StateService : Disposable {
             timer?.cancel(false)
             if (disposed) return
             val seconds = SwapDeckSettings.getInstance().snapshot.refreshIntervalSeconds.toLong()
-            timer = SwapDeckThreads.scheduler.schedule(
-                { SwapDeckThreads.io.execute { refresh().whenComplete { _, _ -> schedule() } } },
-                seconds,
-                TimeUnit.SECONDS,
-            )
+            timer = try {
+                SwapDeckThreads.scheduler.schedule({ poll() }, seconds, TimeUnit.SECONDS)
+            } catch (_: RejectedExecutionException) {
+                null // pool chiusi: plugin in chiusura
+            }
+        }
+    }
+
+    private fun poll() {
+        if (disposed) return
+        try {
+            SwapDeckThreads.io.execute { if (!disposed) refresh().whenComplete { _, _ -> schedule() } }
+        } catch (_: RejectedExecutionException) {
         }
     }
 

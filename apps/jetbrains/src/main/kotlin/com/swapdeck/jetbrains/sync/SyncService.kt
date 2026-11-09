@@ -4,12 +4,14 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
+import com.swapdeck.jetbrains.SwapDeckLifecycle
 import com.swapdeck.jetbrains.SwapDeckThreads
 import com.swapdeck.jetbrains.cli.SwapDeckCli
 import com.swapdeck.jetbrains.cli.runBlocking
 import com.swapdeck.jetbrains.cli.toCswapError
 import com.swapdeck.jetbrains.state.StateService
 import kotlinx.serialization.json.JsonObject
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -19,6 +21,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 @Service(Service.Level.APP)
 class SyncService : Disposable {
+    init {
+        SwapDeckLifecycle.ensure()
+    }
+
     /** Identifica questo processo IDE nel segnale. */
     val source: String = SyncWatcher.newSource()
 
@@ -37,15 +43,19 @@ class SyncService : Disposable {
      */
     fun ensureStarted() {
         if (disposed || watching || !starting.compareAndSet(false, true)) return
-        SwapDeckThreads.io.execute {
-            try {
-                val w = watcher ?: create()
-                if (w.start()) LOG.info("sync: osservo la cartella della config di SwapDeck")
-            } catch (e: Exception) {
-                LOG.warn("sync: ${e.toCswapError().message}")
-            } finally {
-                starting.set(false)
+        try {
+            SwapDeckThreads.io.execute {
+                try {
+                    val w = watcher ?: create()
+                    if (!disposed && w.start()) LOG.info("sync: osservo la cartella della config di SwapDeck")
+                } catch (e: Exception) {
+                    LOG.warn("sync: ${e.toCswapError().message}")
+                } finally {
+                    starting.set(false)
+                }
             }
+        } catch (_: RejectedExecutionException) {
+            starting.set(false) // plugin in chiusura
         }
     }
 
@@ -69,7 +79,11 @@ class SyncService : Disposable {
     /** Avvisa gli altri host dopo una propria azione (in background; un errore lascia il polling). */
     fun signal() {
         val w = watcher ?: return
-        SwapDeckThreads.io.execute { w.signal() }
+        if (disposed) return
+        try {
+            SwapDeckThreads.io.execute { w.signal() }
+        } catch (_: RejectedExecutionException) {
+        }
     }
 
     override fun dispose() {

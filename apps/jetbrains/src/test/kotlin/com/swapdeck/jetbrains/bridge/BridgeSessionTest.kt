@@ -88,6 +88,25 @@ class BridgeSessionTest {
     }
 
     @Test
+    fun `pannello chiuso durante l'installazione - niente più avanzamento, il comando continua`() {
+        val pending = CompletableFuture<JsonElement>()
+        var onEvent: ((JsonObject) -> Unit)? = null
+        cli.respond = { _, options ->
+            onEvent = options.onEvent
+            options.onEvent?.invoke(obj("""{"event":"stepStarted","step":"installUv"}"""))
+            pending
+        }
+        val done = session.request(4, json("\"installCswap\""), json("{}")) { sent += it }
+        waitSent(1)
+        session.dispose()
+        onEvent!!.invoke(obj("""{"event":"stepStarted","step":"installCswap"}"""))
+        assertFalse(pending.isCancelled)
+        pending.complete(obj("{}"))
+        done.get(5, TimeUnit.SECONDS)
+        assertEquals(listOf(obj("""{"type":"progress","id":4,"event":{"event":"stepStarted","step":"installUv"}}""")), sent.toList())
+    }
+
+    @Test
     fun `AbortScope - una volta sola, registrazioni tolte, dopo la chiusura subito`() {
         val scope = AbortScope()
         val calls = mutableListOf<String>()

@@ -1,10 +1,12 @@
 package com.swapdeck.jetbrains.cli
 
 import com.intellij.ide.plugins.PluginManagerCore
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.extensions.PluginId
+import com.swapdeck.jetbrains.SwapDeckLifecycle
 import com.swapdeck.jetbrains.settings.SwapDeckSettings
 import kotlinx.serialization.json.JsonElement
 import java.nio.file.Path
@@ -12,10 +14,15 @@ import java.util.concurrent.CompletableFuture
 
 /**
  * `swapdeck-cli` per tutto il plugin (servizio dell'applicazione): percorso dalle impostazioni
- * (`cliPath`) o quello incluso nel plugin, a ogni comando (un cambio vale subito).
+ * (`cliPath`) o quello incluso nel plugin, a ogni comando (un cambio vale subito). Smaltito
+ * (chiusura dell'IDE o del plugin) annulla i comandi in corso e rifiuta i nuovi.
  */
 @Service(Service.Level.APP)
-class SwapDeckCli : CliCaller {
+class SwapDeckCli : CliCaller, Disposable {
+    init {
+        SwapDeckLifecycle.ensure()
+    }
+
     private val pluginDir: Path? =
         PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))?.pluginPath
 
@@ -36,6 +43,8 @@ class SwapDeckCli : CliCaller {
     }
 
     override fun run(args: List<String>, options: CliOptions): CompletableFuture<JsonElement> = runner.run(args, options)
+
+    override fun dispose() = runner.close()
 
     companion object {
         const val PLUGIN_ID = "com.swapdeck.jetbrains"
