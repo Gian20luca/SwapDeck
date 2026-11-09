@@ -93,4 +93,17 @@ Le nuove versioni non arrivano da sole. AppImage: sostituisci il file con quello
 - AppImage: chiudi l'app con **Esci** e cancella il file. Togli anche `~/.config/autostart/SwapDeck.desktop` se resta.
 - `.deb`: `sudo apt remove swap-deck`.
 
-Impostazioni e storico restano in `~/.config/swapdeck` e `~/.local/share/swapdeck`: cancellali a mano se vuoi. Le utenze di cswap e il login di Claude Code non vengono mai toccati.
+Impostazioni e storico restano in `~/.config/swapdeck` e `~/.local/share/swapdeck`: cancellali a mano se vuoi, ma solo se non usi SwapDeck anche da VS Code o da una IDE JetBrains (sono condivisi). Le utenze di cswap e il login di Claude Code non vengono mai toccati.
+
+### Togliere anche cswap e uv
+
+Al primo avvio SwapDeck può aver installato **uv** e **cswap** (pacchetto `claude-swap`) per il tuo utente. Toglili solo se non li usi fuori da SwapDeck (né da VS Code o dalle IDE JetBrains):
+
+1. **cswap:** `uv tool uninstall claude-swap`. Toglie il comando `cswap`; le utenze salvate restano.
+2. **Utenze salvate in cswap** (facoltativo, **irreversibile**): cancella la cartella `~/.local/share/claude-swap`, che contiene i login salvati di tutte le utenze. Il login attivo di Claude Code resta quello dell'ultima utenza usata.
+3. **uv** (facoltativo, solo se l'ha installato SwapDeck e non lo usi per altro: toglie anche tutti gli altri strumenti e i Python di uv):
+   ```bash
+   uv cache clean
+   rm -r "$(uv python dir)" "$(uv tool dir)"
+   rm ~/.local/bin/uv ~/.local/bin/uvx
+   ```

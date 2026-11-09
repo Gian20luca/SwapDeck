@@ -107,6 +107,22 @@ Installa solo il `.vsix` (`code --install-extension swapdeck-vscode-<piattaforma
 | 5.11 | App desktop aperta su Impostazioni (o Notifiche, Cartelle, configurazione di cswap); cambia lo stesso valore da VS Code o con `swapdeck-cli config set` | Entro un paio di secondi l'app mostra il nuovo valore; con un modulo in modifica compare «Modificato in un'altra finestra» con «Ricarica»; un salvataggio fatto dall'app non fa comparire l'avviso | [ ] |
 | 5.12 | Motore sospeso (per esempio con `cswap auto` avviato a mano) con VS Code come titolare | Sopra le schede della vista laterale e del pannello: «Motore sospeso: altro motore attivo (id)»; sparisce quando il conflitto finisce | [ ] |
 
+## 5bis. Plugin JetBrains (senza app desktop)
+
+Installa solo lo zip della piattaforma (Settings → Plugins → ⚙ → «Install Plugin from Disk…», poi riavvio dell'IDE), su IntelliJ IDEA 2024.3 e sull'ultima versione (almeno una IDE diversa da IntelliJ, per esempio PyCharm o WebStorm). L'app desktop **non** è installata. Guida: `docs/condivisione/LEGGIMI-jetbrains.md`; prove di dettaglio in `apps/jetbrains/README.md`.
+
+| # | Prova | Atteso | Esito |
+|---|---|---|---|
+| 5b.1 | Primo avvio senza `cswap` | La finestra SwapDeck propone l'installazione di `cswap`; dopo, versione letta e lista vuota | [ ] |
+| 5b.2 | Ubuntu 24.04 o successivo | L'IDE chiede il profilo AppArmor per JCEF; installato con `sudo` e riavviata l'IDE, il pannello compare | [ ] |
+| 5b.3 | IDE senza JCEF (o profilo AppArmor non installato) | La finestra mostra il messaggio su JCEF (mai «Nothing to show»); barra di stato, azioni e notifiche funzionano | [ ] |
+| 5b.4 | Barra di stato e **Tools → SwapDeck** | Utenza, 5h e 7d, colore per livello; Cambia account (conferma con «Annulla» predefinito), Cambia mappa, Accendi/Spegni motore, Copia diagnostica, Apri cartella dei log | [ ] |
+| 5b.5 | Due progetti aperti nella stessa IDE | Un solo motore per IDE; entrambe le finestre aggiornate | [ ] |
+| 5b.6 | IDE JetBrains e VS Code insieme | Un solo motore (chi ha il lock), niente notifiche doppie; un cambio da una parte si vede dall'altra in pochi secondi (`ide-sync.json`) | [ ] |
+| 5b.7 | «Rifai login» e chiusura della finestra SwapDeck mentre attende il codice | Operazione annullata, motore ripreso | [ ] |
+| 5b.8 | Tema chiaro ↔ scuro dell'IDE; lingua di SwapDeck diversa da quella dell'IDE | Il pannello segue il tema; testi del plugin e del pannello nella lingua di SwapDeck | [ ] |
+| 5b.9 | Disinstallazione del plugin (guida, punto 7.1) e poi rimozione completa (7.2, 7.3) | Plugin tolto dopo il riavvio; nessun processo `swapdeck-cli` rimasto; con 7.3 il comando `cswap` sparisce, le utenze salvate restano finché non si cancella la cartella dei backup | [ ] |
+
 ## 6. Linux e macOS
 
 ### Linux (Ubuntu 22.04 o successivo; prova su GNOME **e** KDE)
@@ -208,7 +224,7 @@ Per un problema difficile da riprodurre rilancia con `SWAPDECK_LOG=debug` (varia
 
 Includi inoltre:
 
-1. **Versione** di SwapDeck (`swapdeck-cli version`) e di `cswap` (`cswap --version`), **sistema operativo** e versione, forma di installazione (NSIS, zip, AppImage, `.deb`, `.dmg`, solo `.vsix`): tutto già nella diagnostica, tranne la forma di installazione.
+1. **Versione** di SwapDeck (`swapdeck-cli version`) e di `cswap` (`cswap --version`), **sistema operativo** e versione, forma di installazione (NSIS, zip, AppImage, `.deb`, `.dmg`, solo `.vsix`, solo plugin JetBrains con la versione dell'IDE): tutto già nella diagnostica, tranne la forma di installazione.
 2. **Numero della prova** di questa guida e **passi** per riprodurla, con esito atteso e osservato.
 3. **Cosa ti aiuta a diagnosticare**, nell'ordine:
    - schermata dell'avviso o della scheda;

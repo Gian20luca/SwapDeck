@@ -80,6 +80,50 @@ Installa da disco lo zip della nuova versione (punto 1): sostituisce quella vecc
 
 ## 7. Disinstallare
 
-**Settings** → **Plugins** → scheda **Installed** → **SwapDeck** → freccia accanto a «Disable» → **Uninstall**, poi **Restart IDE**.
+Tre livelli, dal più leggero al completo. Fermati al primo che ti basta.
 
-Restano la configurazione e lo storico di SwapDeck (condivisi con app ed estensione) e `cswap` con i tuoi account: il plugin non li tocca.
+### 7.1 Solo il plugin
+
+**Settings** → **Plugins** → scheda **Installed** → **SwapDeck** → freccia accanto a «Disable» → **Uninstall**, poi **Restart IDE**. Il motore del plugin si ferma con l'IDE.
+
+Se l'IDE non parte più, chiudila e cancella a mano la cartella del plugin (`<IDE>` è per esempio `IntelliJIdea2026.3`, `PyCharm2025.2`):
+
+| Sistema | Cartella del plugin                                                   |
+| ------- | --------------------------------------------------------------------- |
+| Linux   | `~/.local/share/JetBrains/<IDE>/swapdeck-jetbrains`                   |
+| Windows | `%APPDATA%\JetBrains\<IDE>\plugins\swapdeck-jetbrains`                |
+| macOS   | `~/Library/Application Support/JetBrains/<IDE>/plugins/swapdeck-jetbrains` |
+
+Restano le impostazioni del plugin nell'IDE (file `swapdeck.xml` nella cartella `options` della configurazione dell'IDE: `~/.config/JetBrains/<IDE>/options` su Linux, `%APPDATA%\JetBrains\<IDE>\options` su Windows, `~/Library/Application Support/JetBrains/<IDE>/options` su macOS), la configurazione e lo storico di SwapDeck e `cswap` con i tuoi account.
+
+### 7.2 Anche i dati di SwapDeck
+
+Solo se non usi più SwapDeck **in nessuna forma**: configurazione, mappe, storico e log sono condivisi con l'app e con l'estensione di VS Code. Chiudi prima l'IDE (e l'app, se c'è), poi cancella:
+
+| Sistema | Cartelle                                         |
+| ------- | ------------------------------------------------ |
+| Linux   | `~/.config/swapdeck` e `~/.local/share/swapdeck` |
+| Windows | `%APPDATA%\swapdeck`                             |
+| macOS   | `~/Library/Application Support/swapdeck`         |
+
+Cancella anche `swapdeck.xml` nella cartella `options` dell'IDE (punto 7.1). Le utenze di cswap e il login di Claude Code non vengono toccati.
+
+### 7.3 Anche cswap e uv
+
+Al primo avvio SwapDeck può aver installato **uv** e **cswap** (pacchetto `claude-swap`) per il tuo utente. Toglili solo se non li usi fuori da SwapDeck. In un terminale (su Windows in PowerShell):
+
+1. **cswap:** `uv tool uninstall claude-swap`. Toglie il comando `cswap`; le utenze salvate restano.
+2. **Utenze salvate in cswap** (facoltativo, **irreversibile**): cancella la cartella dei backup di cswap, che contiene i login salvati di tutte le utenze. Su Linux `~/.local/share/claude-swap`, su Windows e macOS `~/.claude-swap-backup` (`%USERPROFILE%\.claude-swap-backup`). Il login attivo di Claude Code resta quello dell'ultima utenza usata.
+3. **uv** (facoltativo, solo se l'ha installato SwapDeck e non lo usi per altro: toglie anche tutti gli altri strumenti e i Python di uv):
+   - Linux e macOS:
+     ```bash
+     uv cache clean
+     rm -r "$(uv python dir)" "$(uv tool dir)"
+     rm ~/.local/bin/uv ~/.local/bin/uvx
+     ```
+   - Windows (PowerShell):
+     ```powershell
+     uv cache clean
+     Remove-Item -Recurse "$(uv python dir)", "$(uv tool dir)"
+     Remove-Item "$HOME\.local\bin\uv.exe", "$HOME\.local\bin\uvx.exe"
+     ```

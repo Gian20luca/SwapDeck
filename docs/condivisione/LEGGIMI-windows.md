@@ -67,3 +67,18 @@ Le nuove versioni non arrivano da sole: quando ricevi un nuovo installer, esegui
 **Impostazioni → App → App installate → SwapDeck → Disinstalla.** «Cancella i dati dell'applicazione» toglie solo la cache della finestra. Impostazioni e storico restano in `%APPDATA%\swapdeck`: se vuoi eliminarli, cancella quella cartella a mano. Le utenze salvate in cswap e il login di Claude Code non vengono mai toccati.
 
 Per la portatile: chiudi l'app con **Esci** dal menu dell'icona e cancella la cartella.
+
+Se usi SwapDeck anche da VS Code o da una IDE JetBrains, lascia `%APPDATA%\swapdeck`: è condivisa.
+
+### Togliere anche cswap e uv
+
+Al primo avvio SwapDeck può aver installato **uv** e **cswap** (pacchetto `claude-swap`) per il tuo utente. Toglili solo se non li usi fuori da SwapDeck (né da VS Code o dalle IDE JetBrains). In PowerShell:
+
+1. **cswap:** `uv tool uninstall claude-swap`. Toglie il comando `cswap`; le utenze salvate restano.
+2. **Utenze salvate in cswap** (facoltativo, **irreversibile**): cancella la cartella `%USERPROFILE%\.claude-swap-backup`, che contiene i login salvati di tutte le utenze. Il login attivo di Claude Code resta quello dell'ultima utenza usata.
+3. **uv** (facoltativo, solo se l'ha installato SwapDeck e non lo usi per altro: toglie anche tutti gli altri strumenti e i Python di uv):
+   ```powershell
+   uv cache clean
+   Remove-Item -Recurse "$(uv python dir)", "$(uv tool dir)"
+   Remove-Item "$HOME\.local\bin\uv.exe", "$HOME\.local\bin\uvx.exe"
+   ```
