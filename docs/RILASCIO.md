@@ -3,6 +3,12 @@
 Workflow: `.github/workflows/release.yml`. Produce installer, `swapdeck-cli`, `.vsix` per piattaforma,
 firme dell'updater e `latest.json`, e li mette in una release **in bozza**: la pubblicazione resta manuale.
 
+## Novità 0.2.4 (correttiva, in corso)
+
+- **AppImage Linux**: cswap installato da SwapDeck non partiva («versione di cswap illeggibile»): l'AppImage passava ai programmi avviati le sue variabili (`PYTHONHOME`, `PYTHONPATH`, `LD_LIBRARY_PATH`...). Ora cswap, uv, claude, il terminale e il file manager partono con l'ambiente normale del sistema.
+- **Cambio rapido**: «Migliore» e «Prossimo disponibile» sono disattivati con meno di due account, con la spiegazione nel suggerimento; prima, senza account, davano «Cambio non riuscito: No accounts are managed yet».
+- **VS Code**: «SwapDeck: Cambia account» senza account lo dice invece di proporre le strategie; con un solo account mostra solo quello.
+
 ## Novità 0.2.3
 
 - **Massimo per utenza**: nella lista della scheda Regole la rotellina accanto a ogni utenza fissa un massimo sulle 5 ore e/o sui 7 giorni, valido per tutte le mappe. Il motore usa il più basso tra il massimo e la soglia della mappa (per esempio 100% sulla propria utenza e 80% su quelle dei colleghi con una mappa a 95%: le altre si lasciano all'80%). Nella riga compare «· max 7d 80%» e la rotellina è evidenziata; il trattino sulle barre, «Adesso andrebbe a», il preavviso e i motivi usano la soglia effettiva.

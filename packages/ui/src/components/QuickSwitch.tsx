@@ -6,28 +6,32 @@ export type QuickStrategy = 'best' | 'next-available';
 export interface QuickSwitchProps {
   onSwitch: (strategy: QuickStrategy) => void;
   disabled?: boolean;
+  /** Perché il cambio rapido non si può usare (es. meno di due account): disattiva i pulsanti e
+   * prende il posto del suggerimento. */
+  unavailable?: string;
 }
 
 /** Cambio rapido: `best` (più margine) e `next-available` (prossimo non al limite). */
-export function QuickSwitch({ onSwitch, disabled = false }: QuickSwitchProps) {
+export function QuickSwitch({ onSwitch, disabled = false, unavailable }: QuickSwitchProps) {
   const { t } = useI18n();
+  const off = disabled || unavailable !== undefined;
   return (
     <div className="sd-toolbar__group" role="group" aria-label={t('quick.group')}>
-      <Tooltip text={t('quick.best.hint')}>
+      <Tooltip text={unavailable ?? t('quick.best.hint')}>
         <button
           type="button"
           className="sd-btn sd-btn--small"
-          disabled={disabled}
+          disabled={off}
           onClick={() => onSwitch('best')}
         >
           {t('quick.best')}
         </button>
       </Tooltip>
-      <Tooltip text={t('quick.next.hint')}>
+      <Tooltip text={unavailable ?? t('quick.next.hint')}>
         <button
           type="button"
           className="sd-btn sd-btn--small"
-          disabled={disabled}
+          disabled={off}
           onClick={() => onSwitch('next-available')}
         >
           {t('quick.next')}

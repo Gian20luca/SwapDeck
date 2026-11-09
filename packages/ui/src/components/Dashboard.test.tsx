@@ -210,6 +210,45 @@ describe('Dashboard: cambio account', () => {
     expect(screen.getByRole('button', { name: 'Migliore' })).toBeEnabled();
   });
 
+  it('senza account il cambio rapido è disattivato e spiega perché', async () => {
+    const backend = fake({ scenario: 'noAccounts' });
+    renderDashboard(backend);
+    await screen.findByText('Nessun account gestito');
+    for (const name of ['Migliore', 'Prossimo disponibile']) {
+      const button = screen.getByRole('button', { name });
+      expect(button).toBeDisabled();
+      expect(button).toHaveAccessibleDescription('Per il cambio rapido servono almeno due account');
+    }
+    expect(backend.actionLog.some((a) => a.kind === 'switch')).toBe(false);
+  });
+
+  it('con un solo account il cambio rapido è disattivato', async () => {
+    const backend = fake();
+    const original = backend.listAccounts.bind(backend);
+    vi.spyOn(backend, 'listAccounts').mockImplementation(async (options) => {
+      const data: ListResponse = await original(options);
+      return { ...data, accounts: data.accounts.slice(0, 1) };
+    });
+    renderDashboard(backend);
+    expect(await cards()).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Migliore' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Prossimo disponibile' })).toBeDisabled();
+  });
+
+  it('con due account il cambio rapido resta attivo', async () => {
+    const backend = fake();
+    const original = backend.listAccounts.bind(backend);
+    vi.spyOn(backend, 'listAccounts').mockImplementation(async (options) => {
+      const data: ListResponse = await original(options);
+      return { ...data, accounts: data.accounts.slice(0, 2) };
+    });
+    renderDashboard(backend);
+    expect(await cards()).toHaveLength(2);
+    const best = screen.getByRole('button', { name: 'Migliore' });
+    expect(best).toBeEnabled();
+    expect(best).toHaveAccessibleDescription('Passa all’account con più margine');
+  });
+
   it('i pulsanti sono disabilitati durante il cambio', async () => {
     const backend = fake();
     let release!: () => void;

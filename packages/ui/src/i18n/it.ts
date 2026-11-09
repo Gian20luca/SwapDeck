@@ -47,6 +47,7 @@ export const it = {
   'quick.best.hint': 'Passa all’account con più margine',
   'quick.next': 'Prossimo disponibile',
   'quick.next.hint': 'Passa al prossimo account non al limite',
+  'quick.needAccounts': 'Per il cambio rapido servono almeno due account',
   'quick.result.switched': 'Passato all’account {to}.',
   'quick.result.stay': 'Nessun cambio: {message}',
 

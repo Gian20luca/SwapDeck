@@ -48,6 +48,7 @@ export const en: Record<MessageKey, string> = {
   'quick.best.hint': 'Switch to the account with the most headroom',
   'quick.next': 'Next available',
   'quick.next.hint': 'Switch to the next account that is not at its limit',
+  'quick.needAccounts': 'Quick switch needs at least two accounts',
   'quick.result.switched': 'Switched to account {to}.',
   'quick.result.stay': 'No switch: {message}',
 

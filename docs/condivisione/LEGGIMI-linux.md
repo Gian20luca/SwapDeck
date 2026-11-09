@@ -1,4 +1,4 @@
-# SwapDeck 0.2.3 per Linux: installazione
+# SwapDeck 0.2.4 per Linux: installazione
 
 Per sapere cosa fa l'app e come si usa, leggi **COME-FUNZIONA.md** in questo stesso zip.
 
@@ -6,9 +6,9 @@ Per sapere cosa fa l'app e come si usa, leggi **COME-FUNZIONA.md** in questo ste
 
 | File                                   | A cosa serve                                                         |
 | -------------------------------------- | -------------------------------------------------------------------- |
-| `SwapDeck_0.2.3_amd64.AppImage`        | App per qualsiasi distribuzione, senza installare e senza `sudo`     |
-| `SwapDeck_0.2.3_amd64.deb`             | Pacchetto per Ubuntu e Debian (richiede `sudo`)                      |
-| `swapdeck-vscode-linux-x64-0.2.3.vsix` | Estensione per VS Code (facoltativa)                                 |
+| `SwapDeck_0.2.4_amd64.AppImage`        | App per qualsiasi distribuzione, senza installare e senza `sudo`     |
+| `SwapDeck_0.2.4_amd64.deb`             | Pacchetto per Ubuntu e Debian (richiede `sudo`)                      |
+| `swapdeck-vscode-linux-x64-0.2.4.vsix` | Estensione per VS Code (facoltativa)                                 |
 | `swapdeck-cli-linux-x64`               | Solo riga di comando, per chi la vuole usare da script (facoltativa) |
 | `LEGGIMI.md`, `COME-FUNZIONA.md`       | Queste guide                                                         |
 
@@ -24,8 +24,8 @@ Scegli **una** tra AppImage e `.deb`. Senza `sudo` usa l'AppImage.
 ## 1. Estrai lo zip
 
 ```bash
-unzip SwapDeck-0.2.3-linux.zip -d ~
-cd ~/SwapDeck-0.2.3-linux
+unzip SwapDeck-0.2.4-linux.zip -d ~
+cd ~/SwapDeck-0.2.4-linux
 ```
 
 Lo zip non conserva il permesso di esecuzione: nei passi sotto c'è `chmod +x`.
@@ -34,9 +34,9 @@ Lo zip non conserva il permesso di esecuzione: nei passi sotto c'è `chmod +x`.
 
 ```bash
 mkdir -p ~/Applicazioni
-mv SwapDeck_0.2.3_amd64.AppImage ~/Applicazioni/
-chmod +x ~/Applicazioni/SwapDeck_0.2.3_amd64.AppImage
-~/Applicazioni/SwapDeck_0.2.3_amd64.AppImage
+mv SwapDeck_0.2.4_amd64.AppImage ~/Applicazioni/
+chmod +x ~/Applicazioni/SwapDeck_0.2.4_amd64.AppImage
+~/Applicazioni/SwapDeck_0.2.4_amd64.AppImage
 ```
 
 Tienila in una cartella fissa: l'avvio automatico punta a quel percorso. Se poi la sposti, avviala una volta dalla nuova posizione.
@@ -46,7 +46,7 @@ Se non parte con un errore su **FUSE**, installa `libfuse2` (su Ubuntu 22.04: `s
 ## 2b. Installa con il .deb (Ubuntu e Debian)
 
 ```bash
-sudo apt install ./SwapDeck_0.2.3_amd64.deb
+sudo apt install ./SwapDeck_0.2.4_amd64.deb
 ```
 
 `apt` installa anche le dipendenze mancanti. Poi avvia **SwapDeck** dal menu delle applicazioni oppure con `swapdeck`. Il pacchetto contiene già anche `swapdeck-cli`.
@@ -70,7 +70,7 @@ Il resto (dashboard, cambio di utenza, Rifai login, motore, massimo per utenza) 
 ## 5. Estensione per VS Code (facoltativa)
 
 ```bash
-code --install-extension swapdeck-vscode-linux-x64-0.2.3.vsix
+code --install-extension swapdeck-vscode-linux-x64-0.2.4.vsix
 ```
 
 oppure in VS Code: **Estensioni** → menu **…** → **Installa da VSIX…**. Poi Command Palette (Ctrl+Shift+P) → **Developer: Reload Window**.

@@ -17,6 +17,10 @@ cli="$CARGO_TARGET_DIR/$TARGET/release/swapdeck-cli"
 mkdir -p apps/desktop/src-tauri/binaries
 cp "$cli" "apps/desktop/src-tauri/binaries/swapdeck-cli-$TARGET"
 
+# Pacchetti delle build precedenti fuori dalla cache: `cp *.deb` li copierebbe con quelli nuovi.
+b="$CARGO_TARGET_DIR/$TARGET/release/bundle"
+rm -rf "$b"
+
 # Config di rilascio come in CI (updater senza firma: gli artefatti dell'updater non servono qui).
 node -e '
   const fs = require("fs");
@@ -28,7 +32,6 @@ pnpm --filter @swapdeck/desktop exec tauri build --ci --target "$TARGET" \
 
 node apps/vscode/scripts/package.mjs --target linux-x64 --cli "$cli"
 
-b="$CARGO_TARGET_DIR/$TARGET/release/bundle"
 rm -rf /out/*
 cp "$b"/appimage/*.AppImage "$b"/deb/*.deb /out/
 cp "$cli" /out/swapdeck-cli-linux-x64
