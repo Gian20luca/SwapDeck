@@ -1,5 +1,5 @@
-import type { EngineSuspension } from '@swapdeck/host';
-import type { MessageBackend } from '@swapdeck/host/backend';
+import type { EngineSuspension } from '../protocol.js';
+import type { MessageBackend } from '../MessageBackend.js';
 import type { SuspendReason } from '@swapdeck/types';
 import { useI18n, type MessageKey, type Translate } from '@swapdeck/ui';
 import { useEffect, useState } from 'react';
@@ -28,7 +28,7 @@ export function EngineBanner({ backend }: { backend: Pick<MessageBackend, 'onEng
   useEffect(() => backend.onEngineSuspension(setSuspended), [backend]);
   if (!suspended) return null;
   return (
-    <div className="sd-vscode-engine" role="status" aria-live="polite">
+    <div className="sd-host-engine" role="status" aria-live="polite">
       <div className="sd-notice" data-tone="danger">
         {suspensionLine(suspended, t)}
       </div>

@@ -12,7 +12,9 @@ Parte comune agli host che mostrano il pannello di `@swapdeck/ui` dentro un IDE:
 | `src/sync.ts` (`@swapdeck/host`)                   | segnale di sincronia: `SYNC_FILE`, `LEGACY_SYNC_FILES`, `CONFIG_FILE`, `SYNC_DEBOUNCE_MS`, `MAX_SIGNAL_BYTES`                                                                                                      |
 | `src/MessageBackend.ts` (`@swapdeck/host/backend`) | `Backend` del pannello: ogni chiamata è un messaggio all'host, tramite le funzioni `post` e `subscribe` date da chi lo crea; `hostConfirms = true`                                                                 |
 
-`MessageBackend` dipende da `@swapdeck/ui` e sta in un sottopercorso a parte, così il lato host (Node o JVM) non carica la UI.
+Pezzi del pannello, sopra `MessageBackend`, in `@swapdeck/host/webview` (stile in `@swapdeck/host/webview.css`): `HostApp` (app completa a schede: aspetta il messaggio `view` e rimonta tema e lingua a ogni cambio), `EngineBanner` e `suspensionLine` (riga «motore sospeso»), `readState` (scheda ricordata, controllata). Il trasporto dei messaggi e il salvataggio della scheda restano a ciascun host.
+
+`MessageBackend` e `webview/` dipendono da `@swapdeck/ui` (e React) e stanno in sottopercorsi a parte, così il lato host (Node o JVM) non carica la UI.
 
 ## `protocol.json`
 

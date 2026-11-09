@@ -9,6 +9,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./backend": "./src/MessageBackend.ts",
+    "./webview": "./src/webview/index.ts",
+    "./webview.css": "./src/webview/webview.css",
     "./protocol.json": "./protocol.json"
   },
   "scripts": {
@@ -24,7 +26,11 @@
     "@types/node": "catalog:",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
   }
 }

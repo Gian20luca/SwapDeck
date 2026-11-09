@@ -1,10 +1,10 @@
-import { suspensionOf } from '@swapdeck/host';
 import { translate, type Translate } from '@swapdeck/ui';
 import { describe, expect, it } from 'vitest';
-import type { EngineStatus } from '../generated/index.js';
+import { suspensionOf, type EngineSuspensionSource } from '../protocol.js';
 import { suspensionLine } from './EngineBanner.js';
 
-const engine: EngineStatus = {
+/** Stato del motore come in `swapdeck-cli state`, senza sospensione. */
+const engine: EngineSuspensionSource & Record<string, unknown> = {
   enabled: true,
   dryRun: false,
   pollIntervalSeconds: 60,

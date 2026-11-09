@@ -1,11 +1,11 @@
-/* Il pannello usa lo sfondo dell'editor di VS Code; il resto viene da @swapdeck/ui. */
+/* Pannello ospitato in un IDE: lo sfondo e il resto vengono da @swapdeck/ui. */
 body {
   margin: 0;
   padding: 0;
 }
 
 /* Riga «motore sospeso» sopra le schede (come `.sd-desktop-engine` dell'app desktop). */
-.sd-vscode-engine {
+.sd-host-engine {
   display: grid;
   gap: 4px;
   padding: 8px 12px 0;

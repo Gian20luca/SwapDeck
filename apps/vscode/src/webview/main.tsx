@@ -1,18 +1,11 @@
-import type { HostMessage, ViewSettings } from '@swapdeck/host';
+import type { HostMessage } from '@swapdeck/host';
 import { MessageBackend } from '@swapdeck/host/backend';
-import {
-  BackendProvider,
-  I18nProvider,
-  SwapDeckApp,
-  ThemeProvider,
-  type TabId,
-} from '@swapdeck/ui';
+import { HostApp, readState } from '@swapdeck/host/webview';
+import '@swapdeck/host/webview.css';
+import type { TabId } from '@swapdeck/ui';
 import '@swapdeck/ui/styles.css';
-import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { EngineBanner } from './EngineBanner.js';
-import { readState } from './viewState.js';
-import './webview.css';
 
 const vscode = acquireVsCodeApi();
 const backend = new MessageBackend(
@@ -33,36 +26,11 @@ const rememberTab = (tab: TabId) => {
 };
 
 /**
- * App completa a schede, nella vista della barra laterale e nella scheda dell’editor. La lingua è
- * quella scelta in SwapDeck (o di VS Code), il tema quello di VS Code: a ogni cambio la UI si
- * rimonta con i nuovi valori, sulla scheda salvata. Le
- * conferme le chiede l'host (`hostConfirms`).
+ * App completa a schede (`HostApp` di `@swapdeck/host/webview`), nella vista della barra laterale e
+ * nella scheda dell’editor: lingua scelta in SwapDeck (o di VS Code), tema di VS Code.
  */
-function App() {
-  const [view, setView] = useState<ViewSettings | null>(null);
-  useEffect(() => {
-    const off = backend.onViewSettings(setView);
-    backend.ready();
-    return off;
-  }, []);
-  if (!view) return null;
-  return (
-    <ThemeProvider key={`${view.locale}-${view.theme}`} initial={view.theme}>
-      <I18nProvider initial={view.locale}>
-        <BackendProvider backend={backend}>
-          <SwapDeckApp
-            header={<EngineBanner backend={backend} />}
-            {...(saved.tab ? { initialTab: saved.tab } : {})}
-            onTabChange={rememberTab}
-          />
-        </BackendProvider>
-      </I18nProvider>
-    </ThemeProvider>
-  );
-}
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <HostApp backend={backend} initialTab={saved.tab} onTabChange={rememberTab} />
   </StrictMode>,
 );

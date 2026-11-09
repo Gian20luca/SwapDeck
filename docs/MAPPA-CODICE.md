@@ -86,6 +86,7 @@ e `tsconfig.build.json` (emissione in `dist/`, test esclusi).
 | `@swapdeck/ui` | `packages/ui` | React 19 + Vite 6: dashboard, mini-widget, grafici uPlot, i18n, tema (vedi sotto) |
 | `@swapdeck/host` | `packages/host` | parte comune agli host delle IDE: protocollo pannello ↔ host, `protocol.json`, `MessageBackend`, segnale `ide-sync.json` (vedi sotto) |
 | `swapdeck-vscode` | `apps/vscode` | estensione VS Code (step 7, vedi sotto) |
+| `swapdeck-jetbrains` | `apps/jetbrains` | plugin per le IDE JetBrains: pannello per JCEF (vedi sotto) |
 
 ### `packages/ui` (step 3)
 
@@ -140,6 +141,7 @@ Comune agli host che mostrano il pannello in un IDE (VS Code, JetBrains), che no
 | `src/rules.ts` | regole dal JSON: `ACTION_KINDS` (il test controlla a compilazione, con un `Record` sull'unione `CswapAction['kind']` del Rust, e poi a runtime che coincidano), `SAFE_CLAUDE_ARGS`, `CONFIG_KEY`, `VERSION`, `MAX_RELOGIN_CODE_CHARS`, `MAX_COPY_CHARS`, `PICK_LIMITS`, `USAGE_WINDOWS`, `USAGE_GROUPS`, `DEFAULT_HISTORY_SECONDS` |
 | `src/sync.ts` | `SYNC_FILE` (`ide-sync.json`), `LEGACY_SYNC_FILES` (`vscode-sync.json`, solo osservato, da togliere nella seconda versione dopo la 0.2.4), `CONFIG_FILE`, `SYNC_DEBOUNCE_MS`, `MAX_SIGNAL_BYTES`, `isSyncSignalName`, tipo `SyncSignal` (`{source, at}`) |
 | `src/MessageBackend.ts` (`@swapdeck/host/backend`) | `Backend` del pannello (ex `VsCodeBackend`): ogni chiamata è un messaggio all'host con `post`, risposte e notifiche da `subscribe`; `hostConfirms = true`, metodi di gestione, `SetupBackend` e `ReloginBackend` con l'avanzamento per id di richiesta, `onEngineSuspension` dal messaggio `engine`. Sottopercorso a parte perché dipende da `@swapdeck/ui`: il lato host non carica la UI |
+| `src/webview/` (`@swapdeck/host/webview`, stile `@swapdeck/host/webview.css`) | pezzi del pannello comuni agli IDE, sopra `MessageBackend`: `HostApp` (aspetta il messaggio `view`, rimonta tema e lingua a ogni cambio, `SwapDeckApp` sulla scheda ricordata), `EngineBanner` e `suspensionLine` (riga «motore sospeso» con motivo e dettagli sopra le schede, classe `sd-host-engine`), `readState` (scheda ricordata, controllata). Il trasporto dei messaggi e dove si salva la scheda restano all'host |
 
 ### `apps/vscode` (step 7)
 
@@ -154,8 +156,20 @@ Host in Node (bundle esbuild `out/extension.js`), webview React con `@swapdeck/u
 | `sync.ts` | `SyncWatcher`: sincronia fra finestre e istanze di VS Code (a ogni evento `refresh` e messaggio `configChanged` a tutti i webview, inviato anche dopo azioni e setup di questa finestra). `fs.watch` della cartella della config, solo `config.json` e il segnale `ide-sync.json` di `@swapdeck/host` (`{source, at}`, scritto con file temporaneo esclusivo 0600 e rinomina; il proprio segnale non fa rileggere; il vecchio `vscode-sync.json` delle finestre non aggiornate fa ancora rileggere, ma non si scrive più), eventi raggruppati (750 ms); errore o cartella assente = resta il polling e si ritenta a ogni lettura |
 | `engine.ts` | `EngineProcess` (`ENGINE_ARGS`: `headless --stop-on-stdin-eof --notify=stdout`, le notifiche le mostra l'estensione; stop con stdin chiuso poi kill), `LineSplitter` (righe per stream, UTF-8), `shouldRetryEngine`, `LOCK_BUSY_EXIT` |
 | `panel.ts` | `WebviewHub` (HTML con CSP a nonce, `localResourceRoots` = `out/webview`, richieste al gestore con un `AbortSignal` per webview, interrotto alla chiusura o con `abortRequests`, stato a tutti i webview aperti), `SidebarView` (`WebviewViewProvider`, senza `retainContextWhenHidden`: nascosta interrompe le sue richieste), `DashboardPanel` (scheda dell'editor); messaggi host ↔ webview da `@swapdeck/host` |
-| `webview/` | `EngineBanner.tsx` (riga «motore sospeso» con motivo e dettagli sopra le schede, da `suspensionOf` di `@swapdeck/host` sullo `state` della CLI), `main.tsx` (`MessageBackend` di `@swapdeck/host/backend` collegato a `acquireVsCodeApi().postMessage` e agli eventi `message`; `SwapDeckApp` completa a schede, nella vista e nella scheda; scheda aperta ricordata con `getState`/`setState`, letta da `viewState.ts`) |
+| `webview/` | `main.tsx`: `MessageBackend` di `@swapdeck/host/backend` collegato a `acquireVsCodeApi().postMessage` e agli eventi `message`; `HostApp` di `@swapdeck/host/webview` (app completa a schede e riga «motore sospeso»), nella vista e nella scheda; scheda aperta ricordata con `getState`/`setState` (`readState`) |
 | `statusBar.ts`, `notifications.ts` | barra di stato dal riepilogo `ide status` (logica in `swapdeck_core::ide`; qui solo testi tradotti: `statusModel`, `statusArgs` con soglie e PID del motore di questa finestra, `errorStatus` se la CLI non risponde; in `extension.ts` `updateStatus` chiede il riepilogo a ogni stato, soglia o PID nuovi e scarta le risposte superate; testo e colore uguali in tutte le finestre, cambia solo la riga del motore nel tooltip; comando «SwapDeck: Cambia mappa» con quick pick (personali, separatore «preset», preset) in `extension.ts`) e notifiche: eventi del motore dell'estensione (`parseEngineEvent`), `notifications poll` solo senza motore vivo (`shouldPoll`, `fromPoll`), livello e testo (`messageOf`) |
 | `generated/` | tipi della CLI (ts-rs) |
 
 Altro: `l10n/` e `package.nls*.json` (inglese sorgente, bundle italiano; `l10n.test.ts` ne controlla la completezza); `test:coverage` (vitest v8, soglia 70% righe, `vitest.config.mts`); `test/suite.ts` + `scripts/run-ext-tests.mjs` (`test:ext`: VS Code isolato in `.vscode-test/`, finto cswap, `SWAPDECK_HOME` temporanea); `scripts/package.mjs` (.vsix per target).
+
+### `apps/jetbrains`
+
+Plugin per le IDE JetBrains (2024.3 e successive). Usa solo `packages/*` e `swapdeck-cli`, mai `apps/vscode` (`lint:apps`). Contratto dei messaggi con Kotlin, pagina e indirizzi in `apps/jetbrains/README.md`.
+
+| File | Ruolo |
+|---|---|
+| `webview/main.tsx` | pannello nella tool window JCEF: `MessageBackend` sul trasporto JCEF, `HostApp` di `@swapdeck/host/webview`, scheda ricordata in `localStorage` |
+| `webview/transport.ts` | `createJcefTransport`: pannello → plugin con `window.__swapdeckHost.post(json)` (iniettata con `JBCefJSQuery`; coda finché non c'è, svuotata all'evento `swapdeck-host-ready` o col controllo ogni 100 ms), plugin → pannello con l'evento `swapdeck-host` (`detail` JSON o oggetto, controllato da `hostMessageOf`) |
+| `webview/tabStore.ts` | `loadState`/`saveState` (chiave `swapdeck.webview.state`, errori di `localStorage` ignorati) |
+| `webview/index.html` | pagina con CSP a nonce e segnaposto `__SWAPDECK_NONCE__`, `__SWAPDECK_LANG__` |
+| `scripts/build.mjs` | esbuild (browser, IIFE, es2022) in `out/webview/` (`main.js`, `main.css`, `index.html`); `--production` minimizza e toglie le mappe |
