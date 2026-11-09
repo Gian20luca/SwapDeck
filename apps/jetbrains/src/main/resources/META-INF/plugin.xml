@@ -16,6 +16,13 @@
 
   <resource-bundle>messages.SwapDeckBundle</resource-bundle>
 
+  <extensionPoints>
+    <!-- «run» in un terminale dell'IDE: implementazione solo in swapdeck-terminal.xml. -->
+    <extensionPoint qualifiedName="com.swapdeck.jetbrains.commandRunner"
+                    interface="com.swapdeck.jetbrains.bridge.CommandRunner"
+                    dynamic="true"/>
+  </extensionPoints>
+
   <extensions defaultExtensionNs="com.intellij">
     <toolWindow id="SwapDeck"
                 anchor="right"
