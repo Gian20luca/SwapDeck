@@ -48,7 +48,7 @@ data class SwapDeckNotification(
     }
 }
 
-/** Notifiche da mostrare (bus dell'applicazione); il gruppo di notifiche dell'IDE arriva col sottotask 10. */
+/** Notifiche da mostrare (bus dell'applicazione): le mostra `ui/SwapDeckNotificationPresenter` nel gruppo «SwapDeck». */
 fun interface SwapDeckNotificationListener {
     fun notify(notification: SwapDeckNotification)
 

@@ -45,6 +45,7 @@ class BridgeHandler(
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val check = BridgeValidation(rules)
+    private val actions = ActionFlow(cli)
 
     /** «Rifai login» in corso (uno solo per processo IDE): pannello e stdin della CLI. */
     private class Relogin(val owner: BridgeSession) {
@@ -226,53 +227,21 @@ class BridgeHandler(
     // --- azioni --------------------------------------------------------------------------------
 
     /** Conferma dovuta (regola del Rust), con l'account attivo se lo stato è noto. */
-    private fun confirmationFor(action: JsonObject): JsonElement {
-        val list = host.lastState()?.list
-        val args = mutableListOf("confirm", "-")
-        if (list != null) {
-            val active = list["activeAccountNumber"]
-            args += listOf("--active", if (active is JsonPrimitive && active !is JsonNull) active.content else "none")
-        }
-        return cli(args, CliOptions(stdin = action.toString()))
-    }
+    private fun confirmationFor(action: JsonObject): JsonElement = actions.confirmationFor(action, host.lastState()?.list)
 
     private fun runAction(c: Call): JsonElement {
         val action = check.action(c.params["action"])
         // La conferma la impone l'host: il pannello non è fidato.
-        val needed = confirmationOf(confirmationFor(action))
+        val needed = ActionFlow.confirmationOf(confirmationFor(action))
         if (needed != null) {
             if (!c.session.ui.confirmAction(describeAction(action), needed)) throw cancelled("azione annullata")
         }
-        val result = cli(listOf("action", "-"), CliOptions(stdin = action.toString(), timeoutMs = CliTimeouts.ACTION_MS))
+        val result = actions.run(action)
         val outcome = result as? JsonObject ?: return result
-        showOutcome(outcome, c.session.ui)
+        ActionFlow.showOutcome(outcome, c.session.ui)
         // L'azione è fatta: un errore nell'aggiornare lo stato non la rende fallita.
         runCatching { await(host.afterAction(outcome)) }
         return outcome
-    }
-
-    /** `null` = nessuna conferma; `kind` sconosciuto o senza parola = conferma con parola impossibile. */
-    private fun confirmationOf(value: JsonElement): Confirmation? {
-        val obj = value as? JsonObject ?: throw CliException("failed", "confirm: risposta non valida")
-        return when (obj.textOrNull("kind")) {
-            "none" -> null
-            "simple" -> Confirmation.Simple
-            else -> Confirmation.Typed(obj.textOrNull("word") ?: throw CliException("failed", "confirm: risposta non valida"))
-        }
-    }
-
-    /** Terminale per `run`, avvisi dell'esito e cambio di account non riuscito. */
-    private fun showOutcome(outcome: JsonObject, ui: BridgeUi) {
-        (outcome["command"] as? JsonObject)?.let { command ->
-            val program = command.textOrNull("program")
-            val args = (command["args"] as? JsonArray)?.mapNotNull { it.textOrNull() } ?: emptyList()
-            if (program != null) ui.openCommand(program, args)
-        }
-        outcome.textOrNull("warning")?.let { ui.warn("SwapDeck: $it") }
-        (outcome["switch"] as? JsonObject)?.let { sw ->
-            val switched = (sw["switched"] as? JsonPrimitive)?.takeIf { !it.isString }?.booleanOrNull
-            if (switched == false) ui.warn("SwapDeck: ${sw.textOrNull("message") ?: ""}")
-        }
     }
 
     // --- setup di cswap ------------------------------------------------------------------------

@@ -34,8 +34,14 @@ import java.nio.file.Path
 class IdeBridgeUi(private val project: Project?) : BridgeUi {
     private val owner: Project? get() = project?.takeUnless { it.isDisposed }
 
-    override fun confirmAction(description: String, confirmation: Confirmation): Boolean = onEdt {
-        val label = SwapDeckBundle.message("bridge.confirm.action", description)
+    override fun confirmAction(description: String, confirmation: Confirmation): Boolean =
+        confirm(SwapDeckBundle.message("bridge.confirm.action", description), confirmation)
+
+    /**
+     * Conferma modale con il testo [label] (già tradotto; i valori non fidati già passati da
+     * [displaySafe]); per [Confirmation.Typed] poi la parola da digitare. Dai thread del plugin.
+     */
+    fun confirm(label: String, confirmation: Confirmation): Boolean = onEdt {
         when {
             !confirmDialog(owner, label) -> false
             confirmation !is Confirmation.Typed -> true
@@ -143,16 +149,16 @@ class IdeBridgeUi(private val project: Project?) : BridgeUi {
 
     private fun findLocalDir(dir: File): VirtualFile? = if (dir.isDirectory) findLocal(dir) else null
 
-    /** Esegue [block] sull'EDT e ne restituisce l'esito (anche l'eccezione) al thread chiamante. */
-    private fun <T> onEdt(block: () -> T): T {
-        val app = ApplicationManager.getApplication()
-        if (app.isDispatchThread) return block()
-        var result: Result<T>? = null
-        app.invokeAndWait({ result = runCatching(block) }, ModalityState.defaultModalityState())
-        return result!!.getOrThrow()
-    }
-
     companion object {
+        /** Esegue [block] sull'EDT e ne restituisce l'esito (anche l'eccezione) al thread chiamante. */
+        fun <T> onEdt(block: () -> T): T {
+            val app = ApplicationManager.getApplication()
+            if (app.isDispatchThread) return block()
+            var result: Result<T>? = null
+            app.invokeAndWait({ result = runCatching(block) }, ModalityState.defaultModalityState())
+            return result!!.getOrThrow()
+        }
+
         private const val TITLE = "SwapDeck"
 
         /**

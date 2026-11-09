@@ -11,7 +11,10 @@ import com.intellij.openapi.wm.IdeFrame
 import com.intellij.util.messages.Topic
 import com.swapdeck.jetbrains.SwapDeckLifecycle
 import com.swapdeck.jetbrains.SwapDeckThreads
+import com.swapdeck.jetbrains.bridge.IdeBridgeHost
+import com.swapdeck.jetbrains.cli.CliOptions
 import com.swapdeck.jetbrains.cli.SwapDeckCli
+import com.swapdeck.jetbrains.cli.toCswapError
 import com.swapdeck.jetbrains.engine.EngineService
 import com.swapdeck.jetbrains.engine.SwapDeckEngineListener
 import com.swapdeck.jetbrains.engine.SwapDeckNotification
@@ -88,6 +91,12 @@ class StateService : Disposable {
     /** Avvio (idempotente): motore, prima lettura, polling. */
     fun start() {
         if (disposed || !started.compareAndSet(false, true)) return
+        // Nel log di SwapDeck (redatto dal core) una riga sola per processo IDE, come VS Code.
+        SwapDeckCli.getInstance().run(listOf("log", "info", "-"), CliOptions(stdin = "plugin attivo (${IdeBridgeHost.CLIENT_INFO})"))
+            .exceptionally { error ->
+                LOG.warn("log: ${error.toCswapError().message}")
+                null
+            }
         val connection = bus.connect(this)
         connection.subscribe(
             SwapDeckSettingsListener.TOPIC,

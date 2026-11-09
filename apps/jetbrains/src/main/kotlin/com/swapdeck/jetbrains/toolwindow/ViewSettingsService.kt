@@ -55,7 +55,8 @@ class ViewSettingsService : Disposable {
     /** [listener] riceve le nuove impostazioni a ogni cambio, finché [parent] non si smaltisce. */
     fun addListener(parent: Disposable, listener: (ViewSettings) -> Unit) {
         listeners += listener
-        Disposer.register(parent) { listeners -= listener }
+        // Da un altro thread il genitore può essere già smaltito: allora niente ascolto.
+        if (!Disposer.tryRegister(parent) { listeners -= listener }) listeners -= listener
     }
 
     override fun dispose() = listeners.clear()

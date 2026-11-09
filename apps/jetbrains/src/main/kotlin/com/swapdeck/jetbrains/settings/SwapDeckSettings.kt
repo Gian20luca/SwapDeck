@@ -45,7 +45,7 @@ fun interface SwapDeckSettingsListener {
 
 /**
  * Impostazioni del plugin, per utente e per tutta l'IDE (`swapdeck.xml` nella configurazione
- * dell'IDE). La pagina Impostazioni arriva col sottotask 10; qui il deposito e l'avviso dei cambi.
+ * dell'IDE): deposito e avviso dei cambi. La pagina è [SwapDeckConfigurable] (Strumenti → SwapDeck).
  */
 @Service(Service.Level.APP)
 @State(name = "SwapDeckSettings", storages = [Storage("swapdeck.xml")])

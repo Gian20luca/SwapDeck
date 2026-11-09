@@ -53,10 +53,15 @@ class IdeBridgeHost : BridgeHost {
 
     override fun preferencesChanged() = bus.syncPublisher(SwapDeckViewListener.TOPIC).preferencesChanged()
 
-    override val clientInfo: String by lazy {
-        val ide = ApplicationInfo.getInstance().fullApplicationName
-        val plugin = PluginManagerCore.getPlugin(PluginId.getId(SwapDeckCli.PLUGIN_ID))?.version ?: "?"
-        "$ide, plugin $plugin"
+    override val clientInfo: String get() = CLIENT_INFO
+
+    companion object {
+        /** `<IDE> <versione>, plugin <versione>`: `diagnostics --client` e riga d'avvio nel log. */
+        val CLIENT_INFO: String by lazy {
+            val ide = ApplicationInfo.getInstance().fullApplicationName
+            val plugin = PluginManagerCore.getPlugin(PluginId.getId(SwapDeckCli.PLUGIN_ID))?.version ?: "?"
+            "$ide, plugin $plugin"
+        }
     }
 }
 
