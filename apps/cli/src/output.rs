@@ -4,7 +4,7 @@
 use serde::Serialize;
 use swapdeck_core::config::AppConfig;
 use swapdeck_core::cswap::{CswapError, ListResponse};
-use swapdeck_core::engine::SuspendReason;
+use swapdeck_core::engine::{EngineState, SuspendReason};
 use swapdeck_core::lock::LockInfo;
 use ts_rs::TS;
 
@@ -78,4 +78,15 @@ pub struct ConfigView {
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 pub struct CliErrorEnvelope {
     pub error: CswapError,
+}
+
+/// `swapdeck-cli engine enable`: serve la conferma della prima accensione, oppure motore acceso.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum EngineEnable {
+    /// Prima accensione da confermare (`--confirm`, eventualmente `--observe`): nulla è stato
+    /// scritto.
+    NeedsConfirmation,
+    /// Motore acceso: regole salvate e stato del motore come `engine state`.
+    Enabled { state: Box<EngineState> },
 }

@@ -563,3 +563,41 @@ fn first_enable_confirmation_is_sticky() {
     let json = serde_json::to_string(&c.engine).unwrap();
     assert!(json.contains(r#""firstEnableConfirmed":true"#));
 }
+
+/// «Accendi» delle IDE (`engine enable`, prima in `firstEnable.ts` di VS Code): alla prima
+/// accensione serve la conferma; con la conferma (o se già data) acceso, osservazione a scelta.
+#[test]
+fn enabled_by_asks_once_then_turns_on() {
+    let off: EngineRules = serde_json::from_str(r#"{"order":[6,1]}"#).unwrap();
+    assert_eq!(off.enabled_by(false, false), None, "serve la conferma");
+    assert_eq!(off.enabled_by(false, true), None, "anche in osservazione");
+
+    let on = off.enabled_by(true, false).unwrap();
+    assert!(on.enabled && !on.dry_run && on.first_enable_confirmed);
+    assert_eq!(on.order, off.order, "il resto delle regole resta");
+    let observe = off.enabled_by(true, true).unwrap();
+    assert!(observe.enabled && observe.dry_run && observe.first_enable_confirmed);
+
+    // Già confermata, accesa o in osservazione: parte subito senza chiedere.
+    for confirmed in [
+        EngineRules {
+            first_enable_confirmed: true,
+            ..off.clone()
+        },
+        EngineRules {
+            enabled: true,
+            ..off.clone()
+        },
+        EngineRules {
+            dry_run: true,
+            ..off.clone()
+        },
+    ] {
+        let next = confirmed.enabled_by(false, false).unwrap();
+        assert!(next.enabled && next.first_enable_confirmed);
+        assert_eq!(
+            next.dry_run, confirmed.dry_run,
+            "l'osservazione attiva resta"
+        );
+    }
+}

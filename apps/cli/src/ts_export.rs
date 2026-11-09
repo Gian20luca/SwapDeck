@@ -8,16 +8,19 @@ use std::path::{Path, PathBuf};
 
 use ts_rs::{Config, TS};
 
-use crate::output::{CliErrorEnvelope, CliState, CliVersion, ConfigView, EngineStatus};
+use crate::output::{
+    CliErrorEnvelope, CliState, CliVersion, ConfigView, EngineEnable, EngineStatus,
+};
 
 const HEADER: &str =
     "// Generato da swapdeck-cli (ts-rs): non modificare a mano. Rigenera con `pnpm gen:types`.\n";
 
-const OWN: [&str; 5] = [
+const OWN: [&str; 6] = [
     "CliErrorEnvelope",
     "CliState",
     "CliVersion",
     "ConfigView",
+    "EngineEnable",
     "EngineStatus",
 ];
 
@@ -55,6 +58,7 @@ fn render(dir: &Path) -> BTreeMap<String, String> {
     CliState::export_all(&cfg).unwrap();
     ConfigView::export_all(&cfg).unwrap();
     CliErrorEnvelope::export_all(&cfg).unwrap();
+    EngineEnable::export_all(&cfg).unwrap();
     let mut files = BTreeMap::new();
     let mut index = String::from(HEADER);
     for name in OWN {

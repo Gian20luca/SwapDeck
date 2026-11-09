@@ -14,11 +14,12 @@ use swapdeck_core::cswap::{
 use swapdeck_core::diagnostics;
 use swapdeck_core::engine::{EngineProfiles, EngineRules, EngineState, ProfileCommand};
 use swapdeck_core::history::{
-    DEFAULT_RETENTION_DAYS, History, HistoryEvents, HistoryQuery, HistoryRecord,
+    DEFAULT_RETENTION_DAYS, History, HistoryEvents, HistoryPoint, HistoryQuery, history_bucket,
+    history_points,
 };
 use swapdeck_core::notify::NotificationConfig;
 use swapdeck_core::paths::AppPaths;
-use swapdeck_core::timeutil::{now_unix, parse_iso};
+use swapdeck_core::timeutil::now_unix;
 use swapdeck_core::usage::{self, UsageBreakdown, UsageError, UsagePaths, UsageQuery};
 use tauri::{AppHandle, State};
 
@@ -82,65 +83,8 @@ pub async fn get_config_value(
     blocking(move || api.config_get(&key)).await
 }
 
-/// Punto dello storico (`HistoryPoint` della UI).
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HistoryPoint {
-    pub ts: i64,
-    pub account: u32,
-    pub five_hour_pct: Option<f64>,
-    pub seven_day_pct: Option<f64>,
-    pub five_hour_expected_pct: Option<f64>,
-    pub seven_day_expected_pct: Option<f64>,
-}
-
 /// Intervallo di default dello storico (come la UI): 7 giorni.
 const HISTORY_DEFAULT_SECS: i64 = 7 * 86_400;
-/// Punti per account oltre i quali se ne tiene uno per intervallo (grafici leggeri).
-const HISTORY_MAX_POINTS: i64 = 1_500;
-const FIVE_HOURS_SECS: i64 = 5 * 3_600;
-
-/// Consumo atteso al ritmo lineare della finestra di 5 ore che si chiude a `resets_at`.
-fn five_hour_expected(ts: i64, resets_at: Option<&str>) -> Option<f64> {
-    let reset = parse_iso(resets_at?)?;
-    let elapsed = ts - (reset - FIVE_HOURS_SECS);
-    (0..=FIVE_HOURS_SECS)
-        .contains(&elapsed)
-        .then(|| elapsed as f64 * 100.0 / FIVE_HOURS_SECS as f64)
-}
-
-/// Campioni dello storico in punti per la UI: filtro per account, ordine per istante e al
-/// massimo un punto per account ogni `bucket_secs`.
-pub fn history_points(
-    records: &[HistoryRecord],
-    account: Option<u32>,
-    bucket_secs: i64,
-) -> Vec<HistoryPoint> {
-    let mut samples: Vec<_> = records
-        .iter()
-        .filter_map(|r| match r {
-            HistoryRecord::Sample(s) if account.is_none_or(|a| a == s.account) => Some(s),
-            _ => None,
-        })
-        .collect();
-    samples.sort_by_key(|s| s.ts);
-    let bucket = bucket_secs.max(1);
-    let mut last_bucket = std::collections::HashMap::new();
-    samples
-        .into_iter()
-        .filter(|s| {
-            last_bucket.insert(s.account, s.ts.div_euclid(bucket)) != Some(s.ts.div_euclid(bucket))
-        })
-        .map(|s| HistoryPoint {
-            ts: s.ts,
-            account: s.account,
-            five_hour_pct: s.five_hour_pct,
-            seven_day_pct: s.seven_day_pct,
-            five_hour_expected_pct: five_hour_expected(s.ts, s.five_hour_resets_at.as_deref()),
-            seven_day_expected_pct: s.seven_day_expected_pct,
-        })
-        .collect()
-}
 
 /// Storico dei consumi dalla cartella dati (scritto da chi tiene il lock del motore).
 #[tauri::command]
@@ -162,8 +106,11 @@ pub async fn get_history(
         let records = History::new(&dir)
             .read_range(from, now)
             .map_err(|e| CswapError::new(CswapErrorKind::Failed, format!("storico: {e}")))?;
-        let bucket = ((now - from) / HISTORY_MAX_POINTS).max(60);
-        Ok(history_points(&records, q.account, bucket))
+        Ok(history_points(
+            &records,
+            q.account,
+            history_bucket(from, now),
+        ))
     })
     .await
 }
@@ -570,32 +517,6 @@ mod tests {
         assert_eq!(v["message"], "ok");
         assert!(v.get("command").is_none());
         assert_eq!(api.actions.lock().unwrap().len(), 1);
-    }
-
-    #[test]
-    fn history_points_filter_sort_and_thin_out() {
-        use swapdeck_core::history::UsageSample;
-        use swapdeck_core::timeutil::format_iso;
-        let list = fixture_list();
-        let a = &list.accounts[0];
-        let sample = |ts: i64| {
-            let mut s = UsageSample::from_account(a, ts);
-            s.five_hour_pct = Some(10.0);
-            s.five_hour_resets_at = Some(format_iso(3_600 * 5));
-            HistoryRecord::Sample(s)
-        };
-        let other = HistoryRecord::Sample(UsageSample::from_account(&list.accounts[1], 0));
-        let records = vec![sample(9_000), sample(0), sample(30), other, sample(120)];
-        let points = history_points(&records, Some(a.number), 60);
-        assert_eq!(
-            points.iter().map(|p| p.ts).collect::<Vec<_>>(),
-            [0, 120, 9_000]
-        );
-        assert_eq!(points[0].five_hour_expected_pct, Some(0.0));
-        assert_eq!(points[2].five_hour_expected_pct, Some(50.0));
-        assert_eq!(history_points(&records, None, 1).len(), 5);
-        assert_eq!(five_hour_expected(0, Some("non una data")), None);
-        assert_eq!(five_hour_expected(20_000, Some(&format_iso(18_000))), None);
     }
 
     #[test]

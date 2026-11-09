@@ -313,6 +313,146 @@ fn headless_once_writes_history() {
     assert_eq!(e["running"], false, "lock rilasciato: {e}");
 }
 
+/// `history --points`: i campioni come punti dei grafici (prima in `bridge.ts` di VS Code).
+#[test]
+fn history_points_after_headless() {
+    let env = Env::new();
+    let (code, p) = env.run(&["history", "--points"]);
+    assert_eq!((code, p), (0, json!([])));
+    let out = env
+        .command(&["headless", "--once", "--dry-run", "--notify=stdout"])
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(0));
+    let (code, p) = env.run(&["history", "--account", "6", "--points"]);
+    assert_eq!(code, 0, "{p}");
+    let points = p.as_array().unwrap();
+    assert_eq!(points.len(), 1, "{p}");
+    assert_eq!(points[0]["account"], 6);
+    assert_eq!(points[0]["fiveHourPct"], 66.0);
+    assert_eq!(points[0]["sevenDayExpectedPct"], 26.0);
+    assert!(points[0].get("fiveHourExpectedPct").is_some(), "{p}");
+    assert!(points[0].get("type").is_none(), "punti, non record: {p}");
+    let (code, _) = env.run(&["history", "--points", "--from"]);
+    assert_eq!(code, 2);
+}
+
+/// `ide status`: riepilogo della barra di stato, dallo stato su stdin o letto dalla CLI.
+#[test]
+fn ide_status_from_stdin_and_from_cswap() {
+    let env = Env::new();
+    let (code, direct) = env.run(&["ide", "status", "--thresholds", "70,90"]);
+    assert_eq!(code, 0, "{direct}");
+    assert_eq!(direct["content"]["kind"], "account");
+    assert_eq!(direct["content"]["account"]["alias"], "alias6");
+    assert_eq!(direct["content"]["fiveHour"]["pct"], 66);
+    assert_eq!(direct["content"]["sevenDay"]["pct"], 77);
+    assert_eq!(direct["level"], "warn", "77% con avviso a 70: {direct}");
+    assert_eq!(direct["thresholds"], json!({"warn": 70.0, "danger": 90.0}));
+    assert_eq!(direct["engine"]["holder"], "off");
+
+    let (_, state) = env.run(&["state"]);
+    let mut running = state.clone();
+    running["engine"]["running"] = json!(true);
+    running["engine"]["enabled"] = json!(true);
+    running["engine"]["activeMap"] = json!("Eco");
+    running["engine"]["lock"] = json!({
+        "pid": 4242, "host": "pc", "instance": "x", "processStart": null,
+        "acquiredAt": 0, "heartbeatAt": 0, "intervalSecs": 60
+    });
+    let input = running.to_string();
+    let (code, here) = env.run_stdin(&["ide", "status", "--engine-pid", "4242", "-"], &input);
+    assert_eq!(code, 0, "{here}");
+    assert_eq!(here["level"], "ok", "soglie di default: {here}");
+    assert_eq!(
+        here["engine"],
+        json!({"holder": "here", "pid": 4242, "switching": true, "dryRun": false, "activeMap": "Eco"})
+    );
+    assert_eq!(here["updatedAtMs"], state["updatedAtMs"]);
+    let (_, other) = env.run_stdin(&["ide", "status", "--engine-pid", "1", "-"], &input);
+    assert_eq!(other["engine"]["holder"], "other");
+    assert_eq!(other["content"], here["content"]);
+
+    let error = json!({"list": null, "error": {"kind": "notInstalled", "message": "cswap non trovato"},
+        "updatedAtMs": 1, "engine": {"enabled": false, "dryRun": false, "pollIntervalSeconds": 60,
+        "running": false, "lock": null}});
+    let (code, e) = env.run_stdin(&["ide", "status", "-"], &error.to_string());
+    assert_eq!(code, 0, "{e}");
+    assert_eq!(e["level"], "error");
+    assert_eq!(e["content"]["kind"], "error");
+    assert_eq!(e["content"]["error"]["kind"], "notInstalled");
+
+    for bad in [
+        vec!["ide", "status", "--engine-pid", "x"],
+        vec!["ide", "status", "--thresholds"],
+        vec!["ide", "status", "--nope", "1"],
+    ] {
+        assert_eq!(env.run(&bad).0, 2, "{bad:?}");
+    }
+    let (code, v) = env.run_stdin(&["ide", "status", "-"], "{not json");
+    assert_eq!(
+        (code, v["error"]["kind"].as_str()),
+        (2, Some("invalidUsage"))
+    );
+}
+
+/// `engine enable|disable` (prima `firstEnable.ts` di VS Code): conferma alla prima accensione,
+/// osservazione a scelta, poi parte subito.
+#[test]
+fn engine_enable_asks_first_then_turns_on() {
+    let env = Env::new();
+    let rules = r#"{"primary":6,"reserves":[1,3]}"#;
+    assert_eq!(env.run_stdin(&["engine", "rules", "set", "-"], rules).0, 0);
+    let config = env.home().join("config").join("config.json");
+    let before = fs::read_to_string(&config).unwrap();
+
+    let (code, v) = env.run(&["engine", "enable"]);
+    assert_eq!((code, v.clone()), (0, json!({"kind": "needsConfirmation"})));
+    let (_, v2) = env.run(&["engine", "enable", "--observe"]);
+    assert_eq!(v2, v);
+    assert_eq!(
+        fs::read_to_string(&config).unwrap(),
+        before,
+        "nessuna scrittura"
+    );
+
+    let (code, v) = env.run(&["engine", "enable", "--confirm", "--observe"]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["kind"], "enabled");
+    assert_eq!(v["state"]["rules"]["enabled"], true);
+    assert_eq!(v["state"]["rules"]["dryRun"], true);
+    assert_eq!(v["state"]["rules"]["firstEnableConfirmed"], true);
+    assert_eq!(
+        v["state"]["rules"]["primary"], 6,
+        "il resto delle regole resta"
+    );
+
+    let (code, v) = env.run(&["engine", "disable"]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["rules"]["enabled"], false);
+    assert_eq!(v["rules"]["dryRun"], true, "l'osservazione resta com'era");
+    let (_, s) = env.run(&["state"]);
+    assert_eq!(s["engine"]["enabled"], false);
+
+    // Già confermata: parte subito, senza --confirm.
+    let (code, v) = env.run(&["engine", "enable"]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(v["kind"], "enabled");
+    assert_eq!(v["state"]["rules"]["enabled"], true);
+    assert_eq!(env.run(&["engine", "enable", "--forse"]).0, 2);
+}
+
+/// Accendere vuole una principale: errore di configurazione, regole intatte.
+#[test]
+fn engine_enable_validates_rules() {
+    let env = Env::new();
+    let (code, v) = env.run(&["engine", "enable", "--confirm"]);
+    assert_eq!(code, 2, "acceso senza principale: {v}");
+    let (_, s) = env.run(&["engine", "state"]);
+    assert_eq!(s["rules"]["enabled"], false);
+    assert_eq!(s["rules"]["firstEnableConfirmed"], false);
+}
+
 #[test]
 fn headless_rejects_unknown_notify_channel() {
     let env = Env::new();
