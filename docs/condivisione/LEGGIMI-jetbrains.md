@@ -56,20 +56,29 @@ xattr -dr com.apple.quarantine ~/Library/Application\ Support/JetBrains/*/plugin
 
 In alternativa: Impostazioni di Sistema → Privacy e sicurezza → «Apri comunque» per `swapdeck-cli`.
 
-## 4. Problemi comuni
+## 4. Ubuntu 24.04 e successive: profilo per il pannello
+
+Al primo avvio l'IDE può mostrare una notifica che chiede di **installare un profilo AppArmor** per JCEF, il browser integrato in cui gira il pannello SwapDeck. Non è un errore di SwapDeck: da Ubuntu 24.04 il sistema blocca una funzione che serve alla sandbox di JCEF, e finché il profilo manca nessun pannello web dell'IDE si apre (nemmeno quelli di altri plugin, come l'anteprima Markdown).
+
+- **Consigliato:** dalla notifica scegli di installare il profilo e inserisci la password di `sudo`. Si fa una volta sola per questo PC; poi riavvia l'IDE.
+- **Senza `sudo`:** il pannello resta vuoto o mostra il messaggio su JCEF, ma barra di stato, azioni (**Tools** → **SwapDeck**: Cambia account, Cambia mappa, motore) e notifiche funzionano lo stesso.
+- Sconsigliato: disattivare la sandbox di JCEF dal Registry dell'IDE. Funziona, ma toglie una protezione a tutti i pannelli web dell'IDE.
+
+## 5. Problemi comuni
 
 | Cosa succede                                | Cosa fare                                                                                                                                                                                                          |
 | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | «Plugin is incompatible» all'installazione  | L'IDE è più vecchia della 2024.3: aggiornala.                                                                                                                                                                      |
 | Il pannello dice che JCEF non è disponibile | L'IDE gira senza JCEF (runtime alternativo). Barra di stato, azioni e notifiche funzionano lo stesso; per il pannello usa il runtime JetBrains predefinito (Find Action → «Choose Boot Java Runtime for the IDE»). |
+| Su Ubuntu l'IDE chiede di installare un profilo AppArmor | Vedi il punto 4: installalo dalla notifica (serve `sudo`), poi riavvia l'IDE. |
 | Errore di `swapdeck-cli`                    | Zip di un altro sistema: installa quello giusto. Su macOS vedi il punto 3.                                                                                                                                         |
 | Qualcosa non va e non si capisce perché     | **Tools** → **SwapDeck** → **Copia diagnostica** e incolla il testo a chi ti ha dato SwapDeck.                                                                                                                     |
 
-## 5. Aggiornare
+## 6. Aggiornare
 
 Installa da disco lo zip della nuova versione (punto 1): sostituisce quella vecchia. Configurazione, storico e account restano.
 
-## 6. Disinstallare
+## 7. Disinstallare
 
 **Settings** → **Plugins** → scheda **Installed** → **SwapDeck** → freccia accanto a «Disable» → **Uninstall**, poi **Restart IDE**.
 
