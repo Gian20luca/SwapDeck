@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "gradle:build": "node scripts/gradle.mjs --no-daemon buildPlugin",
-    "gradle:test": "node scripts/gradle.mjs --no-daemon test"
+    "gradle:test": "node scripts/gradle.mjs --no-daemon test",
+    "package": "node scripts/package.mjs"
   },
   "devDependencies": {
     "@swapdeck/host": "workspace:*",

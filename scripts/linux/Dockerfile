@@ -1,4 +1,5 @@
-# Ambiente di build Linux come il job della CI (ubuntu-22.04): .deb, AppImage, swapdeck-cli e .vsix linux-x64.
+# Ambiente di build Linux come il job della CI (ubuntu-22.04): .deb, AppImage, swapdeck-cli, .vsix e
+# zip del plugin JetBrains linux-x64 (JDK 21 per Gradle).
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive \

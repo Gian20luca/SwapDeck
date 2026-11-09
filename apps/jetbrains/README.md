@@ -146,5 +146,17 @@ Comandi:
 | `pnpm build`, `pnpm test` (qui o dalla radice)        | solo il pannello e i test vitest: niente Java                                    |
 | `pnpm jetbrains:build` (radice) o `pnpm gradle:build` | `./gradlew buildPlugin`: `build/distributions/swapdeck-jetbrains-<versione>.zip` |
 | `pnpm jetbrains:test` (radice) o `pnpm gradle:test`   | `./gradlew test`                                                                 |
+| `pnpm jetbrains:package` (radice) o `pnpm package`    | zip per il sistema corrente con `swapdeck-cli` incluso (sotto)                   |
 
-Lo zip contiene `swapdeck-jetbrains/lib/swapdeck-jetbrains-<versione>.jar` con classi, `plugin.xml`, testi, `swapdeck/protocol.json` e `webview/`. `swapdeck-cli` per piattaforma arriva con il sottotask 11.
+Lo zip di `buildPlugin` contiene `swapdeck-jetbrains/lib/swapdeck-jetbrains-<versione>.jar` con classi, `plugin.xml`, testi, `swapdeck/protocol.json` e `webview/`, ma non `swapdeck-cli`.
+
+### Zip per piattaforma (`scripts/package.mjs`)
+
+`node scripts/package.mjs [--target linux-x64|win32-x64|darwin-arm64|darwin-x64] [--cli <binario>] [--rust-target <triple>]`:
+
+1. senza `--cli` compila `swapdeck-cli` (`cargo build --release --locked`, con `--target` se c'è `--rust-target`; senza nessuno dei due solo per il sistema corrente, che è anche il `--target` di default);
+2. lancia `./gradlew --no-daemon buildPlugin` (pannello di produzione);
+3. aggiunge allo zip `swapdeck-jetbrains/bin/swapdeck-cli[.exe]` (`CliPaths.bundled`) con permessi 0755 e, con il toolchain gnullvm su Windows, `bin/libunwind.dll` dal PATH (`scripts/zip.mjs`: le voci di Gradle restano byte per byte);
+4. controlla jar e binario (CRC, contenuto, permessi) e scrive `dist/swapdeck-jetbrains-<target>-<versione>.zip`.
+
+Dove si usa: `pnpm dist:linux` (linux-x64 nel container), `pnpm dist:local` (win32-x64, se c'è un JDK 21), job `jetbrains` di `release.yml` (tutti e quattro), `docs/BUILD-MAC.md` (macOS).
