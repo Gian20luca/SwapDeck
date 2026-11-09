@@ -4,12 +4,13 @@ Interfaccia grafica per [`cswap`](https://pypi.org/project/claude-swap/) (claude
 
 Si installa in **una** di queste forme (a scelta):
 
-| Forma                     | Per chi                               | Cosa dà                                                                                                                                                   |
-| ------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| App nell'area di notifica | chi vuole un widget sempre visibile   | icona con anello dei consumi, dashboard, mini-widget flottante, notifiche, avvio al login                                                                 |
-| Estensione VS Code        | chi lavora tutto il giorno in VS Code | tutto dentro VS Code, senza l'app: vista SwapDeck nella barra delle attività con la stessa app a schede, barra di stato, cambio rapido, notifiche, motore |
+| Forma                          | Per chi                                                                         | Cosa dà                                                                                                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App nell'area di notifica      | chi vuole un widget sempre visibile                                             | icona con anello dei consumi, dashboard, mini-widget flottante, notifiche, avvio al login                                                                 |
+| Estensione VS Code             | chi lavora tutto il giorno in VS Code                                           | tutto dentro VS Code, senza l'app: vista SwapDeck nella barra delle attività con la stessa app a schede, barra di stato, cambio rapido, notifiche, motore |
+| Plugin JetBrains (in sviluppo) | chi lavora in IntelliJ IDEA, WebStorm, PyCharm e le altre IDE JetBrains 2024.3+ | come l'estensione VS Code: finestra SwapDeck con la stessa app a schede, barra di stato, azioni nel menu Strumenti, notifiche, motore                     |
 
-Entrambe usano lo stesso motore (Rust) e la stessa config, e coprono i comandi di `cswap` (list, switch, add, remove, alias, swap, map, export/import, run...). Interfaccia in italiano e inglese.
+Tutte usano lo stesso motore (Rust) e la stessa config, e coprono i comandi di `cswap` (list, switch, add, remove, alias, swap, map, export/import, run...). Interfaccia in italiano e inglese.
 
 ## Requisiti
 
@@ -31,6 +32,8 @@ Scarica gli asset dalla pagina Releases del repo (serve essere loggati con un ac
 L'installazione contiene `swapdeck` e `swapdeck-cli` (su macOS in `SwapDeck.app/Contents/MacOS/`). `swapdeck-cli` c'è anche come file a sé nelle release, con il target nel nome (per esempio `swapdeck-cli-x86_64-pc-windows-msvc.exe`, `swapdeck-cli-x86_64-unknown-linux-gnu`, `swapdeck-cli-aarch64-apple-darwin`).
 
 Estensione: `code --install-extension swapdeck-vscode-<piattaforma>-<versione>.vsix`, oppure «Estensioni» → «...» → «Installa da VSIX...». Poi «Ricarica finestra». Basta da sola: contiene `swapdeck-cli` (motore, storico, notifiche, installazione di cswap) e non richiede l'app; l'icona SwapDeck nella barra delle attività apre l'app completa, e con più finestre aperte resta tutto sincronizzato (vedi [apps/vscode/README.md](apps/vscode/README.md)).
+
+Plugin JetBrains (in sviluppo, non ancora in una release): `swapdeck-jetbrains-<piattaforma>-<versione>.zip` (`win32-x64`, `linux-x64`, `darwin-arm64`, `darwin-x64`), da installare senza estrarlo con Settings → Plugins → ⚙ → «Install Plugin from Disk…». Contiene `swapdeck-cli` e basta da solo; con l'app o con VS Code resta sincronizzato. Guida: [docs/condivisione/LEGGIMI-jetbrains.md](docs/condivisione/LEGGIMI-jetbrains.md); dettagli tecnici in [apps/jetbrains/README.md](apps/jetbrains/README.md).
 
 Avvisi attesi, perché i pacchetti non sono firmati con certificati dei produttori dei sistemi:
 
@@ -187,7 +190,7 @@ SwapDeck scrive un log per utente in `logs/swapdeck.log` nella cartella dati: `%
 
 ## Per chi sviluppa
 
-Monorepo: `crates/swapdeck-core` (Rust), `apps/desktop` (Tauri 2), `apps/cli`, `apps/vscode`, `packages/ui`, `packages/types`. Servono Node >= 22, pnpm e Rust.
+Monorepo: `crates/swapdeck-core` (Rust), `apps/desktop` (Tauri 2), `apps/cli`, `apps/vscode`, `apps/jetbrains` (plugin Kotlin con Gradle), `packages/ui`, `packages/host`, `packages/types`. Servono Node >= 22, pnpm e Rust; per il plugin JetBrains anche un JDK 21.
 
 ```
 pnpm install
@@ -196,7 +199,12 @@ pnpm test             # test JS
 pnpm test:rust        # cargo test --workspace
 pnpm lint             # prettier + typecheck
 pnpm lint:rust        # fmt + clippy
-pnpm dist:local       # build Windows locale in dist-locale/
+pnpm dist:local       # build Windows locale in dist-locale/ (con lo zip JetBrains win32-x64 se c'è un JDK 21)
+pnpm dist:linux       # pacchetti Linux con Docker in dist-locale/linux/ (anche lo zip JetBrains linux-x64)
+pnpm jetbrains:test   # test JUnit del plugin (Gradle)
+pnpm jetbrains:package # zip del plugin per il sistema corrente in apps/jetbrains/dist/
 ```
+
+Zip del plugin per un'altra piattaforma con un `swapdeck-cli` già costruito: `node apps/jetbrains/scripts/package.mjs --target <linux-x64|win32-x64|darwin-arm64|darwin-x64> --cli <binario>`. Quello per macOS richiede un `swapdeck-cli` compilato su un Mac ([docs/BUILD-MAC.md](docs/BUILD-MAC.md), passo 5bis).
 
 Prove locali: mai col motore acceso sul profilo reale; usa `SWAPDECK_HOME` e il finto cswap (`apps/desktop/README.md`). Documentazione: [docs/](docs/) (`PIANO.md`, `STATO.md`, `MAPPA-CODICE.md`, `CSWAP-CONTRATTO.md`, `RILASCIO.md`).

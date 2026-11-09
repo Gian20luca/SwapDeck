@@ -152,6 +152,31 @@ Poi in VS Code: «Developer: Reload Window». L'estensione contiene già `swapde
 
 Se fallisce: `code: command not found`, vedi passo 1.5, oppure «Estensioni», «...», «Installa da VSIX...». Se `package.mjs` non trova `vsce`, verifica che `pnpm install` (passo 2) sia finito.
 
+## 5bis. Plugin JetBrains (zip darwin)
+
+Facoltativo, solo se il collega usa IntelliJ IDEA, WebStorm, PyCharm o un'altra IDE JetBrains (2024.3 o successiva). La parte JVM del plugin è uguale per tutti i sistemi; lo zip per macOS cambia solo perché contiene il `swapdeck-cli` del passo 3, che si può compilare solo su un Mac.
+
+1. JDK 21 (per Gradle; non serve all'IDE, che ha il suo). Per utente, senza admin: Temurin 21 dal sito di Adoptium (archivio `.tar.gz` estratto in `~/jdk-21`) oppure Homebrew se già presente (`brew install --cask temurin@21`, chiede la password di amministratore):
+
+```bash
+export JAVA_HOME="$(/usr/libexec/java_home -v 21 2>/dev/null || echo "$HOME/jdk-21/Contents/Home")"
+"$JAVA_HOME/bin/java" -version    # atteso: version "21..."
+```
+
+2. Zip con il binario del passo 3 (la prima volta Gradle scarica sé stesso e la piattaforma IntelliJ 2024.3, circa 1 GB in `~/.gradle`):
+
+```bash
+node apps/jetbrains/scripts/package.mjs --target "$VSTARGET" --cli "out/cli/swapdeck-cli-$TARGET"
+ls apps/jetbrains/dist/*.zip    # swapdeck-jetbrains-<VSTARGET>-<versione>.zip
+unzip -l "apps/jetbrains/dist/swapdeck-jetbrains-$VSTARGET-"*.zip | grep -E 'lib/.*\.jar|bin/swapdeck-cli'
+```
+
+Lo script controlla da sé che nello zip ci siano il jar e `swapdeck-jetbrains/bin/swapdeck-cli` con permessi 0755.
+
+3. Installazione: nell'IDE Settings → Plugins → icona a ingranaggio → «Install Plugin from Disk…», scegli lo zip (senza estrarlo), poi riavvia l'IDE se lo chiede. Istruzioni per i colleghi: `docs/condivisione/LEGGIMI-jetbrains.md`.
+
+Se fallisce: `Unsupported class file major version` o «Gradle requires JVM 17 or later», `JAVA_HOME` non punta al JDK 21; `node: scripts/build.mjs` fallisce, `pnpm install` (passo 2) non è finito. Come l'estensione VS Code, il plugin avvia il processo del motore con l'IDE (Settings → Tools → SwapDeck), ma cambia account da solo solo dopo la prima accensione confermata nella scheda Regole.
+
 ## 6. Verifiche finali
 
 ```bash

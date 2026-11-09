@@ -1,7 +1,25 @@
 # Rilascio
 
-Workflow: `.github/workflows/release.yml`. Produce installer, `swapdeck-cli`, `.vsix` per piattaforma,
-firme dell'updater e `latest.json`, e li mette in una release **in bozza**: la pubblicazione resta manuale.
+Workflow: `.github/workflows/release.yml`. Produce installer, `swapdeck-cli`, `.vsix` e zip del plugin
+JetBrains per piattaforma, firme dell'updater e `latest.json`, e li mette in una release **in bozza**:
+la pubblicazione resta manuale.
+
+## In sviluppo: plugin per le IDE JetBrains (branch `feature/jetbrains-plugin`)
+
+Non ancora in una release; la versione resta quella del ramo (0.2.4).
+
+- **Plugin SwapDeck per IntelliJ IDEA, WebStorm, PyCharm e le altre IDE JetBrains** dalla 2024.3: stesso
+  pannello dell'app e di VS Code in una finestra dell'IDE, barra di stato con account attivo, 5 ore e 7
+  giorni, azioni nel menu Strumenti e in Trova azione (Aggiorna, Cambia account, Cambia mappa, Avvia e
+  Ferma motore, Copia diagnostica, Apri cartella dei log), impostazioni in Strumenti → SwapDeck,
+  notifiche nella lingua di SwapDeck.
+- **Un motore per IDE**: un solo processo del motore anche con più progetti aperti, con lo stesso lock
+  dell'app e di VS Code; pannelli, finestre di VS Code e app restano sincronizzati (`ide-sync.json`).
+- **Uno zip per piattaforma** con `swapdeck-cli` incluso: `swapdeck-jetbrains-<win32-x64|linux-x64|darwin-arm64|darwin-x64>-<versione>.zip`,
+  installato con «Install Plugin from Disk…» (`docs/condivisione/LEGGIMI-jetbrains.md`).
+- **Logica comune nel Rust**: testo e livello della barra di stato (`swapdeck-cli ide status`), prima
+  accensione del motore (`engine enable`/`disable`) e punti dello storico (`history --points`) ora li
+  calcola la CLI; l'estensione VS Code li usa già.
 
 ## Novità 0.2.4 (correttiva, in corso)
 
@@ -45,8 +63,10 @@ Actions → Release → Run workflow sul branch, con `dry_run` attivo e `platfor
 
 ## Release in bozza
 
-1. Allinea la versione `X.Y.Z` in `Cargo.toml` (`[workspace.package]`, vale anche per l'app Tauri)
-   e in `apps/vscode/package.json`. Se le versioni sono diverse, il job `publish` fallisce.
+1. Allinea la versione `X.Y.Z` in `Cargo.toml` (`[workspace.package]`, vale anche per l'app Tauri),
+   in `apps/vscode/package.json`, in `apps/jetbrains/package.json` e in `pluginVersion` di
+   `apps/jetbrains/gradle.properties`. Se le versioni sono diverse, il job `publish` fallisce
+   (`pnpm test` e il task Gradle `checkVersion` lo segnalano prima).
 2. Fai il commit su `main` e aspetta che la CI sia verde.
 3. Crea e pubblica il tag, che deve essere `v` seguito dalla versione:
    `git tag vX.Y.Z` e poi `git push origin vX.Y.Z`.

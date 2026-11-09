@@ -57,6 +57,8 @@ SwapDeck/
   crates/swapdeck-core/   Rust: client cswap, config, motore regole, lock, storico, rilevamento conflitti
   apps/desktop/           Tauri 2: area di notifica, finestre, notifiche, autostart, updater, modalità --headless
   apps/vscode/            estensione VS Code (TypeScript, esbuild)
+  apps/jetbrains/         plugin per le IDE JetBrains (Kotlin, Gradle; pannello con esbuild), vedi §7
+  packages/host/          comune agli host IDE: client a messaggi del pannello, protocol.json
   packages/ui/            React + TypeScript + Vite: dashboard, grafici, gestione account, regole, i18n
   packages/types/         tipi TS generati dal Rust (ts-rs), unica fonte dei formati
   docs/
@@ -115,3 +117,21 @@ Gli agenti si scelgono secondo le regole globali. Step 2 e 3 possono andare in p
 
 ## 6. Idee non pianificate
 - Più AI diverse (17/10): monitorare e sfruttare insieme abbonamenti di altre AI (CLI e limiti propri). Fuori da cswap, che gestisce solo account Claude: servirebbero per ogni AI la lettura dei consumi e lo scambio delle credenziali. Nessuno sviluppo senza brainstorming e decisione dell'utente.
+
+## 7. Plugin per le IDE JetBrains (decisioni del 09/11, branch `feature/jetbrains-plugin`)
+Piano di dettaglio nella sessione di sviluppo; avanzamento in `STATO.md`.
+- **Parità con VS Code:** stesso pannello (tutti i 33 metodi del protocollo, installazione e aggiornamento di cswap, «Rifai login», chi consuma, selettori di file), barra di stato, cambio di account e di mappa, motore, notifiche, diagnostica.
+- **Host in Kotlin, pannello condiviso.** La parte host (ponte, CLI, motore, sincronia, barra di stato, azioni, notifiche) è riscritta in Kotlin; la UI React di `packages/ui` gira in una tool window JCEF con il client a messaggi di `@swapdeck/host` (`packages/host`), estratto dall'estensione VS Code. Regole e limiti del pannello non fidato in `packages/host/protocol.json`, letto da entrambi gli host.
+- **Nessun riferimento tra le estensioni:** `apps/vscode` e `apps/jetbrains` usano solo `packages/*` e `swapdeck-cli` (controllo `scripts/check-app-isolation.mjs` in `pnpm lint`; vale anche per gli script di pacchetto).
+- **Logica nel Rust** (regola di CLAUDE.md): testo, livelli e ultimo dato noto della barra di stato (`swapdeck-cli ide status`), prima accensione del motore (`engine enable`/`disable` con `needsConfirmation`) e punti dello storico (`history --points`) passati dal TypeScript alla CLI; li usano JetBrains e VS Code.
+- **Un motore per processo IDE:** servizi dell'applicazione (CLI, motore, stato, sincronia, ponte), quindi un solo `swapdeck-cli headless` anche con più progetti aperti, con il lock comune ad app e VS Code.
+- **Sincronia tra host:** segnale `ide-sync.json` nella cartella della config (prima `vscode-sync.json`, ancora letto), oltre al watcher di `config.json`.
+- **IDE minima 2024.3** (`since-build` 243, nessun limite superiore), dipendenza solo da `com.intellij.modules.platform`: vale per tutte le IDE JetBrains. Terminal facoltativo per `run`.
+- **Distribuzione:** uno zip per piattaforma (`swapdeck-jetbrains-<target>-<versione>.zip`, con `swapdeck-cli` in `bin/`), installato da disco come le `.vsix`; niente Marketplace. Versione uguale a `Cargo.toml`.
+- **macOS:** lo zip richiede un `swapdeck-cli` compilato su un Mac (SDK Apple solo su hardware Apple): lo costruisce il collega con `BUILD-MAC.md` (passo 5bis), oppure il binario Mac arriva qui e lo zip si assembla con `--cli`, oppure la CI quando il billing di GitHub Actions sarà sbloccato.
+- **Scritture dal pannello senza dialogo dell'IDE:** restano come oggi, uguali a VS Code (`setEngineRules`, `applyEngineProfile`, `configSet`, cambio account, alias…); le azioni con `confirm` del Rust hanno il dialogo dell'host.
+
+### Evoluzione futura decisa, non pianificata («opzione 2», 09/11)
+- Dialogo dell'IDE solo per le scritture del pannello con effetti duraturi: accensione del cambio automatico (`enabled` da `false` a `true`) e uscita da «Solo osservazione», ogni volta; mappa applicata che accende il cambio automatico; modifica delle impostazioni di cswap (`configSet`).
+- Regola nel Rust: `swapdeck-cli confirm` esteso al confronto tra regole attuali e nuove. I ponti VS Code e JetBrains lo chiamano prima di `setEngineRules`, `applyEngineProfile` e `configSet`; la pagina Regole non mostra il proprio dialogo della prima accensione quando l'host conferma da sé.
+- Restano senza dialogo: cambio account, alias, mappe delle cartelle, spegnimento. L'app desktop non cambia.
