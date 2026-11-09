@@ -467,16 +467,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<SwapDe
   async function pickAccount(): Promise<void> {
     const current = state?.list ? state : await refresh();
     type Item = vscode.QuickPickItem & { target?: number | SwitchStrategy };
-    const items: Item[] = [
-      { label: `$(sparkle) ${t('Best account')}`, description: 'best', target: 'best' },
-      {
-        label: `$(arrow-right) ${t('Next available')}`,
-        description: 'next-available',
-        target: 'next-available',
-      },
-    ];
     const accounts = current.list?.accounts ?? [];
-    if (accounts.length > 0)
+    if (current.list && accounts.length === 0) {
+      void vscode.window.showInformationMessage(t('SwapDeck: no accounts managed by cswap yet'));
+      return;
+    }
+    const items: Item[] = [];
+    // Il cambio con strategia serve almeno un altro account: con uno solo non c'è verso chi
+    // cambiare. Senza lista (cswap in errore) resta com'era: l'errore lo spiega cswap.
+    if (!current.list || accounts.length >= 2)
+      items.push(
+        { label: `$(sparkle) ${t('Best account')}`, description: 'best', target: 'best' },
+        {
+          label: `$(arrow-right) ${t('Next available')}`,
+          description: 'next-available',
+          target: 'next-available',
+        },
+      );
+    if (items.length > 0 && accounts.length > 0)
       items.push({ label: t('Accounts'), kind: vscode.QuickPickItemKind.Separator });
     for (const a of accounts) {
       const usage = displayUsage(a)?.usage;

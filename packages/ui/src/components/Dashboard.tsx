@@ -164,7 +164,15 @@ export function Dashboard({ toolbarExtra, manage = false }: DashboardProps) {
           <h1 id="sd-dashboard-title">{t('dashboard.title')}</h1>
         </WithInfo>
         <div className="sd-toolbar__group">
-          <QuickSwitch onSwitch={onQuick} disabled={busy || state.status !== 'ready'} />
+          <QuickSwitch
+            onSwitch={onQuick}
+            disabled={busy || state.status !== 'ready'}
+            // Con meno di due account non c'è verso chi cambiare (senza account cswap risponde
+            // «No accounts are managed yet»).
+            {...(state.status === 'ready' && accounts.length < 2
+              ? { unavailable: t('quick.needAccounts') }
+              : {})}
+          />
           <Tooltip text={t('dashboard.refresh.tip')}>
             <button
               type="button"

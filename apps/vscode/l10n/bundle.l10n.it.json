@@ -17,6 +17,7 @@
   "SwapDeck engine stopped unexpectedly (exit code {0}). See the SwapDeck output.": "Il motore di SwapDeck si è fermato (codice di uscita {0}). Vedi l'output di SwapDeck.",
   "SwapDeck: cswap not available": "SwapDeck: cswap non disponibile",
   "SwapDeck: loading…": "SwapDeck: caricamento…",
+  "SwapDeck: no accounts managed by cswap yet": "SwapDeck: cswap non gestisce ancora nessun account",
   "SwapDeck: switch failed: {0}": "SwapDeck: cambio non riuscito: {0}",
   "SwapDeck: switching account…": "SwapDeck: cambio dell'account…",
   "Switch account ({0})?": "Cambiare account ({0})?",
