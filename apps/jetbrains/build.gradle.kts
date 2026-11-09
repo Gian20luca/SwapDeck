@@ -1,4 +1,5 @@
 import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
+import org.jetbrains.intellij.platform.gradle.models.ProductRelease
 import org.jetbrains.kotlin.gradle.dsl.JvmDefaultMode
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
@@ -61,6 +62,18 @@ intellijPlatform {
         ideaVersion {
             sinceBuild = providers.gradleProperty("pluginSinceBuild")
             untilBuild = provider { null }
+        }
+    }
+    // `verifyPlugin` (CI): la piattaforma minima con cui si compila (IntelliJ IDEA Community 2024.3)
+    // e l'ultima IntelliJ IDEA rilasciata (dalla 2025.3 una sola distribuzione, tipo `IntellijIdea`).
+    // L'elenco delle versioni si scarica solo quando serve a `verifyPlugin`.
+    pluginVerification {
+        ides {
+            current()
+            latest {
+                types = listOf(IntelliJPlatformType.IntellijIdea)
+                channels = listOf(ProductRelease.Channel.RELEASE)
+            }
         }
     }
     buildSearchableOptions = false
