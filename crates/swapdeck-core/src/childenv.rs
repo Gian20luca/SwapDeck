@@ -86,7 +86,9 @@ pub fn sanitize(cmd: &mut Command) {
     }
 }
 
-#[cfg(test)]
+// Percorsi in stile Linux, dove esistono le AppImage: su Windows `/tmp/...` non è assoluto e la
+// funzione, giustamente, non riconosce nessuna AppImage.
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
@@ -191,7 +193,6 @@ mod tests {
         assert_eq!(change(&changes, "PATH"), None);
     }
 
-    #[cfg(unix)]
     #[test]
     fn non_utf8_values_are_kept() {
         use std::os::unix::ffi::OsStringExt;
@@ -201,7 +202,6 @@ mod tests {
         assert_eq!(change(&changes, "STRANA"), None);
     }
 
-    #[cfg(unix)]
     #[test]
     fn sanitize_outside_appimage_keeps_environment() {
         // Il processo dei test non gira in un'AppImage: il comando resta com'è.
