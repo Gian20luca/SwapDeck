@@ -9,14 +9,18 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "lint": "prettier --check . && pnpm -r typecheck",
+    "lint": "prettier --check . && pnpm -r typecheck && pnpm lint:apps",
+    "lint:apps": "node scripts/check-app-isolation.mjs",
     "format": "prettier --write .",
     "test:rust": "cargo test --workspace",
     "lint:rust": "cargo fmt --all --check && cargo clippy --workspace --all-targets -- -D warnings",
     "dist:local": "node scripts/dist-local.mjs",
     "dist:linux": "node scripts/dist-linux.mjs",
     "check:tauri": "node scripts/check-tauri-versions.mjs",
-    "gen:types": "pnpm --filter @swapdeck/types gen:types && pnpm --filter swapdeck-vscode gen:types"
+    "gen:types": "pnpm --filter @swapdeck/types gen:types && pnpm --filter swapdeck-vscode gen:types",
+    "jetbrains:build": "pnpm --filter swapdeck-jetbrains gradle:build",
+    "jetbrains:test": "pnpm --filter swapdeck-jetbrains gradle:test",
+    "jetbrains:package": "pnpm --filter swapdeck-jetbrains package"
   },
   "devDependencies": {
     "prettier": "catalog:"

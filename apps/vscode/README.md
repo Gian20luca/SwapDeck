@@ -32,7 +32,7 @@ Un solo motore attivo per utente, grazie al lock: le altre finestre osservano (t
 Tutte le finestre aperte, anche di istanze diverse di VS Code, mostrano gli stessi dati entro pochi secondi senza ricaricare:
 
 - ogni finestra osserva la cartella della config di SwapDeck: una modifica di `config.json` (regole, mappe, preferenze, notifiche) le fa rileggere tutte;
-- dopo un cambio di account o un'altra azione di cswap, la finestra che l'ha fatta riscrive il segnale `vscode-sync.json` (solo `source` e `at`, in modo atomico) e le altre rileggono; lo stesso fa la finestra titolare a ogni notifica del motore;
+- dopo un cambio di account o un'altra azione di cswap, la finestra che l'ha fatta riscrive il segnale `ide-sync.json` (solo `source` e `at`, in modo atomico; formato in `packages/host/README.md`; per una versione fa rileggere anche il vecchio `vscode-sync.json`) e le altre rileggono; lo stesso fa la finestra titolare a ogni notifica del motore;
 - il polling (`refreshIntervalSeconds`) e la rilettura al ritorno del focus restano come rete di sicurezza;
 - le schede aperte (Cartelle, Regole, Impostazioni, configurazione di cswap, Notifiche) si aggiornano da sole, anche nell'app desktop quando la modifica arriva da VS Code o dalla CLI; se stai modificando un modulo non salvato, resta com'è e compare «Modificato in un'altra finestra» con «Ricarica» (che scarta le tue modifiche);
 - le scritture passano dalla CLI, che sotto un lock di file per utente (`.config.json.lock`, attesa massima 5 s) rilegge la config, cambia solo la parte toccata e la riscrive in modo atomico: due salvataggi simultanei da finestre diverse, dall'app o dalla CLI non si perdono;

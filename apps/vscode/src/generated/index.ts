@@ -3,4 +3,5 @@ export type * from './CliErrorEnvelope.js';
 export type * from './CliState.js';
 export type * from './CliVersion.js';
 export type * from './ConfigView.js';
+export type * from './EngineEnable.js';
 export type * from './EngineStatus.js';

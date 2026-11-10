@@ -1,0 +1,36 @@
+{
+  "name": "@swapdeck/host",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Parte comune agli host del pannello (VS Code, JetBrains): protocollo dei messaggi, regole di validazione, client dei messaggi, segnale di sincronia",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./backend": "./src/MessageBackend.ts",
+    "./webview": "./src/webview/index.ts",
+    "./webview.css": "./src/webview/webview.css",
+    "./protocol.json": "./protocol.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@swapdeck/types": "workspace:*",
+    "@swapdeck/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}

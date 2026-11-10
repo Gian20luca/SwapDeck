@@ -1,3 +1,4 @@
+import { CONFIG_FILE, LEGACY_SYNC_FILES, SYNC_FILE } from '@swapdeck/host';
 import { EventEmitter } from 'node:events';
 import type * as fs from 'node:fs';
 import {
@@ -11,7 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CONFIG_FILE, SYNC_FILE, SyncWatcher, isSyncEvent } from './sync.js';
+import { SyncWatcher, isSyncEvent } from './sync.js';
 
 let dir: string;
 const open: SyncWatcher[] = [];
@@ -38,7 +39,9 @@ const settle = () => new Promise((r) => setTimeout(r, 400));
 describe('isSyncEvent', () => {
   it('solo config e segnale; senza nome per prudenza sì', () => {
     expect(isSyncEvent(CONFIG_FILE)).toBe(true);
+    expect(SYNC_FILE).toBe('ide-sync.json');
     expect(isSyncEvent(SYNC_FILE)).toBe(true);
+    expect(isSyncEvent('vscode-sync.json')).toBe(true);
     expect(isSyncEvent(null)).toBe(true);
     expect(isSyncEvent('engine.lock')).toBe(false);
     expect(isSyncEvent('engine-memory.json')).toBe(false);
@@ -59,6 +62,19 @@ describe('SyncWatcher fra due finestre', () => {
     expect(body['source']).toBe('A');
     // Nessun file temporaneo lasciato indietro.
     expect(readdirSync(dir)).toEqual([SYNC_FILE]);
+  });
+
+  it('il segnale col vecchio nome (finestra non aggiornata) fa ancora rileggere', async () => {
+    const [legacy] = LEGACY_SYNC_FILES;
+    expect(legacy).toBe('vscode-sync.json');
+    const a = window('A');
+    // Anche se il `source` coincide: il vecchio nome lo scrive solo un'altra finestra.
+    writeFileSync(join(dir, legacy!), JSON.stringify({ source: 'A', at: Date.now() }));
+    await settle();
+    expect(a.onChange).toHaveBeenCalledTimes(1);
+    // Il nuovo segnale si scrive solo col nome nuovo.
+    await a.w.signal();
+    expect(readdirSync(dir).sort()).toEqual([SYNC_FILE, legacy!].sort());
   });
 
   it('una modifica della config (CLI di qualunque finestra) fa rileggere tutte, raggruppata', async () => {

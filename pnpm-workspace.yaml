@@ -1,6 +1,7 @@
 packages:
   - packages/*
   - apps/vscode
+  - apps/jetbrains
   - apps/desktop
 
 catalog:

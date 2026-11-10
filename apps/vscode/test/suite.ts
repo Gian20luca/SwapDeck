@@ -87,7 +87,7 @@ const tests: Array<[string, (api: SwapDeckApi) => Promise<void>]> = [
         rules: Record<string, unknown>;
       };
       execFileSync(cli, ['engine', 'rules', 'set', '-'], {
-        // Prima accensione già confermata: il dialogo modale (unit test in firstEnable.test.ts) non si apre.
+        // Prima accensione già confermata: il dialogo modale non si apre (regola nel Rust, `engine enable`).
         input: JSON.stringify({
           ...state.rules,
           order: [6, 3],
@@ -117,7 +117,7 @@ const tests: Array<[string, (api: SwapDeckApi) => Promise<void>]> = [
       await api.refresh();
       await waitFor('watcher attivo', () => api.syncWatching());
       await api.signalSync();
-      const signal = path.join(process.env['SWAPDECK_HOME']!, 'config', 'vscode-sync.json');
+      const signal = path.join(process.env['SWAPDECK_HOME']!, 'config', 'ide-sync.json');
       assert.ok(existsSync(signal));
     },
   ],

@@ -1,0 +1,6 @@
+<!-- Parte del plugin attiva solo con il plugin Terminal: «run» apre un terminale dell'IDE. -->
+<idea-plugin>
+  <extensions defaultExtensionNs="com.swapdeck.jetbrains">
+    <commandRunner implementation="com.swapdeck.jetbrains.terminal.TerminalCommandRunner"/>
+  </extensions>
+</idea-plugin>

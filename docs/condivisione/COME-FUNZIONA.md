@@ -6,7 +6,7 @@ Tutto resta sul tuo PC: niente server, niente account SwapDeck. Token e password
 
 ## Le parole da sapere
 
-- **Utenza:** un account Claude registrato in cswap. Una sola alla volta è **attiva**, ed è quella che usano Claude Code, l'estensione di VS Code e tutte le sessioni aperte.
+- **Utenza:** un account Claude registrato in cswap. Una sola alla volta è **attiva**, ed è quella che usano Claude Code, le estensioni degli editor e tutte le sessioni aperte.
 - **Limite delle 5 ore** e **limite dei 7 giorni:** le due finestre di consumo di Claude. Quando una arriva al 100% quell'utenza si ferma fino al reset.
 - **Cambio di utenza:** vale per **tutte** le sessioni aperte sul PC, non solo per una finestra.
 
@@ -18,6 +18,7 @@ Tutto resta sul tuo PC: niente server, niente account SwapDeck. Token e password
 - **Finestra principale:** chiudendola con la X l'app non si spegne, resta nell'area di notifica. Si spegne solo con «Esci».
 - **Mini-widget:** finestrella sempre in primo piano con l'utenza attiva e le sue barre. Si trascina dove vuoi; la freccia la riduce a una striscia, la croce la nasconde.
 - **Estensione di VS Code** (facoltativa): la stessa app dentro VS Code, nella barra laterale (icona SwapDeck), più una voce nella barra di stato in basso.
+- **Plugin per le IDE JetBrains** (facoltativo; IntelliJ IDEA, WebStorm, PyCharm e le altre, dalla 2024.3): la stessa app nella finestra **SwapDeck** a destra, una voce nella barra di stato e le azioni nel menu **Tools** → **SwapDeck**. Installazione in `LEGGIMI-jetbrains.md`.
 
 L'app parte da sola quando accedi a Windows (o al desktop Linux) e resta accesa anche con lo schermo spento o il PC bloccato.
 
@@ -100,7 +101,7 @@ Se tutte le utenze sono oltre il proprio massimo, il motore non cambia e ti avvi
 
 - Tra due cambi passano almeno 5 minuti, e il motore si fida solo di consumi letti da poco.
 - Se trova un altro automatismo che cambia account (per esempio `cswap auto` o uno script pianificato), il motore si mette **«sospeso»** da solo, per non fare cambi in contemporanea. Riparte quando l'altro si ferma. Se sai che va bene così, puoi ignorare quel conflitto dalla scheda Regole.
-- App e VS Code non cambiano mai insieme: il motore gira in un posto solo alla volta.
+- App, VS Code e IDE JetBrains non cambiano mai insieme: il motore gira in un posto solo alla volta.
 
 ## Notifiche
 
@@ -122,6 +123,7 @@ C'è anche **Non disturbare** a orari e un **riepilogo giornaliero**.
 | Un'utenza con login da rifare       | Usa **Rifai login** sulla sua scheda                                                                 |
 | Consumi non aggiornati per un po'   | Normale: cswap li legge al massimo ogni minuto e a volte Claude li limita                            |
 | L'estensione di VS Code non compare | Command Palette → «Developer: Reload Window»                                                         |
+| La finestra SwapDeck di JetBrains è vuota o chiede un profilo | Vedi `LEGGIMI-jetbrains.md` (su Ubuntu serve il profilo AppArmor per il pannello) |
 | Non capisci cosa succede            | Strumenti → Diagnostica → **Copia diagnostica** e mandala a chi ti ha dato SwapDeck                  |
 
-Impostazioni, storico e log stanno in `%APPDATA%\swapdeck` su Windows e in `~/.config/swapdeck` e `~/.local/share/swapdeck` su Linux.
+Impostazioni, storico e log stanno in `%APPDATA%\swapdeck` su Windows, in `~/.config/swapdeck` e `~/.local/share/swapdeck` su Linux e in `~/Library/Application Support/swapdeck` su macOS, e sono condivisi tra app, VS Code e IDE JetBrains. Per togliere tutto dal PC, compresi cswap e uv, vedi la sezione «Disinstallare» della guida del tuo sistema.

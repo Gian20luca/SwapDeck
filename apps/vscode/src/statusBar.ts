@@ -1,8 +1,9 @@
-/** Testo, tooltip e livello della barra di stato (logica pura, senza `vscode`). */
-import type { Account } from '@swapdeck/types';
-import { displayUsage } from '@swapdeck/ui/account';
-import { displayPct, levelFor, shortEmail, type Level, type Thresholds } from '@swapdeck/ui/format';
-import type { CliState } from './generated/index.js';
+/**
+ * Testo e tooltip della barra di stato dal riepilogo della CLI (`swapdeck-cli ide status`): la
+ * logica (livelli, ultimo dato noto, titolare del motore, soglie) sta nel Rust; qui restano solo
+ * le traduzioni e la composizione dei testi.
+ */
+import type { CswapError, IdeEngine, IdeLevel, IdeStatus } from '@swapdeck/types';
 
 /** Traduzione con segnaposto `{0}`, `{1}`… (in VS Code è `vscode.l10n.t`). */
 export type Translate = (message: string, ...args: Array<string | number>) => string;
@@ -11,104 +12,104 @@ export interface StatusModel {
   text: string;
   tooltip: string;
   /** `error`: lettura fallita o cswap assente. */
-  level: Level | 'error';
+  level: IdeLevel;
 }
 
-/**
- * Chi tiene il lock del motore: il processo figlio di questa finestra, un'altra istanza (altra
- * finestra di VS Code o app), nessuno. Il testo della barra è uguale in tutte le finestre; cambia
- * solo questa riga del tooltip.
- */
-export type EngineView = { kind: 'here' } | { kind: 'other'; pid: number | null } | { kind: 'off' };
-
-/** Soglie dei colori dalle soglie delle notifiche: la più bassa avvisa, la più alta è critica. */
-export function colorThresholds(values: readonly number[] | undefined): Thresholds {
-  const valid = (values ?? []).filter((v) => Number.isFinite(v) && v > 0 && v <= 100);
-  if (valid.length === 0) return { warn: 80, danger: 95 };
-  return { warn: Math.min(...valid), danger: Math.max(...valid) };
-}
-
-export function accountLabel(account: Account): string {
+/** Nome da mostrare: l'alias, altrimenti il numero (`#6`). */
+export function accountLabel(account: { alias?: string | null; number: number }): string {
   return account.alias && account.alias.length > 0 ? account.alias : `#${account.number}`;
 }
 
-function worst(a: Level, b: Level): Level {
-  const order: Level[] = ['unknown', 'ok', 'warn', 'danger'];
-  return order.indexOf(a) >= order.indexOf(b) ? a : b;
+/**
+ * Argomenti di `ide status` con lo stato su stdin: soglie dalle impostazioni delle notifiche
+ * (la CLI ignora i valori non validi) e PID del motore avviato da questa finestra.
+ */
+export function statusArgs(
+  thresholds: readonly unknown[] | undefined,
+  enginePid: number | undefined,
+): string[] {
+  const args = ['ide', 'status', '--thresholds', (thresholds ?? []).join(',')];
+  if (enginePid !== undefined) args.push('--engine-pid', String(enginePid));
+  args.push('-');
+  return args;
 }
 
-function pctText(pct: number | undefined): string {
-  return pct === undefined ? '—' : `${displayPct(pct)}%`;
+/** Riepilogo d'errore quando la CLI stessa non risponde (niente da chiedere al Rust). */
+export function errorStatus(error: CswapError): IdeStatus {
+  return {
+    level: 'error',
+    content: { kind: 'error', error },
+    engine: { holder: 'off', pid: null, switching: false, dryRun: false, activeMap: null },
+    updatedAtMs: Date.now(),
+    thresholds: { warn: 80, danger: 95 },
+  };
 }
 
-/** Dal lock letto nello stato: il titolare è il motore di questa finestra se il PID è il suo. */
-export function engineView(state: CliState | undefined, childPid: number | undefined): EngineView {
-  if (!state?.engine.running) return { kind: 'off' };
-  const pid = state.engine.lock?.pid ?? null;
-  if (childPid !== undefined && pid === childPid) return { kind: 'here' };
-  return { kind: 'other', pid };
+function pctText(pct: number | null): string {
+  return pct === null ? '—' : `${pct}%`;
 }
 
-export function statusModel(
-  state: CliState | undefined,
-  thresholds: Thresholds,
-  engine: EngineView,
-  t: Translate,
-  formatTime: (ms: number) => string,
-): StatusModel {
+function engineLine(engine: IdeEngine, t: Translate): string {
   const holder =
-    engine.kind === 'here'
+    engine.holder === 'here'
       ? t('Engine: running in this window')
-      : engine.kind === 'other'
+      : engine.holder === 'other'
         ? engine.pid === null
           ? t('Engine: running in another window or instance')
           : t('Engine: running in another window or instance (PID {0})', engine.pid)
         : t('Engine: stopped');
-  const switching = state?.engine.enabled
-    ? t('automatic switching on')
-    : t('automatic switching off');
-  const engineLine = `${holder} · ${switching}`;
-  if (!state) {
+  const switching = engine.switching ? t('automatic switching on') : t('automatic switching off');
+  return `${holder} · ${switching}`;
+}
+
+/** Testo, tooltip e livello; senza riepilogo (nessuna lettura ancora) è il caricamento. */
+export function statusModel(
+  summary: IdeStatus | undefined,
+  t: Translate,
+  formatTime: (ms: number) => string,
+): StatusModel {
+  if (!summary) {
     return { text: '$(sync~spin) SwapDeck', tooltip: t('SwapDeck: loading…'), level: 'unknown' };
   }
-  if (!state.list) {
-    const message = state.error?.message ?? t('unknown error');
+  const engine = engineLine(summary.engine, t);
+  const content = summary.content;
+  if (content.kind === 'error') {
     return {
       text: '$(warning) SwapDeck',
-      tooltip: [t('SwapDeck: cswap not available'), message, engineLine].join('\n'),
+      tooltip: [
+        t('SwapDeck: cswap not available'),
+        content.error?.message ?? t('unknown error'),
+        engine,
+      ].join('\n'),
       level: 'error',
     };
   }
-  const active = state.list.accounts.find((a) => a.active);
-  const updated = t('Updated at {0}', formatTime(state.updatedAtMs));
-  if (!active) {
+  const updated = t('Updated at {0}', formatTime(summary.updatedAtMs));
+  if (content.kind === 'noAccount') {
     return {
       text: '$(account) SwapDeck: —',
-      tooltip: [t('No active account'), engineLine, updated].join('\n'),
-      level: 'unknown',
+      tooltip: [t('No active account'), engine, updated].join('\n'),
+      level: summary.level,
     };
   }
-  const shown = displayUsage(active);
-  const five = shown?.usage.fiveHour;
-  const seven = shown?.usage.sevenDay;
-  const level = worst(levelFor(five?.pct, thresholds), levelFor(seven?.pct, thresholds));
-  const stale = shown?.lastKnown ? '~' : '';
-  const name = accountLabel(active);
-  const text = `$(account) ${name} 5h ${stale}${pctText(five?.pct)} · 7d ${stale}${pctText(seven?.pct)}`;
-  const lines = [`SwapDeck — ${name} (${shortEmail(active.email)})`];
+  const { account, fiveHour: five, sevenDay: seven, lastKnown } = content;
+  const stale = lastKnown ? '~' : '';
+  const name = accountLabel(account);
+  const text = `$(account) ${name} 5h ${stale}${pctText(five.pct)} · 7d ${stale}${pctText(seven.pct)}`;
+  const lines = [`SwapDeck — ${name} (${account.shortEmail})`];
   lines.push(
-    five?.countdown
+    five.countdown
       ? t('5h: {0} (resets in {1})', pctText(five.pct), five.countdown)
-      : t('5h: {0}', pctText(five?.pct)),
+      : t('5h: {0}', pctText(five.pct)),
   );
   lines.push(
-    seven?.expectedPct !== undefined
+    seven.expectedPct !== null
       ? t('7d: {0} (expected {1})', pctText(seven.pct), pctText(seven.expectedPct))
-      : t('7d: {0}', pctText(seven?.pct)),
+      : t('7d: {0}', pctText(seven.pct)),
   );
-  if (shown?.lastKnown) lines.push(t('Last known data (current usage unavailable)'));
-  lines.push(engineLine);
-  if (state.engine.activeMap) lines.push(t('Map: {0}', state.engine.activeMap));
+  if (lastKnown) lines.push(t('Last known data (current usage unavailable)'));
+  lines.push(engine);
+  if (summary.engine.activeMap) lines.push(t('Map: {0}', summary.engine.activeMap));
   lines.push(updated);
-  return { text, tooltip: lines.join('\n'), level };
+  return { text, tooltip: lines.join('\n'), level: summary.level };
 }

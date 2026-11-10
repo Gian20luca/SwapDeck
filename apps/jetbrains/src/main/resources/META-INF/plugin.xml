@@ -1,0 +1,85 @@
+<idea-plugin>
+  <id>com.swapdeck.jetbrains</id>
+  <name>SwapDeck</name>
+  <vendor>SwapDeck</vendor>
+  <!-- version, since-build e until-build li scrive Gradle (gradle.properties). -->
+
+  <description><![CDATA[
+    <p>Monitor and manage your <code>cswap</code> Claude accounts from the IDE: usage, switching,
+    directory maps, automatic switching engine and notifications.</p>
+    <p>Monitor e gestione degli account Claude di <code>cswap</code> dall'IDE: consumi, cambio
+    account, mappe delle cartelle, motore di cambio automatico e notifiche.</p>
+  ]]></description>
+
+  <depends>com.intellij.modules.platform</depends>
+  <depends optional="true" config-file="swapdeck-terminal.xml">org.jetbrains.plugins.terminal</depends>
+  <!-- JCEF: dalla 2026.x è un plugin a parte (com.intellij.modules.jcef) e le sue classi si vedono
+       solo dichiarandolo; nella 2024.3 sta nel nucleo e la dipendenza, assente, viene ignorata. -->
+  <depends optional="true" config-file="swapdeck-jcef.xml">com.intellij.modules.jcef</depends>
+
+  <resource-bundle>messages.SwapDeckBundle</resource-bundle>
+
+  <extensionPoints>
+    <!-- «run» in un terminale dell'IDE: implementazione solo in swapdeck-terminal.xml. -->
+    <extensionPoint qualifiedName="com.swapdeck.jetbrains.commandRunner"
+                    interface="com.swapdeck.jetbrains.bridge.CommandRunner"
+                    dynamic="true"/>
+  </extensionPoints>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <toolWindow id="SwapDeck"
+                anchor="right"
+                icon="/icons/swapdeck.svg"
+                factoryClass="com.swapdeck.jetbrains.toolwindow.SwapDeckToolWindowFactory"/>
+    <notificationGroup id="SwapDeck" displayType="BALLOON" key="notification.group.name"/>
+    <!-- Account attivo, 5h e 7d, colore per livello; clic: tool window. -->
+    <statusBarWidgetFactory id="SwapDeckStatus"
+                            implementation="com.swapdeck.jetbrains.ui.SwapDeckStatusWidgetFactory"/>
+    <applicationConfigurable parentId="tools"
+                             id="com.swapdeck.jetbrains.settings"
+                             instance="com.swapdeck.jetbrains.settings.SwapDeckConfigurable"
+                             key="settings.displayName"/>
+    <!-- Avvio di stato, motore e sincronia (servizi dell'applicazione, uno per processo IDE). -->
+    <postStartupActivity implementation="com.swapdeck.jetbrains.SwapDeckStartup"/>
+  </extensions>
+
+  <applicationListeners>
+    <listener class="com.swapdeck.jetbrains.state.SwapDeckActivationListener"
+              topic="com.intellij.openapi.application.ApplicationActivationListener"/>
+    <!-- Notifiche anche senza tool window aperta; creati solo alla prima notifica. -->
+    <listener class="com.swapdeck.jetbrains.ui.SwapDeckNotificationPresenter"
+              topic="com.swapdeck.jetbrains.engine.SwapDeckNotificationListener"/>
+    <listener class="com.swapdeck.jetbrains.ui.SwapDeckEngineStopPresenter"
+              topic="com.swapdeck.jetbrains.engine.SwapDeckEngineListener"/>
+  </applicationListeners>
+
+  <!-- Testi: chiavi action.<id>.text/.description e GoToAction (Trova azione) in SwapDeckBundle. -->
+  <actions resource-bundle="messages.SwapDeckBundle">
+    <group id="swapdeck.group" popup="true" icon="/icons/swapdeck.svg">
+      <add-to-group group-id="ToolsMenu" anchor="last"/>
+      <action id="swapdeck.refresh" class="com.swapdeck.jetbrains.actions.RefreshAction" icon="AllIcons.Actions.Refresh">
+        <override-text place="GoToAction"/>
+      </action>
+      <action id="swapdeck.switchAccount" class="com.swapdeck.jetbrains.actions.SwitchAccountAction">
+        <override-text place="GoToAction"/>
+      </action>
+      <action id="swapdeck.switchMap" class="com.swapdeck.jetbrains.actions.SwitchMapAction">
+        <override-text place="GoToAction"/>
+      </action>
+      <separator/>
+      <action id="swapdeck.startEngine" class="com.swapdeck.jetbrains.actions.StartEngineAction">
+        <override-text place="GoToAction"/>
+      </action>
+      <action id="swapdeck.stopEngine" class="com.swapdeck.jetbrains.actions.StopEngineAction">
+        <override-text place="GoToAction"/>
+      </action>
+      <separator/>
+      <action id="swapdeck.copyDiagnostics" class="com.swapdeck.jetbrains.actions.CopyDiagnosticsAction">
+        <override-text place="GoToAction"/>
+      </action>
+      <action id="swapdeck.openLogsFolder" class="com.swapdeck.jetbrains.actions.OpenLogsFolderAction">
+        <override-text place="GoToAction"/>
+      </action>
+    </group>
+  </actions>
+</idea-plugin>

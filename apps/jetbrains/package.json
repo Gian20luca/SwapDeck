@@ -1,0 +1,29 @@
+{
+  "name": "swapdeck-jetbrains",
+  "version": "0.2.4",
+  "private": true,
+  "type": "module",
+  "description": "Plugin SwapDeck per le IDE JetBrains: pannello per JCEF (qui) e plugin Gradle in Kotlin",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "gradle:build": "node scripts/gradle.mjs --no-daemon buildPlugin",
+    "gradle:test": "node scripts/gradle.mjs --no-daemon test",
+    "package": "node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "@swapdeck/host": "workspace:*",
+    "@swapdeck/types": "workspace:*",
+    "@swapdeck/ui": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "esbuild": "^0.25.12",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

@@ -1,6 +1,7 @@
-//! Cambi della config fatti fuori dall'app (VS Code, CLI, `--headless`): polling leggero di
-//! dimensione e data di modifica di `config.json` e del segnale `vscode-sync.json` che VS Code
-//! riscrive dopo una sua azione (cambio di account, configurazione di cswap, cartelle).
+//! Cambi della config fatti fuori dall'app (VS Code, IDE JetBrains, CLI, `--headless`): polling
+//! leggero di dimensione e data di modifica di `config.json` e del segnale `ide-sync.json` che gli
+//! host delle IDE riscrivono dopo una loro azione (cambio di account, configurazione di cswap,
+//! cartelle). Formato del segnale: `packages/host/README.md`.
 //!
 //! Un cambio vale quando la firma del file resta ferma per un giro (le scritture ravvicinate si
 //! raggruppano). Le scritture dell'app stessa non contano: la config letta si confronta con
@@ -22,8 +23,11 @@ use crate::state::Shared;
 /// Evento verso tutte le finestre: le schede aperte rileggono i loro dati (`CONFIG_EVENT` in
 /// `TauriBackend.ts`).
 pub const CONFIG_EVENT: &str = "config-changed";
-/// Segnale di VS Code (`SYNC_FILE` in `apps/vscode/src/sync.ts`).
-pub const SYNC_FILE: &str = "vscode-sync.json";
+/// Segnale degli host delle IDE (`sync.file` in `packages/host/protocol.json`).
+pub const SYNC_FILE: &str = "ide-sync.json";
+/// Vecchio nome del segnale, scritto da VS Code fino alla 0.2.4 (`sync.legacyFiles`). Da togliere
+/// nella seconda versione dopo la 0.2.4, insieme a `legacyFiles`.
+pub const LEGACY_SYNC_FILE: &str = "vscode-sync.json";
 /// Periodo del controllo: un cambio arriva alla UI tra uno e due periodi dopo.
 pub const WATCH_PERIOD: Duration = Duration::from_millis(500);
 
@@ -73,30 +77,36 @@ pub struct Changes {
 #[derive(Debug)]
 pub struct Watch {
     config: PathBuf,
-    signal: PathBuf,
-    slots: [Slot; 2],
+    /// Segnale attuale e vecchio nome.
+    signals: [PathBuf; 2],
+    slots: [Slot; 3],
 }
 
 impl Watch {
     /// Parte dallo stato attuale dei file: quello che c'è già non è un cambio.
     pub fn new(config_file: &Path) -> Self {
         let dir = config_file.parent().unwrap_or(Path::new(""));
-        let signal = dir.join(SYNC_FILE);
+        let signals = [dir.join(SYNC_FILE), dir.join(LEGACY_SYNC_FILE)];
         let slot = |p: &Path| Slot {
             seen: sig(p),
             pending: None,
         };
         Self {
-            slots: [slot(config_file), slot(&signal)],
+            slots: [slot(config_file), slot(&signals[0]), slot(&signals[1])],
             config: config_file.to_path_buf(),
-            signal,
+            signals,
         }
     }
 
     pub fn poll(&mut self) -> Changes {
         let config = self.slots[0].step(sig(&self.config));
-        let signal = self.slots[1].step(sig(&self.signal));
-        Changes { config, signal }
+        // Tutti e due i passi a ogni giro: ognuno tiene la sua firma in attesa.
+        let current = self.slots[1].step(sig(&self.signals[0]));
+        let legacy = self.slots[2].step(sig(&self.signals[1]));
+        Changes {
+            config,
+            signal: current | legacy,
+        }
     }
 }
 
@@ -194,11 +204,40 @@ mod tests {
     }
 
     #[test]
+    fn the_old_signal_name_still_counts() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut w = Watch::new(&dir.path().join("config.json"));
+        write(
+            &dir.path().join(LEGACY_SYNC_FILE),
+            r#"{"source":"x","at":1}"#,
+        );
+        w.poll();
+        assert!(w.poll().signal);
+    }
+
+    #[test]
+    fn sync_file_matches_the_shared_protocol() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../packages/host/protocol.json"
+        );
+        let text = fs::read_to_string(path).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(v["sync"]["file"], SYNC_FILE);
+        assert_eq!(
+            v["sync"]["legacyFiles"],
+            serde_json::json!([LEGACY_SYNC_FILE])
+        );
+        assert_eq!(v["sync"]["configFile"], config::CONFIG_FILE);
+    }
+
+    #[test]
     fn existing_files_are_not_changes() {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("config.json");
         write(&file, "{}");
         write(&dir.path().join(SYNC_FILE), "{}");
+        write(&dir.path().join(LEGACY_SYNC_FILE), "{}");
         let mut w = Watch::new(&file);
         assert_eq!(w.poll(), Changes::default());
         assert_eq!(w.poll(), Changes::default());
@@ -271,7 +310,7 @@ mod tests {
             lock_settings(&shared).poll_interval,
             Duration::from_secs(300)
         );
-        // Il segnale di VS Code conta sempre.
+        // Il segnale degli host delle IDE conta sempre.
         assert!(absorb(
             &shared,
             &file,

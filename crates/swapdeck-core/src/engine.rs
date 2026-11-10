@@ -233,6 +233,22 @@ impl EngineRules {
         self.first_enable_confirmed || self.enabled || self.dry_run
     }
 
+    /// Regole per «Accendi» (`swapdeck-cli engine enable`, comandi delle IDE): `None` se la
+    /// prima accensione va ancora confermata e `confirmed` è falso (nessuna scrittura). Altrimenti
+    /// motore acceso, in osservazione se `observe` (un'osservazione già attiva resta) e conferma
+    /// ricordata.
+    pub fn enabled_by(&self, confirmed: bool, observe: bool) -> Option<Self> {
+        if !confirmed && !self.enable_confirmed() {
+            return None;
+        }
+        Some(Self {
+            enabled: true,
+            dry_run: self.dry_run || observe,
+            first_enable_confirmed: true,
+            ..self.clone()
+        })
+    }
+
     /// Lista configurata: `order` se c'è, altrimenti `primary` più `reserves`.
     pub fn configured_order(&self) -> Vec<u32> {
         match (&self.order, self.primary) {

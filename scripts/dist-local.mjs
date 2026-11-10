@@ -1,5 +1,6 @@
 // Build Windows locale in `dist-locale/` (toolchain gnullvm, senza Build Tools MSVC):
-// installer NSIS per utente (se riesce), cartella portatile zippata, .vsix win32-x64, LEGGIMI.txt.
+// installer NSIS per utente (se riesce), cartella portatile zippata, .vsix win32-x64, zip del plugin
+// JetBrains win32-x64 (serve un JDK 21; senza, si salta con un avviso), LEGGIMI.txt.
 //
 //   pnpm dist:local            (oppure: node scripts/dist-local.mjs)
 //   pnpm dist:local --clean    (alla fine libera la target di rilascio: disco piccolo)
@@ -180,7 +181,30 @@ if (hasCli) {
   copyFileSync(join(dist, vsix), join(out, vsix));
 }
 
-// 5. LEGGIMI.txt
+// 5. Plugin JetBrains win32-x64 con lo stesso swapdeck-cli (libunwind.dll inclusa con gnullvm).
+// Gradle vuole un JDK 21: se manca, il resto della build resta valido.
+let jetbrainsZip;
+if (hasCli) {
+  const ok = run(process.execPath, [
+    join(repo, 'apps', 'jetbrains', 'scripts', 'package.mjs'),
+    '--target',
+    'win32-x64',
+    '--cli',
+    join(release, 'swapdeck-cli.exe'),
+  ]);
+  const dist = join(repo, 'apps', 'jetbrains', 'dist');
+  const name = `swapdeck-jetbrains-win32-x64-${version}.zip`;
+  if (ok && existsSync(join(dist, name))) {
+    jetbrainsZip = name;
+    copyFileSync(join(dist, name), join(out, name));
+  } else {
+    console.warn(
+      'zip del plugin JetBrains non prodotto (serve un JDK 21: JAVA_HOME o java nel PATH)',
+    );
+  }
+}
+
+// 6. LEGGIMI.txt
 const lines = [
   `SwapDeck ${version} - build locale per Windows (${new Date().toISOString().slice(0, 10)})`,
   '',
@@ -195,6 +219,9 @@ const lines = [
   vsix
     ? `- ${vsix}: estensione VS Code con swapdeck-cli incluso.`
     : '- (estensione VS Code non prodotta: swapdeck-cli non ancora integrato)',
+  jetbrainsZip
+    ? `- ${jetbrainsZip}: plugin per le IDE JetBrains (2024.3 e successive) con swapdeck-cli incluso.`
+    : '- (plugin JetBrains non prodotto in questa build)',
   '',
   'INSTALLAZIONE',
   '1. Installer: doppio clic e avanti. Si installa in %LOCALAPPDATA%\\SwapDeck; se manca',
@@ -203,6 +230,8 @@ const lines = [
   '   I file della cartella (exe e DLL) devono restare insieme.',
   '3. Estensione: in VS Code, Estensioni > menu "..." > Installa da VSIX, oppure',
   vsix ? `   code --install-extension ${vsix}` : '   code --install-extension <file>.vsix',
+  '4. Plugin JetBrains: Settings > Plugins > icona a ingranaggio > Install Plugin from Disk...,',
+  "   scegliere lo zip (senza estrarlo) e riavviare l'IDE se lo chiede.",
   '',
   'PRIMA PROVA',
   "- L'app parte nell'area di notifica (icona ad anello) e apre la finestra principale.",

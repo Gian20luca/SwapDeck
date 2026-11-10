@@ -25,3 +25,9 @@ apps/desktop/src-tauri/binaries/
 
 # Binario incluso nel .vsix (scripts/package.mjs)
 apps/vscode/bin/
+
+# Plugin JetBrains (Gradle)
+apps/jetbrains/build/
+apps/jetbrains/.gradle/
+apps/jetbrains/.intellijPlatform/
+apps/jetbrains/.kotlin/

@@ -30,7 +30,10 @@ use swapdeck_core::engine::{
     Decision, EngineMemory, EngineProfiles, EngineRules, EngineState, EngineView, Observation,
     ProfileCommand, SuspendReason, evaluate,
 };
-use swapdeck_core::history::{History, HistoryEvents, HistoryQuery, HistoryRecord};
+use swapdeck_core::history::{
+    History, HistoryEvents, HistoryQuery, HistoryRecord, history_bucket, history_points,
+};
+use swapdeck_core::ide::{self, ColorThresholds, EngineFacts, IdeStatus, StatusInput};
 use swapdeck_core::lock;
 use swapdeck_core::notify::{self, NotificationConfig, NotifyPoll};
 use swapdeck_core::paths::AppPaths;
@@ -41,7 +44,9 @@ use swapdeck_core::usage::{
     self, BreakdownWindow, UsageBreakdown, UsageError, UsageGroupBy, UsagePaths, UsageQuery,
 };
 
-use output::{CliErrorEnvelope, CliState, CliVersion, ConfigView, EngineStatus, PROTOCOL};
+use output::{
+    CliErrorEnvelope, CliState, CliVersion, ConfigView, EngineEnable, EngineStatus, PROTOCOL,
+};
 
 /// Codici di uscita dei comandi JSON (`headless` usa quelli del core: 0/1/2/3).
 pub mod exit_code {
@@ -57,7 +62,8 @@ pub const USAGE: &str = "uso: swapdeck-cli <comando>
   cswap-config [CHIAVE]
   confirm - [--active N|none]  (azione JSON da stdin)
   action -                     (azione JSON da stdin)
-  history [--from SECONDI] [--to SECONDI] [--account N]
+  history [--from SECONDI] [--to SECONDI] [--account N] [--points]
+                               (--points: punti dei grafici, al più 1500 per account)
   history events [--since SECONDI] [--account N]
   usage breakdown [--account N] [--window 5h|7d|custom] [--from SECONDI --to SECONDI]
                   [--group-by project|session|agent|model]
@@ -72,6 +78,9 @@ pub const USAGE: &str = "uso: swapdeck-cli <comando>
   engine status
   engine state
   engine rules set <json|->
+  engine enable [--confirm] [--observe]   (acceso; alla prima accensione senza --confirm
+                                           risponde needsConfirmation e non scrive)
+  engine disable                          (cambi automatici spenti)
   engine profiles [<json|->]          (senza argomento: elenco; con un'operazione: la applica)
                                       (op: create, rename, duplicate, clone, delete, select;
                                        i preset sono in sola lettura: clone li copia)
@@ -82,6 +91,9 @@ pub const USAGE: &str = "uso: swapdeck-cli <comando>
   logs dir                            (cartella dei log, creata se manca)
   log info|warn|error -               (una riga nel log, testo da stdin)
   relogin candidates -                (lista da stdin: utenze per «Rifai login»)
+  ide status [--thresholds N,N,…] [--engine-pid PID] [-]
+                                      (riepilogo per la barra di stato delle IDE; con - lo
+                                       stato di `state` da stdin, senza lo legge)
   relogin start <N>                   (eventi JSON per riga, poi l'esito; da stdin righe
                                        JSON con code o cancel; fine di stdin = annulla)
   headless [--once] [--dry-run] [--stop-on-stdin-eof] [--notify=os|stdout|both]";
@@ -129,7 +141,7 @@ pub fn main_with(args: &[String]) -> i32 {
 }
 
 /// Parole dei comandi (niente valori dell'utente nel log).
-const COMMAND_WORDS: [&str; 34] = [
+const COMMAND_WORDS: [&str; 38] = [
     "version",
     "state",
     "status",
@@ -162,7 +174,11 @@ const COMMAND_WORDS: [&str; 34] = [
     "relogin",
     "candidates",
     "start",
+    "ide",
+    "enable",
+    "disable",
     "--force",
+    "--points",
     "-",
 ];
 
@@ -187,6 +203,7 @@ fn is_write(args: &[String]) -> bool {
         w.as_slice(),
         [_, "set", ..]
             | ["engine", "rules", "set", ..]
+            | ["engine", "enable" | "disable", ..]
             | ["engine", "profiles", _]
             | ["setup", "install" | "upgrade" | "dismiss-update", ..]
             | ["relogin", "start", ..]
@@ -303,13 +320,16 @@ fn dispatch(args: &[String]) -> Res<Value> {
             "l'azione va passata da stdin (-)\n{USAGE}"
         ))),
         ["history", "events", rest @ ..] => to_value(history_events(rest)?),
-        ["history", rest @ ..] => to_value(history(rest)?),
+        ["history", rest @ ..] => history(rest),
         ["usage", "breakdown", rest @ ..] => to_value(usage_breakdown(rest)?),
         ["mappings"] => to_value(client()?.mappings()?),
         ["preferences", "get"] => to_value(preferences_get()?),
         ["preferences", "set", input] => to_value(preferences_set(&read_input(input)?)?),
         ["engine", "state"] => to_value(engine_state(&paths()?)?),
         ["engine", "rules", "set", input] => to_value(engine_rules_set(&read_input(input)?)?),
+        ["engine", "enable", rest @ ..] => to_value(engine_enable(rest)?),
+        ["engine", "disable"] => to_value(engine_disable()?),
+        ["ide", "status", rest @ ..] => to_value(ide_status(rest)?),
         ["engine", "profiles"] => to_value(engine_profiles()?),
         ["engine", "profiles", input] => to_value(engine_profile_apply(&read_input(input)?)?),
         ["notifications", "get"] => to_value(notifications_get()?),
@@ -664,12 +684,19 @@ fn auto_once(
     })
 }
 
-fn history(rest: &[&str]) -> Res<Vec<HistoryRecord>> {
+/// `history`: record dello storico (senza i battiti); con `--points` i punti dei grafici
+/// (campioni sfoltiti, come nell'app).
+fn history(rest: &[&str]) -> Res<Value> {
     let mut from = None;
     let mut to = None;
     let mut account = None;
+    let mut points = false;
     let mut it = rest.iter();
     while let Some(flag) = it.next() {
+        if *flag == "--points" {
+            points = true;
+            continue;
+        }
         let value = it
             .next()
             .ok_or_else(|| usage_error(format!("{flag}: manca il valore")))?;
@@ -688,15 +715,20 @@ fn history(rest: &[&str]) -> Res<Vec<HistoryRecord>> {
     let records = History::new(&paths()?.data_dir)
         .read_range(from, to)
         .map_err(|e| failed(format!("storico non leggibile: {e}")))?;
-    Ok(records
-        .into_iter()
-        .filter(|r| match (r, account) {
-            (HistoryRecord::Sample(s), Some(n)) => s.account == n,
-            // I battiti servono solo all'attribuzione dei consumi (F20).
-            (HistoryRecord::Heartbeat(_), _) => false,
-            _ => true,
-        })
-        .collect())
+    if points {
+        return to_value(history_points(&records, account, history_bucket(from, to)));
+    }
+    to_value(
+        records
+            .into_iter()
+            .filter(|r| match (r, account) {
+                (HistoryRecord::Sample(s), Some(n)) => s.account == n,
+                // I battiti servono solo all'attribuzione dei consumi (F20).
+                (HistoryRecord::Heartbeat(_), _) => false,
+                _ => true,
+            })
+            .collect::<Vec<_>>(),
+    )
 }
 
 /// `history events`: cambi e decisioni del motore (`--since` limitato alla conservazione).
@@ -844,6 +876,151 @@ fn engine_rules_set(text: &str) -> Res<EngineState> {
     let paths = paths()?;
     config::update(&paths.config_file(), |c| c.set_engine_rules(rules)).map_err(config_error)?;
     engine_state(&paths)
+}
+
+/// `engine enable [--confirm] [--observe]`: «Accendi» delle IDE ([`EngineRules::enabled_by`]).
+/// Alla prima accensione senza `--confirm` risponde `needsConfirmation` e non scrive; altrimenti
+/// applica le regole rilette sotto il lock della config (un'altra finestra può averle cambiate).
+fn engine_enable(rest: &[&str]) -> Res<EngineEnable> {
+    let (mut confirmed, mut observe) = (false, false);
+    for flag in rest {
+        match *flag {
+            "--confirm" => confirmed = true,
+            "--observe" => observe = true,
+            _ => return Err(usage_error(format!("opzione sconosciuta: {flag}\n{USAGE}"))),
+        }
+    }
+    let paths = paths()?;
+    let file = paths.config_file();
+    let current = config::load(&file).map_err(config_error)?.config.engine;
+    let Some(next) = current.enabled_by(confirmed, observe) else {
+        return Ok(EngineEnable::NeedsConfirmation);
+    };
+    if next != current {
+        config::update(&file, |c| match c.engine.enabled_by(confirmed, observe) {
+            Some(rules) => c.set_engine_rules(rules),
+            None => Err(ConfigError::Invalid(
+                "serve la conferma della prima accensione".into(),
+            )),
+        })
+        .map_err(config_error)?;
+    }
+    Ok(EngineEnable::Enabled {
+        state: Box::new(engine_state(&paths)?),
+    })
+}
+
+/// `engine disable`: cambi automatici spenti (il processo del motore resta per storico e notifiche).
+fn engine_disable() -> Res<EngineState> {
+    let paths = paths()?;
+    let file = paths.config_file();
+    if config::load(&file)
+        .map_err(config_error)?
+        .config
+        .engine
+        .enabled
+    {
+        config::update(&file, |c| {
+            c.set_engine_rules(EngineRules {
+                enabled: false,
+                ..c.engine.clone()
+            })
+        })
+        .map_err(config_error)?;
+    }
+    engine_state(&paths)
+}
+
+/// Lo stato di `swapdeck-cli state` come lo legge `ide status` da stdin: solo i campi che servono,
+/// gli altri si ignorano.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IdeStateInput {
+    #[serde(default)]
+    list: Option<ListResponse>,
+    #[serde(default)]
+    error: Option<CswapError>,
+    #[serde(default)]
+    updated_at_ms: u64,
+    #[serde(default)]
+    engine: IdeEngineInput,
+}
+
+#[derive(Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+struct IdeEngineInput {
+    running: bool,
+    enabled: bool,
+    dry_run: bool,
+    lock: Option<IdeLockInput>,
+    active_map: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+struct IdeLockInput {
+    pid: u32,
+}
+
+/// Soglie da `--thresholds 80,95`: valori non numerici o fuori da (0, 100] ignorati, come le
+/// soglie delle notifiche; nessuno valido = default.
+fn parse_thresholds(text: &str) -> ColorThresholds {
+    let values: Vec<f64> = text
+        .split(',')
+        .filter_map(|v| v.trim().parse::<f64>().ok())
+        .collect();
+    ColorThresholds::from_values(&values)
+}
+
+/// `ide status [--thresholds N,N,…] [--engine-pid PID] [-]`: riepilogo per la barra di stato
+/// delle IDE ([`ide::status`]). Con `-` lo stato (`swapdeck-cli state`) arriva da stdin, così
+/// l'host non fa leggere cswap due volte; senza lo legge la CLI.
+fn ide_status(rest: &[&str]) -> Res<IdeStatus> {
+    let mut thresholds = ColorThresholds::default();
+    let mut own_pid = None;
+    let mut from_stdin = false;
+    let mut it = rest.iter();
+    while let Some(flag) = it.next() {
+        if *flag == "-" {
+            from_stdin = true;
+            continue;
+        }
+        let value = it
+            .next()
+            .ok_or_else(|| usage_error(format!("{flag}: manca il valore")))?;
+        match *flag {
+            "--thresholds" => thresholds = parse_thresholds(value),
+            "--engine-pid" => own_pid = Some(parse_u32(flag, value)?),
+            _ => return Err(usage_error(format!("opzione sconosciuta: {flag}\n{USAGE}"))),
+        }
+    }
+    let input: IdeStateInput = if from_stdin {
+        serde_json::from_str(&read_input("-")?).map_err(|e| json_error("stato", &e))?
+    } else {
+        serde_json::from_value(to_value(state())?).map_err(|e| failed(e.to_string()))?
+    };
+    Ok(ide_summary(&input, thresholds, own_pid, now_unix()))
+}
+
+fn ide_summary(
+    input: &IdeStateInput,
+    thresholds: ColorThresholds,
+    own_pid: Option<u32>,
+    now: i64,
+) -> IdeStatus {
+    let engine = EngineFacts {
+        running: input.engine.running,
+        enabled: input.engine.enabled,
+        dry_run: input.engine.dry_run,
+        lock_pid: input.engine.lock.as_ref().map(|l| l.pid),
+        active_map: input.engine.active_map.clone(),
+    };
+    let status_input = StatusInput {
+        list: input.list.as_ref(),
+        error: input.error.as_ref(),
+        updated_at_ms: input.updated_at_ms,
+        engine: &engine,
+    };
+    ide::status(status_input, thresholds, own_pid, now)
 }
 
 /// Mappe e mappa attiva (migrate dalle regole se il file non le ha ancora).

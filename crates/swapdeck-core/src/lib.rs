@@ -12,6 +12,7 @@ pub mod engine;
 pub mod filelock;
 pub mod headless;
 pub mod history;
+pub mod ide;
 pub mod lock;
 pub mod notify;
 pub mod paths;
