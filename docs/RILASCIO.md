@@ -21,7 +21,7 @@ Non ancora in una release; la versione resta quella del ramo (0.2.4).
   accensione del motore (`engine enable`/`disable`) e punti dello storico (`history --points`) ora li
   calcola la CLI; l'estensione VS Code li usa già.
 
-## Novità 0.2.4 (correttiva, in corso)
+## Novità 0.2.4 (correttiva, 09/11)
 
 - **AppImage Linux**: cswap installato da SwapDeck non partiva («versione di cswap illeggibile»): l'AppImage passava ai programmi avviati le sue variabili (`PYTHONHOME`, `PYTHONPATH`, `LD_LIBRARY_PATH`...). Ora cswap, uv, claude, il terminale e il file manager partono con l'ambiente normale del sistema.
 - **Cambio rapido**: «Migliore» e «Prossimo disponibile» sono disattivati con meno di due account, con la spiegazione nel suggerimento; prima, senza account, davano «Cambio non riuscito: No accounts are managed yet».
