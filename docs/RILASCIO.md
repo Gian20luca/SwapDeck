@@ -3,7 +3,7 @@
 Workflow: `.github/workflows/release.yml`. Produce installer, `swapdeck-cli`, `.vsix` per piattaforma,
 firme dell'updater e `latest.json`, e li mette in una release **in bozza**: la pubblicazione resta manuale.
 
-## Novità 0.2.4 (correttiva, in corso)
+## Novità 0.2.4 (correttiva, 09/11)
 
 - **AppImage Linux**: cswap installato da SwapDeck non partiva («versione di cswap illeggibile»): l'AppImage passava ai programmi avviati le sue variabili (`PYTHONHOME`, `PYTHONPATH`, `LD_LIBRARY_PATH`...). Ora cswap, uv, claude, il terminale e il file manager partono con l'ambiente normale del sistema.
 - **Cambio rapido**: «Migliore» e «Prossimo disponibile» sono disattivati con meno di due account, con la spiegazione nel suggerimento; prima, senza account, davano «Cambio non riuscito: No accounts are managed yet».
